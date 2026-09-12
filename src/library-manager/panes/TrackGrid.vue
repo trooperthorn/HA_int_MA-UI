@@ -255,6 +255,7 @@ const gridTemplate = computed(() => ({
       column.grow ? `minmax(${column.width}px, 1fr)` : `${column.width}px`,
     )
     .join(" "),
+  minWidth: `${props.visibleColumns.reduce((sum, column) => sum + column.width, 0)}px`,
 }));
 
 const sort = computed<GridSort | undefined>(() =>
@@ -604,7 +605,7 @@ defineExpose({
 .track-grid__header,
 .track-grid__row {
   display: grid;
-  min-width: max-content;
+  width: 100%;
   align-items: center;
 }
 
