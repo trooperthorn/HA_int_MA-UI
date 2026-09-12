@@ -27,6 +27,7 @@ vi.mock("@/plugins/api", async () => {
     getLibraryPlaylistsCount: mocks.getLibraryPlaylistsCount,
     players: {
       p1: {
+        player_id: "p1",
         enabled: true,
         available: true,
         needs_setup: false,

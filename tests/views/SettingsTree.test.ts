@@ -10,15 +10,21 @@ const mocks = vi.hoisted(() => ({
   getCoreConfigs: vi.fn(),
 }));
 
-vi.mock("@/plugins/api", () => {
+vi.mock("@/plugins/api", async () => {
+  const { ref } = await import("vue");
   const api = {
+    state: ref("initialized"),
     getProviderConfigs: mocks.getProviderConfigs,
     getCoreConfigs: mocks.getCoreConfigs,
     getProvider: (id: string) =>
       id === "spotify--1" ? { type: "music", domain: "spotify" } : undefined,
     providerManifests: { spotify: { name: "Spotify", type: "music" } },
   };
-  return { api, default: api };
+  return {
+    api,
+    default: api,
+    ConnectionState: { INITIALIZED: "initialized" },
+  };
 });
 
 vi.mock("@/plugins/auth", () => ({

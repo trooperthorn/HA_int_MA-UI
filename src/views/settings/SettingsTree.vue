@@ -61,7 +61,7 @@ import { useI18n } from "vue-i18n";
 import { useRoute, useRouter, type RouteLocationRaw } from "vue-router";
 import Icon from "@/components/Icon.vue";
 import ProviderIcon from "@/components/ProviderIcon.vue";
-import { api } from "@/plugins/api";
+import { api, ConnectionState } from "@/plugins/api";
 import {
   ProviderType,
   type CoreConfig,
@@ -369,8 +369,17 @@ function onKeydown(event: KeyboardEvent) {
 
 onMounted(() => {
   focusedId.value = activeId.value || null;
-  void loadChildren();
 });
+
+// a hard reload lands here before the socket is up; load once it is (and
+// again after a reconnect)
+watch(
+  () => api.state.value === ConnectionState.INITIALIZED,
+  (ready) => {
+    if (ready) void loadChildren();
+  },
+  { immediate: true },
+);
 </script>
 
 <style scoped>

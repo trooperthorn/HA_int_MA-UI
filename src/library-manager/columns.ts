@@ -455,16 +455,22 @@ export function sortItemsLocally(
   const column = columns.find((candidate) => candidate.id === sort.columnId);
   const text = column?.sortText ?? column?.text;
   if (!text) return items;
-  const collator = new Intl.Collator(undefined, {
-    numeric: true,
-    sensitivity: "base",
-  });
-  const sorted = items
+  const direction = sort.desc ? -1 : 1;
+  // the direction flips the key order only; ties keep the listing's order
+  return items
     .map((item, index) => ({ item, index, key: text(item) }))
-    .sort((a, b) => collator.compare(a.key, b.key) || a.index - b.index)
+    .sort(
+      (a, b) =>
+        direction * LOCAL_SORT_COLLATOR.compare(a.key, b.key) ||
+        a.index - b.index,
+    )
     .map((entry) => entry.item);
-  return sort.desc ? sorted.reverse() : sorted;
 }
+
+const LOCAL_SORT_COLLATOR = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: "base",
+});
 
 export function sortByToGridSort(
   sortBy: string,

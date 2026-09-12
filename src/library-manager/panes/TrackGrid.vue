@@ -182,7 +182,7 @@ import {
   Settings2,
 } from "@lucide/vue";
 import { useVirtualizer } from "@tanstack/vue-virtual";
-import { computed, ref, watch } from "vue";
+import { computed, ref, shallowRef, watch } from "vue";
 import ProviderIcon from "@/components/ProviderIcon.vue";
 import {
   DropdownMenu,
@@ -345,7 +345,8 @@ watch(
 
 // ---- selection and focus ---------------------------------------------------
 
-const selectedUris = ref(new Set<string>());
+// keyed by uri; holds the items so a selection never rescans the rows
+const selectedUris = shallowRef(new Map<string, GridItem>());
 const anchorIndex = ref(-1);
 const focusIndex = ref(-1);
 
@@ -354,7 +355,7 @@ watch(
   (rows) => {
     // a new listing (filter change) drops the selection; a page append keeps it
     if (rows.length === 0) {
-      selectedUris.value = new Set();
+      selectedUris.value = new Map();
       anchorIndex.value = -1;
       focusIndex.value = -1;
       emit("update:selection", []);
@@ -362,40 +363,40 @@ watch(
   },
 );
 
-const selectedTracks = computed(() =>
-  props.rows.filter((track) => track && selectedUris.value.has(track.uri)),
-);
+const selectedTracks = computed(() => [...selectedUris.value.values()]);
 
-function commitSelection(next: Set<string>) {
+function commitSelection(next: Map<string, GridItem>) {
   selectedUris.value = next;
   emit("update:selection", selectedTracks.value);
 }
 
 function selectRange(from: number, to: number, additive: boolean) {
   const [start, end] = from < to ? [from, to] : [to, from];
-  const next = additive ? new Set(selectedUris.value) : new Set<string>();
+  const next = additive
+    ? new Map(selectedUris.value)
+    : new Map<string, GridItem>();
   for (let i = start; i <= end; i++) {
     const track = props.rows[i];
-    if (track) next.add(track.uri);
+    if (track) next.set(track.uri, track);
   }
   commitSelection(next);
 }
 
 function selectOnly(index: number) {
   const track = props.rows[index];
-  commitSelection(track ? new Set([track.uri]) : new Set());
+  commitSelection(track ? new Map([[track.uri, track]]) : new Map());
   anchorIndex.value = index;
   focusIndex.value = index;
 }
 
 function selectAll() {
-  commitSelection(
-    new Set(props.rows.filter(Boolean).map((track) => track.uri)),
-  );
+  const next = new Map<string, GridItem>();
+  for (const track of props.rows) if (track) next.set(track.uri, track);
+  commitSelection(next);
 }
 
 function clearSelection() {
-  commitSelection(new Set());
+  commitSelection(new Map());
 }
 
 function moveFocus(index: number, extend: boolean) {
@@ -427,9 +428,9 @@ function onRowClick(event: MouseEvent, index: number) {
   if (event.ctrlKey || event.metaKey) {
     const track = props.rows[index];
     if (!track) return;
-    const next = new Set(selectedUris.value);
+    const next = new Map(selectedUris.value);
     if (next.has(track.uri)) next.delete(track.uri);
-    else next.add(track.uri);
+    else next.set(track.uri, track);
     commitSelection(next);
     anchorIndex.value = index;
     focusIndex.value = index;
@@ -506,6 +507,7 @@ function onMenuButton(event: MouseEvent, index: number) {
 
 let typeAhead = "";
 let typeAheadTimer: ReturnType<typeof setTimeout> | undefined;
+let jumpTimer: ReturnType<typeof setTimeout> | undefined;
 
 function typeAheadJump(char: string) {
   clearTimeout(typeAheadTimer);
@@ -518,12 +520,11 @@ function typeAheadJump(char: string) {
       (candidate) => candidate.id === sort.value?.columnId,
     ) ?? props.visibleColumns.find((candidate) => candidate.id === "title");
   if (!column?.text) return;
-  const from = focusIndex.value + (typeAhead.length === 1 ? 1 : 0);
-  const order = [
-    ...Array.from({ length: props.rows.length - from }, (_, i) => from + i),
-    ...Array.from({ length: from }, (_, i) => i),
-  ];
-  for (const index of order) {
+  const count = props.rows.length;
+  const from = Math.max(0, focusIndex.value + (typeAhead.length === 1 ? 1 : 0));
+  // walk from the focus row round to it again without building index lists
+  for (let step = 0; step < count; step++) {
+    const index = (from + step) % count;
     const track = props.rows[index];
     if (!track) continue;
     if (column.text(track).toLowerCase().startsWith(typeAhead)) {
@@ -531,8 +532,10 @@ function typeAheadJump(char: string) {
       return;
     }
   }
-  // nothing paged in starts with it; the source can look further
-  emit("jumpToLetter", typeAhead);
+  // nothing paged in starts with it; the source can look further, once the
+  // letters have settled
+  clearTimeout(jumpTimer);
+  jumpTimer = setTimeout(() => emit("jumpToLetter", typeAhead), 150);
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -655,6 +658,8 @@ defineExpose({
   focus: () => gridRef.value?.focus(),
   scrollToTrack,
   scrollToIndex,
+  scrollTop: () => scrollRef.value?.scrollTop ?? 0,
+  scrollTo: (top: number) => scrollRef.value?.scrollTo({ top }),
   selectAll,
   clearSelection,
   sortByIndex,

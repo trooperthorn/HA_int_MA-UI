@@ -46,8 +46,9 @@ export function useOrderedPlayers(opts?: OrderedPlayersOptions) {
   });
 }
 
+const NAME_COLLATOR = new Intl.Collator(undefined, { sensitivity: "base" });
 const compareNames = (left: string, right: string) =>
-  left.localeCompare(right, undefined, { sensitivity: "base" });
+  NAME_COLLATOR.compare(left, right);
 
 function comparePlayers(
   left: Player,
