@@ -10,6 +10,15 @@
       </template>
       <template #append>
         <v-btn
+          v-if="!mobile"
+          icon="mdi-file-tree"
+          variant="text"
+          :title="t('settings.tree_layout')"
+          :aria-label="t('settings.tree_layout')"
+          :active="treeLayout"
+          @click="toggleTreeLayout()"
+        />
+        <v-btn
           v-if="isOverview"
           :icon="settingsViewMode === 'list' ? 'mdi-view-list' : 'mdi-grid'"
           variant="text"
@@ -54,231 +63,260 @@
 
     <v-divider />
 
-    <Container
-      v-if="isOverview"
-      variant="comfortable"
-      class="settings-overview"
+    <SplitterGroup
+      direction="horizontal"
+      auto-save-id="settings-tree"
+      :storage="storage"
+      class="settings-body"
     >
-      <!-- Onboarding welcome message -->
-      <div v-if="store.isOnboarding" class="onboarding-card">
-        <div class="onboarding-header">
-          <div>
-            <h2 class="onboarding-title">
-              {{ t("settings.onboarding_title") }}
-            </h2>
-            <p class="onboarding-subtitle">
-              {{ t("settings.onboarding_subtitle") }}
+      <SplitterPanel
+        v-if="treeLayout"
+        id="settings-tree"
+        :order="1"
+        :default-size="22"
+        :min-size="14"
+        :max-size="40"
+        class="settings-body__tree"
+      >
+        <SettingsTree />
+      </SplitterPanel>
+      <SplitterResizeHandle
+        v-if="treeLayout"
+        id="settings-tree-handle"
+        class="settings-body__handle"
+      />
+      <SplitterPanel
+        id="settings-content"
+        :order="2"
+        class="settings-body__content"
+      >
+        <Container
+          v-if="isOverview"
+          variant="comfortable"
+          class="settings-overview"
+        >
+          <!-- Onboarding welcome message -->
+          <div v-if="store.isOnboarding" class="onboarding-card">
+            <div class="onboarding-header">
+              <div>
+                <h2 class="onboarding-title">
+                  {{ t("settings.onboarding_title") }}
+                </h2>
+                <p class="onboarding-subtitle">
+                  {{ t("settings.onboarding_subtitle") }}
+                </p>
+              </div>
+              <v-btn
+                icon="mdi-close"
+                variant="text"
+                size="small"
+                class="onboarding-close"
+                @click="store.isOnboarding = false"
+              />
+            </div>
+
+            <div class="onboarding-sections">
+              <div class="onboarding-section">
+                <div class="section-icon music">
+                  <v-icon icon="mdi-music" size="24" />
+                </div>
+                <div class="section-content">
+                  <h3>{{ t("settings.onboarding_music_title") }}</h3>
+                  <p>{{ t("settings.onboarding_music_desc") }}</p>
+                </div>
+                <v-btn
+                  color="primary"
+                  variant="flat"
+                  class="section-btn"
+                  @click="
+                    router.push({
+                      name: 'providersettings',
+                      query: { types: 'music' },
+                    })
+                  "
+                >
+                  {{ t("settings.onboarding_add_music") }}
+                </v-btn>
+              </div>
+
+              <div class="onboarding-section">
+                <div class="section-icon player">
+                  <v-icon icon="mdi-speaker" size="24" />
+                </div>
+                <div class="section-content">
+                  <h3>{{ t("settings.onboarding_player_title") }}</h3>
+                  <p>{{ t("settings.onboarding_player_desc") }}</p>
+                </div>
+                <v-btn
+                  color="primary"
+                  variant="flat"
+                  class="section-btn"
+                  @click="
+                    router.push({
+                      name: 'providersettings',
+                      query: { types: 'player' },
+                    })
+                  "
+                >
+                  {{ t("settings.onboarding_add_player") }}
+                </v-btn>
+              </div>
+            </div>
+
+            <p class="onboarding-footer">
+              <v-icon icon="mdi-information-outline" size="16" class="mr-1" />
+              {{ t("settings.onboarding_footer") }}
             </p>
           </div>
-          <v-btn
-            icon="mdi-close"
-            variant="text"
-            size="small"
-            class="onboarding-close"
-            @click="store.isOnboarding = false"
-          />
-        </div>
 
-        <div class="onboarding-sections">
-          <div class="onboarding-section">
-            <div class="section-icon music">
-              <v-icon icon="mdi-music" size="24" />
+          <div v-if="settingsViewMode === 'card'" class="settings-card-view">
+            <div class="settings-featured">
+              <Card
+                v-for="section in [...musicSections, ...playerSections]"
+                :key="section.name"
+                class="setting-card"
+                @click="router.push(section.route)"
+              >
+                <CardHeader>
+                  <div class="setting-header-top">
+                    <div
+                      class="setting-icon"
+                      :style="getIconBackgroundStyle(section.color)"
+                    >
+                      <Icon :icon="section.icon" size="20" color="white" />
+                    </div>
+                    <div class="setting-chevron">
+                      <Icon icon="mdi-chevron-right" size="20" />
+                    </div>
+                  </div>
+                  <CardTitle class="setting-title">
+                    {{ t(section.label) }}
+                  </CardTitle>
+                  <CardDescription class="setting-description">
+                    {{ t(section.description) }}
+                  </CardDescription>
+                </CardHeader>
+              </Card>
             </div>
-            <div class="section-content">
-              <h3>{{ t("settings.onboarding_music_title") }}</h3>
-              <p>{{ t("settings.onboarding_music_desc") }}</p>
+
+            <div class="settings-grid">
+              <Card
+                v-for="section in regularSections"
+                :key="section.name"
+                class="setting-card"
+                @click="router.push(section.route)"
+              >
+                <CardHeader>
+                  <div class="setting-header-top">
+                    <div
+                      class="setting-icon"
+                      :style="getIconBackgroundStyle(section.color)"
+                    >
+                      <Icon :icon="section.icon" size="20" color="white" />
+                    </div>
+                    <div class="setting-chevron">
+                      <Icon icon="mdi-chevron-right" size="20" />
+                    </div>
+                  </div>
+                  <CardTitle class="setting-title">
+                    {{ t(section.label) }}
+                  </CardTitle>
+                  <CardDescription class="setting-description">
+                    {{ t(section.description) }}
+                  </CardDescription>
+                </CardHeader>
+              </Card>
             </div>
-            <v-btn
-              color="primary"
-              variant="flat"
-              class="section-btn"
-              @click="
-                router.push({
-                  name: 'providersettings',
-                  query: { types: 'music' },
-                })
-              "
-            >
-              {{ t("settings.onboarding_add_music") }}
-            </v-btn>
           </div>
 
-          <div class="onboarding-section">
-            <div class="section-icon player">
-              <v-icon icon="mdi-speaker" size="24" />
-            </div>
-            <div class="section-content">
-              <h3>{{ t("settings.onboarding_player_title") }}</h3>
-              <p>{{ t("settings.onboarding_player_desc") }}</p>
-            </div>
-            <v-btn
-              color="primary"
-              variant="flat"
-              class="section-btn"
-              @click="
-                router.push({
-                  name: 'providersettings',
-                  query: { types: 'player' },
-                })
-              "
-            >
-              {{ t("settings.onboarding_add_player") }}
-            </v-btn>
+          <div v-else class="settings-list-view">
+            <v-list class="settings-list">
+              <ListItem
+                v-for="section in providersSection"
+                :key="section.name"
+                link
+                class="settings-list-item"
+                @click="router.push(section.route)"
+              >
+                <template #prepend>
+                  <div
+                    class="setting-list-icon"
+                    :style="getIconBackgroundStyle(section.color)"
+                  >
+                    <Icon :icon="section.icon" size="20" color="white" />
+                  </div>
+                </template>
+                <template #title>
+                  {{ t(section.label) }}
+                </template>
+                <template #subtitle>
+                  {{ t(section.description) }}
+                </template>
+                <template #append>
+                  <Icon icon="mdi-chevron-right" size="20" />
+                </template>
+              </ListItem>
+
+              <ListItem
+                v-for="section in playersSection"
+                :key="section.name"
+                link
+                class="settings-list-item"
+                @click="router.push(section.route)"
+              >
+                <template #prepend>
+                  <div
+                    class="setting-list-icon"
+                    :style="getIconBackgroundStyle(section.color)"
+                  >
+                    <Icon :icon="section.icon" size="20" color="white" />
+                  </div>
+                </template>
+                <template #title>
+                  {{ t(section.label) }}
+                </template>
+                <template #subtitle>
+                  {{ t(section.description) }}
+                </template>
+                <template #append>
+                  <Icon icon="mdi-chevron-right" size="20" />
+                </template>
+              </ListItem>
+
+              <ListItem
+                v-for="section in otherSettingsSections"
+                :key="section.name"
+                link
+                class="settings-list-item"
+                @click="router.push(section.route)"
+              >
+                <template #prepend>
+                  <div
+                    class="setting-list-icon"
+                    :style="getIconBackgroundStyle(section.color)"
+                  >
+                    <Icon :icon="section.icon" size="20" color="white" />
+                  </div>
+                </template>
+                <template #title>
+                  {{ t(section.label) }}
+                </template>
+                <template #subtitle>
+                  {{ t(section.description) }}
+                </template>
+                <template #append>
+                  <Icon icon="mdi-chevron-right" size="20" />
+                </template>
+              </ListItem>
+            </v-list>
           </div>
-        </div>
+        </Container>
 
-        <p class="onboarding-footer">
-          <v-icon icon="mdi-information-outline" size="16" class="mr-1" />
-          {{ t("settings.onboarding_footer") }}
-        </p>
-      </div>
-
-      <div v-if="settingsViewMode === 'card'" class="settings-card-view">
-        <div class="settings-featured">
-          <Card
-            v-for="section in [...musicSections, ...playerSections]"
-            :key="section.name"
-            class="setting-card"
-            @click="router.push(section.route)"
-          >
-            <CardHeader>
-              <div class="setting-header-top">
-                <div
-                  class="setting-icon"
-                  :style="getIconBackgroundStyle(section.color)"
-                >
-                  <Icon :icon="section.icon" size="20" color="white" />
-                </div>
-                <div class="setting-chevron">
-                  <Icon icon="mdi-chevron-right" size="20" />
-                </div>
-              </div>
-              <CardTitle class="setting-title">
-                {{ t(section.label) }}
-              </CardTitle>
-              <CardDescription class="setting-description">
-                {{ t(section.description) }}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </div>
-
-        <div class="settings-grid">
-          <Card
-            v-for="section in regularSections"
-            :key="section.name"
-            class="setting-card"
-            @click="router.push(section.route)"
-          >
-            <CardHeader>
-              <div class="setting-header-top">
-                <div
-                  class="setting-icon"
-                  :style="getIconBackgroundStyle(section.color)"
-                >
-                  <Icon :icon="section.icon" size="20" color="white" />
-                </div>
-                <div class="setting-chevron">
-                  <Icon icon="mdi-chevron-right" size="20" />
-                </div>
-              </div>
-              <CardTitle class="setting-title">
-                {{ t(section.label) }}
-              </CardTitle>
-              <CardDescription class="setting-description">
-                {{ t(section.description) }}
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </div>
-      </div>
-
-      <div v-else class="settings-list-view">
-        <v-list class="settings-list">
-          <ListItem
-            v-for="section in providersSection"
-            :key="section.name"
-            link
-            class="settings-list-item"
-            @click="router.push(section.route)"
-          >
-            <template #prepend>
-              <div
-                class="setting-list-icon"
-                :style="getIconBackgroundStyle(section.color)"
-              >
-                <Icon :icon="section.icon" size="20" color="white" />
-              </div>
-            </template>
-            <template #title>
-              {{ t(section.label) }}
-            </template>
-            <template #subtitle>
-              {{ t(section.description) }}
-            </template>
-            <template #append>
-              <Icon icon="mdi-chevron-right" size="20" />
-            </template>
-          </ListItem>
-
-          <ListItem
-            v-for="section in playersSection"
-            :key="section.name"
-            link
-            class="settings-list-item"
-            @click="router.push(section.route)"
-          >
-            <template #prepend>
-              <div
-                class="setting-list-icon"
-                :style="getIconBackgroundStyle(section.color)"
-              >
-                <Icon :icon="section.icon" size="20" color="white" />
-              </div>
-            </template>
-            <template #title>
-              {{ t(section.label) }}
-            </template>
-            <template #subtitle>
-              {{ t(section.description) }}
-            </template>
-            <template #append>
-              <Icon icon="mdi-chevron-right" size="20" />
-            </template>
-          </ListItem>
-
-          <ListItem
-            v-for="section in otherSettingsSections"
-            :key="section.name"
-            link
-            class="settings-list-item"
-            @click="router.push(section.route)"
-          >
-            <template #prepend>
-              <div
-                class="setting-list-icon"
-                :style="getIconBackgroundStyle(section.color)"
-              >
-                <Icon :icon="section.icon" size="20" color="white" />
-              </div>
-            </template>
-            <template #title>
-              {{ t(section.label) }}
-            </template>
-            <template #subtitle>
-              {{ t(section.description) }}
-            </template>
-            <template #append>
-              <Icon icon="mdi-chevron-right" size="20" />
-            </template>
-          </ListItem>
-        </v-list>
-      </div>
-    </Container>
-
-    <router-view v-else v-slot="{ Component }">
-      <component :is="Component" v-if="Component" />
-    </router-view>
+        <router-view v-else v-slot="{ Component }">
+          <component :is="Component" v-if="Component" />
+        </router-view>
+      </SplitterPanel>
+    </SplitterGroup>
   </div>
 </template>
 
@@ -297,12 +335,15 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { useUserPreferences } from "@/composables/userPreferences";
+import { usePaneLayout } from "@/library-manager/composables/usePaneLayout";
+import SettingsTree from "./SettingsTree.vue";
+import { useSettingsSections } from "./settingsSections";
 import { api } from "@/plugins/api";
-import { requireServerVersion } from "@/plugins/api/helpers";
-import { ProviderType, Scope } from "@/plugins/api/interfaces";
+import { ProviderType } from "@/plugins/api/interfaces";
 import { authManager } from "@/plugins/auth";
 import { store } from "@/plugins/store";
 import { Settings } from "@lucide/vue";
+import { SplitterGroup, SplitterPanel, SplitterResizeHandle } from "reka-ui";
 import { match } from "ts-pattern";
 import { computed, provide, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -314,6 +355,14 @@ const router = useRouter();
 const { t } = useI18n();
 const { getPreference, setPreference } = useUserPreferences();
 const { mobile } = useDisplay();
+
+// the settings tree beside the page; phones keep the card overview
+const { storage } = usePaneLayout();
+const savedTreeLayout = getPreference<boolean>("settings.treeLayout", true);
+const treeLayout = computed(() => !mobile.value && savedTreeLayout.value);
+const toggleTreeLayout = function () {
+  setPreference("settings.treeLayout", !savedTreeLayout.value);
+};
 
 const settingsViewMode = ref<"list" | "card">("card");
 const settingsListPrependGap = computed(() => (mobile.value ? 4 : 24));
@@ -480,130 +529,7 @@ provide("systemViewMode", {
   toggleViewMode: toggleSystemViewMode,
 });
 
-const allSettingsSections = [
-  {
-    name: "music_providers",
-    label: "settings.music_sources",
-    description: "settings.music_providers_description",
-    icon: "mdi-music",
-    color: "blue",
-    route: { name: "providersettings", query: { types: "music" } },
-    // a member holding the scope manages the music sources it owns here
-    adminOnly: false,
-    requiresScope: Scope.CONFIG_PROVIDERS_OWN,
-  },
-  {
-    name: "player_providers",
-    label: "settings.playerproviders",
-    description: "settings.player_providers_description",
-    icon: "mdi-speaker-multiple",
-    color: "green",
-    route: { name: "providersettings", query: { types: "player" } },
-    adminOnly: true,
-  },
-  {
-    name: "metadata_providers",
-    label: "settings.metadataproviders",
-    description: "settings.metadata_providers_description",
-    icon: "mdi-file-code",
-    color: "indigo",
-    route: { name: "providersettings", query: { types: "metadata" } },
-    adminOnly: true,
-  },
-  {
-    name: "plugin_providers",
-    label: "settings.plugins",
-    description: "settings.plugin_providers_description",
-    icon: "mdi-puzzle",
-    color: "deep-purple",
-    route: { name: "providersettings", query: { types: "plugin" } },
-    adminOnly: true,
-  },
-  {
-    name: "players",
-    label: "settings.players",
-    description: "settings.players_description",
-    icon: "mdi-tune",
-    color: "teal",
-    route: { name: "playersettings" },
-    adminOnly: true,
-  },
-  {
-    name: "audio_analysis_providers",
-    label: "settings.audio_analysis_providers",
-    description: "settings.audio_analysis_providers_description",
-    icon: "mdi-waveform",
-    color: "blue",
-    route: { name: "providersettings", query: { types: "audio_analysis" } },
-    adminOnly: true,
-    minServerVersion: "2.9.0",
-  },
-  {
-    name: "profile",
-    label: "auth.profile",
-    description: "settings.profile_description",
-    icon: "mdi-account-cog",
-    color: "indigo",
-    route: { name: "profile" },
-    adminOnly: false,
-  },
-  {
-    name: "frontend",
-    label: "settings.frontend",
-    description: "settings.frontend_description",
-    icon: "mdi-palette",
-    color: "orange",
-    route: { name: "frontendsettings" },
-    adminOnly: false,
-  },
-  {
-    name: "users",
-    label: "auth.user_management",
-    description: "settings.users_description",
-    icon: "mdi-account-multiple",
-    color: "teal",
-    route: { name: "usersettings" },
-    adminOnly: true,
-  },
-  {
-    name: "remote_access",
-    label: "settings.remote_access",
-    description: "settings.remote_access_description",
-    icon: "mdi-cloud-lock",
-    color: "deep-purple",
-    route: { name: "remoteaccesssettings" },
-    adminOnly: true,
-  },
-  {
-    name: "system",
-    label: "settings.system",
-    description: "settings.system_description",
-    icon: "mdi-server",
-    color: "purple",
-    route: { name: "systemsettings" },
-    adminOnly: true,
-  },
-  {
-    name: "about",
-    label: "settings.about",
-    description: "settings.about_description",
-    icon: "mdi-information-outline",
-    color: "grey-darken-1",
-    route: { name: "aboutsettings" },
-    adminOnly: false,
-  },
-];
-
-const settingsSections = computed(() => {
-  const isAdmin = authManager.isAdmin();
-  return allSettingsSections.filter(
-    (section) =>
-      (!section.adminOnly || isAdmin) &&
-      (!section.requiresScope || authManager.hasScope(section.requiresScope)) &&
-      (!section.minServerVersion ||
-        requireServerVersion(section.minServerVersion)),
-  );
-});
+const settingsSections = useSettingsSections();
 
 const providerSectionNames = [
   "music_providers",
@@ -877,6 +803,12 @@ const breadcrumbItems = computed(() => {
         disabled: true,
       });
     })
+    .with("frontendlibraryview", () => {
+      items.push({ title: t("settings.library_view.title"), disabled: true });
+    })
+    .with("frontendkeyboard", () => {
+      items.push({ title: t("settings.keyboard.title"), disabled: true });
+    })
     .with("backgroundtasks", () => {
       items.push({
         title: t("background_tasks.title"),
@@ -904,6 +836,49 @@ const breadcrumbItems = computed(() => {
 </script>
 
 <style scoped>
+.settings-body {
+  min-height: 0;
+}
+
+.settings-body__tree {
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+  max-height: calc(100vh - 160px);
+  background: rgb(var(--v-theme-panel));
+}
+
+.settings-body__content {
+  min-width: 0;
+}
+
+.settings-body__handle {
+  width: 6px;
+  flex: none;
+  position: relative;
+  background: rgb(var(--v-theme-panel));
+  border-left: 1px solid rgba(var(--v-theme-fg), 0.08);
+  border-right: 1px solid rgba(var(--v-theme-fg), 0.08);
+  cursor: col-resize;
+}
+
+.settings-body__handle::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 28px;
+  transform: translate(-50%, -50%);
+  border-radius: 1px;
+  background: rgba(var(--v-theme-fg), 0.22);
+}
+
+.settings-body__handle:hover::after,
+.settings-body__handle[data-state="drag"]::after {
+  background: rgb(var(--v-theme-primary));
+}
+
 .settings-overview {
   max-width: 1200px !important;
   margin: 0 auto;
