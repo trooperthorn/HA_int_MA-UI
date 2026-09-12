@@ -228,6 +228,14 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: "/library",
+        name: "librarymanager",
+        component: () =>
+          import(
+            /* webpackChunkName: "librarymanager" */ "@/library-manager/LibraryManagerView.vue"
+          ),
+      },
+      {
         path: "/browse",
         name: "browse",
         component: () =>

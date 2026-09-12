@@ -2509,5 +2509,40 @@
     "command_center_navigate": "navigate",
     "command_center_open": "open",
     "command_center_keep_typing": "Keep typing to search...",
-    "screens": "Screens"
+    "screens": "Screens",
+    "library_manager": {
+        "title": "Library manager",
+        "search_placeholder": "Search library - title, artist, album",
+        "favorites_only": "Favorites only",
+        "columns": {
+            "track_number": "#",
+            "title": "Title",
+            "artist": "Artist",
+            "album": "Album",
+            "album_artist": "Album artist",
+            "year": "Year",
+            "genre": "Genre",
+            "favorite": "Favorite",
+            "source": "Src",
+            "duration": "Length",
+            "last_played": "Last played",
+            "date_added": "Date added",
+            "disc_number": "Disc",
+            "format": "Format",
+            "path": "Path",
+            "explicit": "Explicit",
+            "popularity": "Popularity",
+            "menu": "Actions"
+        },
+        "shortcuts": {
+            "play_pause": "Play \/ pause",
+            "next_track": "Next track",
+            "previous_track": "Previous track",
+            "seek_back": "Back 10 seconds",
+            "seek_forward": "Forward 10 seconds",
+            "volume_up": "Volume up",
+            "volume_down": "Volume down",
+            "mute_toggle": "Mute \/ unmute"
+        }
+    }
 }
