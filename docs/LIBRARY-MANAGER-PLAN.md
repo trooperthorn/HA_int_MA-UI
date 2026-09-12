@@ -262,14 +262,14 @@ collide with a browser shortcut and cannot fire while typing.
 | Stop | - | Ctrl+O | not bound (browser owns Ctrl+O; Space covers it) | - |
 | Show now-playing track in list | Ctrl+L | F6 | `Ctrl+L` | grid scroll-to + select |
 | Toggle favorite on selection | - | - | `Shift+Ctrl+L` | `api.toggleFavorite` |
-| Edit selected track | - | Shift+Enter | `Shift+Enter` | `eventbus editItemDialog` |
+| Properties of selected track | - | Shift+Enter | `Shift+Enter` | opens the row menu (edit only exists for built-in items, and the menu already guards that) |
 | Show info | Ctrl+I | - | `Ctrl+I` | opens Selected pane if hidden |
 | Add selection to playlist | - | - | `Shift+Ctrl+P` | `eventbus.emit("playlistdialog", {items})` |
 | Remove selection (queue / playlist context only) | Delete | Delete | `Delete` | queue/playlist remove |
-| Select all / none | Ctrl+A / Shift+Ctrl+A | Ctrl+A | `Ctrl+A` / `Shift+Ctrl+A` | grid selection |
+| Select all / none | Ctrl+A / Shift+Ctrl+A | Ctrl+A | `Ctrl+A` / `Shift+Ctrl+A` | grid selection - only the rows that have been paged in; selecting the whole library needs a server-side batch action (follow-up) |
 | First / last row, page | Home / End | Home / End | `Home` `End` `PgUp` `PgDn`, `Shift+` extends | grid |
 | Move in list | Up / Down | Up / Down | `Up` / `Down`, `Shift+Up/Down` extends | grid |
-| Type-ahead jump in a column | - | - | letters while grid focused (Explorer-style) | replaces "any key opens search" |
+| Type-ahead jump in a column | - | - | letters while grid focused (Explorer-style) | replaces "any key opens search"; searches paged-in rows only - the browser strip's per-column search (Phase 3) is the way to jump anywhere in 22k tracks |
 | Focus search | Ctrl+F | Ctrl+F, F3 | `/` and `Ctrl+K` (exists) | `CommandCenter` |
 | Sort by column | - | - | `s` then `1-9` (column index) | grid sort |
 | Go to Now Playing | - | F6 | `g` `n` | tree select |

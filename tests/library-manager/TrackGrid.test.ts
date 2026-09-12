@@ -4,7 +4,6 @@ import {
   type LibraryTrack,
 } from "@/library-manager/columns";
 import TrackGrid from "@/library-manager/panes/TrackGrid.vue";
-import { eventbus } from "@/plugins/eventbus";
 import {
   handleMediaItemClick,
   handleMenuBtnClick,
@@ -41,10 +40,6 @@ vi.mock("@/helpers/media_item_actions", () => ({
   handleMediaItemClick: vi.fn(),
   handleMenuBtnClick: vi.fn(),
   handlePlayBtnClick: vi.fn(),
-}));
-
-vi.mock("@/plugins/eventbus", () => ({
-  eventbus: { emit: vi.fn(), on: vi.fn(), off: vi.fn() },
 }));
 
 vi.mock("@/plugins/api/helpers", () => ({
@@ -212,7 +207,7 @@ describe("TrackGrid", () => {
     expect(emittedSelection(wrapper)).toHaveLength(0);
   });
 
-  it("plays on enter, edits on shift+enter and hands / to the search box", async () => {
+  it("plays on enter, opens the row menu on shift+enter and hands / to the search box", async () => {
     const wrapper = mountGrid();
     const grid = wrapper.find("[role=grid]");
     await rowAt(wrapper, 2).trigger("click");
@@ -224,10 +219,10 @@ describe("TrackGrid", () => {
     });
 
     await grid.trigger("keydown", { key: "Enter", shiftKey: true });
-    expect(eventbus.emit).toHaveBeenCalledWith(
-      "editItemDialog",
-      expect.objectContaining({ item_id: "t2" }),
-    );
+    expect(handleMenuBtnClick).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(handleMenuBtnClick).mock.calls[0][0]).toMatchObject([
+      { item_id: "t2" },
+    ]);
 
     await grid.trigger("keydown", { key: "/" });
     expect(wrapper.emitted("focusSearch")).toHaveLength(1);

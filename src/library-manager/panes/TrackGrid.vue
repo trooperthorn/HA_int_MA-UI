@@ -205,7 +205,6 @@ import {
   type MediaItemType,
   type Track,
 } from "@/plugins/api/interfaces";
-import { eventbus } from "@/plugins/eventbus";
 import { store } from "@/plugins/store";
 import {
   gridSortToSortBy,
@@ -528,7 +527,20 @@ function onKeydown(event: KeyboardEvent) {
       if (!track) return;
       event.preventDefault();
       if (event.shiftKey && !ctrl) {
-        eventbus.emit("editItemDialog", track);
+        // properties: the row menu carries edit, info and the rest for
+        // whatever this item's provider supports
+        const rowEl = gridRef.value?.querySelector<HTMLElement>(
+          `[aria-rowindex="${focused + 1}"]`,
+        );
+        const rect = rowEl?.getBoundingClientRect();
+        handleMenuBtnClick(
+          menuTargets(focused),
+          rect ? rect.left + 48 : 0,
+          rect ? rect.bottom : 0,
+          props.parentItem,
+          true,
+          props.sortBy,
+        );
         return;
       }
       if (!event.shiftKey && !ctrl) {
