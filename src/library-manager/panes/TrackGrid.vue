@@ -571,7 +571,7 @@ function onKeydown(event: KeyboardEvent) {
       clearSelection();
       return;
   }
-  if (event.key.length === 1 && !ctrl && !event.altKey) {
+  if (event.key.length === 1 && event.key !== " " && !ctrl && !event.altKey) {
     event.preventDefault();
     typeAheadJump(event.key);
   }

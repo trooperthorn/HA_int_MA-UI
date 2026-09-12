@@ -2533,6 +2533,16 @@
             "explicit": "Explicit",
             "popularity": "Popularity",
             "menu": "Actions"
+        },
+        "shortcuts": {
+            "play_pause": "Play \/ pause",
+            "next_track": "Next track",
+            "previous_track": "Previous track",
+            "seek_back": "Back 10 seconds",
+            "seek_forward": "Forward 10 seconds",
+            "volume_up": "Volume up",
+            "volume_down": "Volume down",
+            "mute_toggle": "Mute \/ unmute"
         }
     }
 }

@@ -78,6 +78,7 @@ import {
 } from "@/composables/userPreferences";
 import { store } from "@/plugins/store";
 import { useGridColumns } from "./composables/useGridColumns";
+import { useKeymap } from "./composables/useKeymap";
 import { useTrackSource, type TrackFilter } from "./composables/useTrackSource";
 import type { LibraryTrack } from "./columns";
 import TrackGrid from "./panes/TrackGrid.vue";
@@ -91,6 +92,7 @@ const router = useRouter();
 const { getPreference } = useUserPreferences();
 const { visibility, visibleColumns, rowHeight, setColumnVisible } =
   useGridColumns();
+useKeymap();
 
 // the manager is a desktop workflow; phones get the existing track list
 watch(
