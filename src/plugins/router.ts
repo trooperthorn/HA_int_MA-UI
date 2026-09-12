@@ -542,6 +542,24 @@ export const routes: RouteRecordRaw[] = [
             props: true,
           },
           {
+            path: "frontend/library-view",
+            name: "frontendlibraryview",
+            component: () =>
+              import(
+                /* webpackChunkName: "frontendlibraryview" */ "@/views/settings/LibraryViewSettings.vue"
+              ),
+            props: true,
+          },
+          {
+            path: "frontend/keyboard",
+            name: "frontendkeyboard",
+            component: () =>
+              import(
+                /* webpackChunkName: "frontendkeyboard" */ "@/views/settings/KeyboardSettings.vue"
+              ),
+            props: true,
+          },
+          {
             path: "users",
             name: "usersettings",
             component: () =>
