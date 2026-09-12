@@ -103,13 +103,16 @@ The piece that fixes the pain first: a text-first, virtualized, sortable
 track grid fed by the same `getLibraryTracks` call `LibraryTracks.vue`
 uses today.
 
-- `TrackGrid.vue`: TanStack table (`useVueTable`, manual sorting, manual
-  pagination) + `@tanstack/vue-virtual` row virtualizer, 28 px rows,
-  sticky header. Columns from `columns.ts`: track #, title, artist,
-  album, year, genre, favorite (heart), source (provider icon via
-  `getListItemProviderIconDomain`), length, plays, last played, row menu.
-  Hidden by default: album artist, date added, disc #, bitrate/format,
-  path, explicit, popularity.
+- `TrackGrid.vue`: a fixed column table in `columns.ts` rendered
+  directly (TanStack's table object is not needed for a known column
+  set) + `@tanstack/vue-virtual` row virtualizer, 28 px rows, sticky
+  header. Columns: track #, title, artist, album, year, genre, favorite
+  (heart), source (provider icon via `getListItemProviderIconDomain`),
+  length, last played, row menu. Hidden by default: album artist, date
+  added, disc #, format, path, explicit, popularity. There is no Plays
+  column: `music-assistant-models` 1.1.210 puts `last_played` and
+  `date_added` on library items but no `play_count`, so the `play_count`
+  sort key has nothing to display.
 - Sorting: header click maps to the existing sort keys; columns without a
   server sort key (genre, favorite, source, year) render as not sortable
   rather than sorting client-side on a partial page.
