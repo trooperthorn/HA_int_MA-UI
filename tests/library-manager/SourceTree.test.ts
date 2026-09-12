@@ -15,8 +15,10 @@ const mocks = vi.hoisted(() => ({
   togglePlayerQueue: vi.fn(),
 }));
 
-vi.mock("@/plugins/api", () => {
+vi.mock("@/plugins/api", async () => {
+  const { ref } = await import("vue");
   const api = {
+    state: ref("initialized"),
     browse: mocks.browse,
     getLibraryArtistsCount: mocks.getLibraryArtistsCount,
     getLibraryAlbumsCount: mocks.getLibraryAlbumsCount,
@@ -43,14 +45,34 @@ vi.mock("@/plugins/api", () => {
         domain: "spotify",
         instance_id: "spotify--1",
         available: true,
+        supported_features: [
+          "library_artists",
+          "library_albums",
+          "library_tracks",
+          "library_playlists",
+          "library_podcasts",
+        ],
+      },
+      "filesystem_local--1": {
+        type: "music",
+        domain: "filesystem_local",
+        instance_id: "filesystem_local--1",
+        available: true,
+        supported_features: ["browse"],
+      },
+      "radiobrowser--1": {
+        type: "music",
+        domain: "radiobrowser",
+        instance_id: "radiobrowser--1",
+        available: true,
+        supported_features: ["browse", "library_radios"],
       },
     },
-    getProvider: (id: string) =>
-      id === "spotify--1"
-        ? { type: "music", domain: "spotify", instance_id: id }
-        : undefined,
+    getProvider(id: string) {
+      return (this.providers as Record<string, unknown>)[id];
+    },
   };
-  return { api, default: api };
+  return { api, default: api, ConnectionState: { INITIALIZED: "initialized" } };
 });
 
 vi.mock("@/plugins/store", async () => {
@@ -109,6 +131,11 @@ const folder = (name: string, path: string, provider = "spotify--1") => ({
   image: null,
 });
 
+const standardFolder = (itemId: string, name: string) => ({
+  ...folder(name, `spotify--1://${itemId}`),
+  item_id: itemId,
+});
+
 function mountTree(activeNode = "library.tracks") {
   return mount(SourceTree, {
     props: { activeNode },
@@ -138,18 +165,130 @@ describe("SourceTree", () => {
     mocks.browse.mockImplementation(async (path?: string) => {
       if (!path) {
         return [
-          folder("Spotify", "spotify--1://"),
-          folder("Filesystem", "filesystem_local--1://", "filesystem_local--1"),
+          folder("Spotify", "spotify--1://", "spotify"),
+          folder("Filesystem", "filesystem_local--1://", "filesystem_local"),
+          folder("RadioBrowser", "radiobrowser--1://", "radiobrowser"),
         ];
       }
       if (path === "spotify--1://") {
         return [
           folder("..", "root"),
-          folder("Artists", "spotify--1://artists"),
-          folder("Playlists", "spotify--1://playlists"),
+          standardFolder("new-releases", "New Releases"),
+          standardFolder("categories", "Genres & Moods"),
+          standardFolder("artists", "Artists"),
+          standardFolder("albums", "Albums"),
+          standardFolder("tracks", "Tracks"),
+          standardFolder("playlists", "Playlists"),
+          standardFolder("podcasts", "Podcasts"),
         ];
       }
-      return [];
+      if (path === "filesystem_local--1://") {
+        return [
+          folder("..", "root"),
+          folder("Music", "filesystem_local--1://Music", "filesystem_local--1"),
+        ];
+      }
+      return [folder("..", "root")];
+    });
+  });
+
+  it("lists the library in source order without a tracks node", async () => {
+    const wrapper = mountTree();
+    await flushPromises();
+
+    const labels = rowLabels(wrapper);
+    const libraryStart = labels.indexOf("library_manager.tree.library");
+    expect(labels.slice(libraryStart + 1, libraryStart + 8)).toEqual([
+      "playlists",
+      "artists",
+      "library_manager.tree.album_artists",
+      "genres",
+      "albums",
+      "library_manager.tree.recently_added",
+      "library_manager.tree.files_to_edit",
+    ]);
+    expect(labels).not.toContain("tracks");
+  });
+
+  it("gives a music source the library listings and drops folders with nothing behind them", async () => {
+    const wrapper = mountTree();
+    await flushPromises();
+
+    const rows = () => wrapper.findAll(".source-tree__row");
+    const spotify = rows().find((row) => row.text().includes("Spotify"))!;
+    await spotify.find(".source-tree__chevron").trigger("click");
+    await flushPromises();
+
+    const labels = rowLabels(wrapper);
+    const start = labels.indexOf("Spotify");
+    expect(labels.slice(start + 1, start + 6)).toEqual([
+      "playlists",
+      "artists",
+      "library_manager.tree.album_artists",
+      "genres",
+      "albums",
+    ]);
+    for (const dropped of [
+      "New Releases",
+      "Genres & Moods",
+      "Tracks",
+      "Podcasts",
+    ]) {
+      expect(labels).not.toContain(dropped);
+    }
+
+    // the source itself lists its tracks like the library does
+    await spotify.trigger("click");
+    expect(wrapper.emitted("select")?.at(-1)?.[0]).toMatchObject({
+      scope: "library",
+      mediaType: MediaType.TRACK,
+      provider: ["spotify--1"],
+    });
+
+    // a listing under the source carries the source
+    await rows()
+      .find(
+        (row) => row.text().startsWith("genres") && row.text() === "genres",
+      )!
+      .trigger("click");
+    expect(wrapper.emitted("select")?.at(-1)?.[0]).toMatchObject({
+      scope: "library",
+      node: "source:spotify--1.genres",
+      mediaType: MediaType.GENRE,
+      provider: ["spotify--1"],
+    });
+  });
+
+  it("keeps a folder tree for the filesystem and hides the chevron of an empty source", async () => {
+    const wrapper = mountTree();
+    await flushPromises();
+
+    const rows = () => wrapper.findAll(".source-tree__row");
+    const radio = rows().find((row) => row.text().includes("RadioBrowser"))!;
+    expect(radio.find("button.source-tree__chevron").exists()).toBe(false);
+
+    const filesystem = rows().find((row) => row.text().includes("Filesystem"))!;
+    expect(filesystem.find("button.source-tree__chevron").exists()).toBe(true);
+    await filesystem.find(".source-tree__chevron").trigger("click");
+    await flushPromises();
+    const labels = rowLabels(wrapper);
+    const start = labels.indexOf("Filesystem");
+    expect(labels.slice(start + 1, start + 7)).toEqual([
+      "playlists",
+      "artists",
+      "library_manager.tree.album_artists",
+      "genres",
+      "albums",
+      "Music",
+    ]);
+
+    await rows()
+      .find((row) => row.text() === "Music")!
+      .trigger("click");
+    expect(wrapper.emitted("select")?.at(-1)?.[0]).toMatchObject({
+      scope: "browse",
+      browsePath: "filesystem_local--1://Music",
+      provider: ["filesystem_local--1"],
     });
   });
 
@@ -166,7 +305,7 @@ describe("SourceTree", () => {
     expect(text).toContain("artists 30");
     expect(text).toContain("library_manager.tree.album_artists 12");
     expect(text).toContain("albums 40");
-    expect(text).toContain("tracks 500");
+    expect(text).toContain("library_manager.tree.library 500");
     expect(text).toContain("genres 7");
     expect(text).toContain("playlists 3");
     expect(text).toContain("players 1");
@@ -176,7 +315,7 @@ describe("SourceTree", () => {
     expect(rowLabels(wrapper)).toContain("Filesystem");
   });
 
-  it("expands a provider once and hides its parent entry", async () => {
+  it("browses a provider once and hides its parent entry", async () => {
     const wrapper = mountTree();
     await flushPromises();
 
@@ -187,8 +326,6 @@ describe("SourceTree", () => {
     await flushPromises();
 
     const labels = rowLabels(wrapper);
-    expect(labels).toContain("Artists");
-    expect(labels).toContain("Playlists");
     expect(labels).not.toContain("..");
     expect(mocks.browse).toHaveBeenCalledWith("spotify--1://", "p1");
 
@@ -230,12 +367,12 @@ describe("SourceTree", () => {
     });
 
     await rows()
-      .find((row) => row.text().includes("Spotify"))!
+      .find((row) => row.text().includes("RadioBrowser"))!
       .trigger("click");
     expect(wrapper.emitted("select")?.at(-1)?.[0]).toMatchObject({
       scope: "browse",
-      browsePath: "spotify--1://",
-      provider: ["spotify--1"],
+      browsePath: "radiobrowser--1://",
+      provider: ["radiobrowser--1"],
     });
   });
 
@@ -273,6 +410,7 @@ describe("SourceTree", () => {
     await tree.trigger("keydown", { key: "ArrowRight" });
     expect(rowLabels(wrapper)).toContain("artists");
 
+    await tree.trigger("keydown", { key: "ArrowDown" });
     await tree.trigger("keydown", { key: "ArrowDown" });
     await tree.trigger("keydown", { key: "Enter" });
     const selected = wrapper.emitted("select")?.at(-1)?.[0] as Record<

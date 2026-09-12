@@ -116,6 +116,7 @@
               :artist="browser.artist"
               :album="browser.album"
               :album-artists-only="node.albumArtistsOnly"
+              :provider="node.provider"
               @update:genres="setGenres"
               @update:artist="setArtist"
               @update:album="setAlbum"
@@ -243,7 +244,8 @@ const {
 } = useLibraryFilter();
 useKeymap();
 
-// the browser narrows library listings; provider folders have nothing to narrow
+// the browser narrows library listings, whole or per source; browsed folders
+// have nothing to narrow
 const stripVisible = computed(
   () => showStrip.value && node.scope === "library",
 );

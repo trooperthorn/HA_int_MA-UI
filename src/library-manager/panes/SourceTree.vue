@@ -19,14 +19,14 @@
         'source-tree__row--section': row.depth === 0,
       }"
       :style="{ paddingLeft: `${10 + row.depth * 16}px` }"
-      :aria-expanded="row.node.expandable ? row.expanded : undefined"
+      :aria-expanded="row.expandable ? row.expanded : undefined"
       :aria-selected="row.node.id === activeNode"
       :aria-level="row.depth + 1"
       @click="onRowClick(row.node)"
-      @dblclick="row.node.expandable && toggle(row.node)"
+      @dblclick="row.expandable && toggle(row.node)"
     >
       <button
-        v-if="row.node.expandable"
+        v-if="row.expandable"
         type="button"
         class="source-tree__chevron"
         tabindex="-1"
@@ -71,13 +71,19 @@ import {
   Folder,
   LibraryBig,
   ListMusic,
-  Music2,
   Play,
   Speaker,
   Tag,
   Users,
 } from "@lucide/vue";
-import { computed, onBeforeUnmount, onMounted, ref, type Component } from "vue";
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+  type Component,
+} from "vue";
 import { useI18n } from "vue-i18n";
 import ProviderIcon from "@/components/ProviderIcon.vue";
 import { Spinner } from "@/components/ui/spinner";
@@ -88,11 +94,13 @@ import {
 import { onLibrarySyncCompleted } from "@/composables/useLibrarySync";
 import { isSelectablePlayer } from "@/helpers/players";
 import { togglePlayerQueue } from "@/helpers/player_queue";
-import { api } from "@/plugins/api";
+import { api, ConnectionState } from "@/plugins/api";
 import {
   MediaType,
+  ProviderFeature,
   ProviderType,
   type BrowseFolder,
+  type ProviderInstance,
 } from "@/plugins/api/interfaces";
 import { store } from "@/plugins/store";
 import type { NodeFilter } from "../composables/useLibraryFilter";
@@ -103,6 +111,7 @@ export interface TreeNode {
   icon?: Component;
   providerDomain?: string;
   count?: number;
+  // may have children; a node whose load turns up none loses its chevron
   expandable: boolean;
   // what selecting the node lists; nodes without a filter run an action
   filter?: NodeFilter;
@@ -156,7 +165,6 @@ async function refreshCount(key: string, load: () => Promise<number>) {
 const unsubscribers: Array<() => void> = [];
 onMounted(() => {
   for (const [key, mediaType, load] of COUNT_LOADERS) {
-    void refreshCount(key, load);
     unsubscribers.push(
       onLibrarySyncCompleted(mediaType, () => void refreshCount(key, load)),
     );
@@ -181,29 +189,68 @@ const libraryNode = (
   filter: { scope: "library", node: `library.${id}`, ...filter },
 });
 
+// the listings every source offers, in the order they appear under a source;
+// the library gets them all, a provider only the ones its features back
+const SOURCE_LISTINGS: Array<{
+  id: string;
+  labelKey: string;
+  icon: Component;
+  countKey: string;
+  feature: ProviderFeature;
+  filter: Partial<NodeFilter> & { mediaType: MediaType };
+}> = [
+  {
+    id: "playlists",
+    labelKey: "playlists",
+    icon: ListMusic,
+    countKey: "playlists",
+    feature: ProviderFeature.LIBRARY_PLAYLISTS,
+    filter: { mediaType: MediaType.PLAYLIST },
+  },
+  {
+    id: "artists",
+    labelKey: "artists",
+    icon: Users,
+    countKey: "artists",
+    feature: ProviderFeature.LIBRARY_ARTISTS,
+    filter: { mediaType: MediaType.ARTIST },
+  },
+  {
+    id: "album_artists",
+    labelKey: "library_manager.tree.album_artists",
+    icon: Users,
+    countKey: "album_artists",
+    feature: ProviderFeature.LIBRARY_ARTISTS,
+    filter: { mediaType: MediaType.ARTIST, albumArtistsOnly: true },
+  },
+  {
+    id: "genres",
+    labelKey: "genres",
+    icon: Tag,
+    countKey: "genres",
+    feature: ProviderFeature.LIBRARY_ARTISTS,
+    filter: { mediaType: MediaType.GENRE },
+  },
+  {
+    id: "albums",
+    labelKey: "albums",
+    icon: Disc3,
+    countKey: "albums",
+    feature: ProviderFeature.LIBRARY_ALBUMS,
+    filter: { mediaType: MediaType.ALBUM },
+  },
+];
+
 const libraryChildren = computed<TreeNode[]>(() => [
-  libraryNode("artists", t("artists"), Users, "artists", {
-    mediaType: MediaType.ARTIST,
-  }),
-  libraryNode(
-    "album_artists",
-    t("library_manager.tree.album_artists"),
-    Users,
-    "album_artists",
-    { mediaType: MediaType.ARTIST, albumArtistsOnly: true },
+  ...SOURCE_LISTINGS.map((listing) =>
+    libraryNode(
+      listing.id,
+      t(listing.labelKey),
+      listing.icon,
+      listing.countKey,
+      listing.filter,
+    ),
   ),
-  libraryNode("albums", t("albums"), Disc3, "albums", {
-    mediaType: MediaType.ALBUM,
-  }),
-  libraryNode("tracks", t("tracks"), Music2, "tracks", {
-    mediaType: MediaType.TRACK,
-  }),
-  libraryNode("genres", t("genres"), Tag, "genres", {
-    mediaType: MediaType.GENRE,
-  }),
-  libraryNode("playlists", t("playlists"), ListMusic, "playlists", {
-    mediaType: MediaType.PLAYLIST,
-  }),
   libraryNode(
     "recently_added",
     t("library_manager.tree.recently_added"),
@@ -231,7 +278,10 @@ async function loadProviderRoots(): Promise<TreeNode[]> {
     providerRoots.value = items.filter(isChildFolder);
     providerRootsLoaded.value = true;
   }
-  return providerRoots.value.map(folderNode);
+  const nodes = providerRoots.value.map(providerNode);
+  // a source with nothing under it should not offer to open; find out now
+  for (const node of nodes) void ensureChildren(node);
+  return nodes;
 }
 
 // providers list a ".." entry that browses back up; the tree already has a parent
@@ -241,30 +291,106 @@ const isChildFolder = (item: {
 }): item is BrowseFolder =>
   item.media_type === MediaType.FOLDER && item.name !== "..";
 
-function providerDomainFor(folder: BrowseFolder): string {
-  const provider = api.getProvider(folder.provider);
-  return provider?.domain ?? folder.provider;
+// the root folder names its provider by domain; the path carries the instance
+const instanceIdOf = (folder: BrowseFolder) => folder.path.split("://")[0];
+
+// the folders a provider's default listing offers; the tree replaces them
+// with its own listing nodes (or drops the ones with nothing behind them)
+const STANDARD_FOLDERS = new Set([
+  "artists",
+  "albums",
+  "tracks",
+  "playlists",
+  "podcasts",
+  "audiobooks",
+  "radios",
+  "sound_effects",
+  "recommendations",
+  "new-releases",
+  "categories",
+]);
+
+const isFilesystem = (provider: ProviderInstance) =>
+  provider.domain.startsWith("filesystem_");
+
+// what of the library a provider can be listed by; filesystem providers do
+// not declare library features but their files are synced into it
+function offersListing(provider: ProviderInstance, feature: ProviderFeature) {
+  if (provider.type !== ProviderType.MUSIC) return false;
+  return (
+    isFilesystem(provider) || provider.supported_features.includes(feature)
+  );
+}
+
+function sourceListingNode(
+  instanceId: string,
+  listing: (typeof SOURCE_LISTINGS)[number],
+): TreeNode {
+  const id = `source:${instanceId}.${listing.id}`;
+  return {
+    id,
+    label: t(listing.labelKey),
+    icon: listing.icon,
+    expandable: false,
+    filter: {
+      scope: "library",
+      node: id,
+      provider: [instanceId],
+      ...listing.filter,
+    },
+  };
+}
+
+// a music provider lists like the library, narrowed to itself; anything else
+// (radio, folder trees) browses
+function providerNode(folder: BrowseFolder): TreeNode {
+  const instanceId = instanceIdOf(folder);
+  const provider =
+    api.getProvider(instanceId) ?? api.getProvider(folder.provider);
+  const listsTracks =
+    !!provider && offersListing(provider, ProviderFeature.LIBRARY_TRACKS);
+  const node = folderNode(folder);
+  return {
+    ...node,
+    providerDomain:
+      provider?.type === ProviderType.MUSIC ? provider.domain : undefined,
+    filter: listsTracks
+      ? {
+          scope: "library",
+          node: node.id,
+          mediaType: MediaType.TRACK,
+          provider: [instanceId],
+        }
+      : node.filter,
+    loadChildren: async () => {
+      const items = await api.browse(folder.path, store.activePlayerId);
+      const listings = provider
+        ? SOURCE_LISTINGS.filter((listing) =>
+            offersListing(provider, listing.feature),
+          ).map((listing) => sourceListingNode(instanceId, listing))
+        : [];
+      const folders = items
+        .filter(isChildFolder)
+        .filter((item) => !STANDARD_FOLDERS.has(item.item_id))
+        .map(folderNode);
+      return [...listings, ...folders];
+    },
+  };
 }
 
 function folderNode(folder: BrowseFolder): TreeNode {
   const id = `browse:${folder.path}`;
-  const provider = api.getProvider(folder.provider);
-  const isMusicProvider = provider?.type === ProviderType.MUSIC;
   return {
     id,
     label: folder.name,
     icon: Folder,
-    providerDomain:
-      folder.path.endsWith("://") && isMusicProvider
-        ? providerDomainFor(folder)
-        : undefined,
     expandable: true,
     filter: {
       scope: "browse",
       node: id,
       mediaType: MediaType.FOLDER,
       browsePath: folder.path,
-      provider: [folder.provider],
+      provider: [instanceIdOf(folder)],
     },
     loadChildren: async () => {
       const items = await api.browse(folder.path, store.activePlayerId);
@@ -274,6 +400,8 @@ function folderNode(folder: BrowseFolder): TreeNode {
 }
 
 const loadedChildren = ref(new Map<string, TreeNode[]>());
+// expandable nodes whose load turned up nothing to expand
+const leafIds = ref(new Set<string>());
 
 const selectablePlayerCount = computed(
   () => Object.values(api.players).filter(isSelectablePlayer).length,
@@ -322,6 +450,7 @@ const roots = computed<TreeNode[]>(() => [
 interface VisibleRow {
   node: TreeNode;
   depth: number;
+  expandable: boolean;
   expanded: boolean;
   loading: boolean;
 }
@@ -330,18 +459,23 @@ function childrenOf(node: TreeNode): TreeNode[] {
   return node.children ?? loadedChildren.value.get(node.id) ?? [];
 }
 
+const isExpandable = (node: TreeNode) =>
+  node.expandable && !leafIds.value.has(node.id);
+
 const visibleRows = computed<VisibleRow[]>(() => {
   const rows: VisibleRow[] = [];
   const walk = (nodes: TreeNode[], depth: number) => {
     for (const node of nodes) {
       const isExpanded = expanded.value.has(node.id);
+      const expandable = isExpandable(node);
       rows.push({
         node,
         depth,
+        expandable,
         expanded: isExpanded,
         loading: loadingIds.value.has(node.id),
       });
-      if (node.expandable && isExpanded) walk(childrenOf(node), depth + 1);
+      if (expandable && isExpanded) walk(childrenOf(node), depth + 1);
     }
   };
   walk(roots.value, 0);
@@ -358,6 +492,9 @@ async function ensureChildren(node: TreeNode) {
   try {
     const children = await node.loadChildren();
     loadedChildren.value = new Map(loadedChildren.value).set(node.id, children);
+    if (children.length === 0) {
+      leafIds.value = new Set(leafIds.value).add(node.id);
+    }
     // branches the user left open below this one come back with it
     for (const child of children) {
       if (expanded.value.has(child.id)) void ensureChildren(child);
@@ -376,7 +513,7 @@ function persistExpanded() {
 }
 
 function expand(node: TreeNode) {
-  if (!node.expandable || expanded.value.has(node.id)) return;
+  if (!isExpandable(node) || expanded.value.has(node.id)) return;
   expanded.value = new Set(expanded.value).add(node.id);
   persistExpanded();
   void ensureChildren(node);
@@ -399,7 +536,7 @@ function activate(node: TreeNode) {
   focusedId.value = node.id;
   if (node.filter) emit("select", node.filter);
   else if (node.action) node.action();
-  else if (node.expandable) toggle(node);
+  else if (isExpandable(node)) toggle(node);
 }
 
 function onRowClick(node: TreeNode) {
@@ -407,12 +544,22 @@ function onRowClick(node: TreeNode) {
   activate(node);
 }
 
-onMounted(() => {
-  // restore lazily loaded branches the user left open
-  for (const node of roots.value) {
-    if (expanded.value.has(node.id)) void ensureChildren(node);
-  }
-});
+// a reload lands here before the server connection is up; counts and lazy
+// branches the user left open are (re)fetched whenever it becomes usable
+const connected = computed(
+  () => api.state.value === ConnectionState.INITIALIZED,
+);
+watch(
+  connected,
+  (ready) => {
+    if (!ready) return;
+    for (const [key, , load] of COUNT_LOADERS) void refreshCount(key, load);
+    for (const node of roots.value) {
+      if (expanded.value.has(node.id)) void ensureChildren(node);
+    }
+  },
+  { immediate: true },
+);
 
 // ---- keyboard --------------------------------------------------------------
 
@@ -458,13 +605,13 @@ function onKeydown(event: KeyboardEvent) {
     case "ArrowRight":
       if (!row) return;
       event.preventDefault();
-      if (row.node.expandable && !row.expanded) expand(row.node);
+      if (row.expandable && !row.expanded) expand(row.node);
       else moveFocus(1);
       return;
     case "ArrowLeft": {
       if (!row) return;
       event.preventDefault();
-      if (row.node.expandable && row.expanded) {
+      if (row.expandable && row.expanded) {
         collapse(row.node);
         return;
       }
