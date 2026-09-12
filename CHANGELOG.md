@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased (fork: trooperthorn/HA_int_MA-UI)
+
+### Features
+
+* **Library manager** at `/library`: source tree, genre / artist / album browser strip with per-column facet dropdowns, dense virtualized sortable track grid with server-backed type-ahead, Now Playing queue and selected-item panel, every pane resizable and remembered per user. See `docs/LIBRARY-MANAGER.md`.
+* **Settings tree** beside every settings page, with Library view and Keyboard pages under User Interface.
+* **Keyboard commands** for playback, selection, navigation chords, pane toggles and a `?` help overlay.
+
 ## [2.9.16](https://github.com/music-assistant/frontend/compare/v2.9.16...v2.9.16) (2024-11-21)
 
 

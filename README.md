@@ -2,6 +2,9 @@
 
 The Music Assistant frontend/panel is developed in Vue, development instructions below.
 
+This fork adds a desktop **Library manager** (`/library`) for large local
+collections: see [docs/LIBRARY-MANAGER.md](docs/LIBRARY-MANAGER.md).
+
 ## Recommended IDE Setup
 
 [VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=johnsoncodehk.volar) (and disable Vetur) + [TypeScript Vue Plugin (Volar)](https://marketplace.visualstudio.com/items?itemName=johnsoncodehk.vscode-typescript-vue-plugin).
