@@ -219,7 +219,8 @@ function onKeydown(event: KeyboardEvent) {
       emit("update:selectedIds", []);
       return;
   }
-  if (event.key.length === 1) {
+  // "?" opens the shortcut help; every other printable key jumps by letter
+  if (event.key.length === 1 && event.key !== "?") {
     event.preventDefault();
     typeAhead(event.key);
   }

@@ -564,8 +564,10 @@ function onKeydown(event: KeyboardEvent) {
     case "Enter": {
       const track = props.rows[focused];
       if (!track) return;
+      // ctrl variants belong to the keymap (play next, add to queue)
+      if (ctrl) return;
       event.preventDefault();
-      if (event.shiftKey && !ctrl) {
+      if (event.shiftKey) {
         // properties: the row menu carries edit, info and the rest for
         // whatever this item's provider supports
         const rowEl = gridRef.value?.querySelector<HTMLElement>(
@@ -582,7 +584,7 @@ function onKeydown(event: KeyboardEvent) {
         );
         return;
       }
-      if (!event.shiftKey && !ctrl) {
+      {
         const rect = gridRef.value?.getBoundingClientRect();
         handlePlayBtnClick(
           track,
@@ -610,10 +612,24 @@ function onKeydown(event: KeyboardEvent) {
       clearSelection();
       return;
   }
-  if (event.key.length === 1 && event.key !== " " && !ctrl && !event.altKey) {
+  // "?" opens the shortcut help; every other printable key jumps by letter
+  if (
+    event.key.length === 1 &&
+    event.key !== " " &&
+    event.key !== "?" &&
+    !ctrl &&
+    !event.altKey
+  ) {
     event.preventDefault();
     typeAheadJump(event.key);
   }
+}
+
+// sort by the nth (1-based) sortable column, as the "s" chord asks
+function sortByIndex(position: number) {
+  const sortable = props.visibleColumns.filter(canSort);
+  const column = sortable[position - 1];
+  if (column) toggleSort(column.id);
 }
 
 // ---- public -----------------------------------------------------------------
@@ -633,6 +649,7 @@ defineExpose({
   scrollToIndex,
   selectAll,
   clearSelection,
+  sortByIndex,
 });
 </script>
 
