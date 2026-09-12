@@ -2538,6 +2538,9 @@
             "type": "Type"
         },
         "toggle_tree": "Show or hide the source tree",
+        "toggle_strip": "Show or hide the genre, artist and album browser",
+        "clear_filters": "Clear filters",
+        "loading_all": "Loading {0} of {1} to sort",
         "tree": {
             "library": "Library (all sources)",
             "sources": "Sources",

@@ -11,6 +11,7 @@ import {
 } from "@/helpers/media_item_actions";
 import { enableAutoUnmount, mount, type VueWrapper } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MediaType } from "@/plugins/api/interfaces";
 import { track } from "../fixtures/track";
 
 const mockToggleFavorite = vi.hoisted(() => vi.fn());
@@ -252,10 +253,11 @@ describe("TrackGrid", () => {
     expect(emittedSelection(wrapper)?.map((t) => t.item_id)).toEqual(["c"]);
   });
 
-  it("opens the item on double click and the menu on right click and the button", async () => {
+  it("plays the item on double click and opens the menu on right click and the button", async () => {
     const wrapper = mountGrid();
     await rowAt(wrapper, 0).trigger("dblclick");
-    expect(handleMediaItemClick).toHaveBeenCalledTimes(1);
+    expect(handlePlayBtnClick).toHaveBeenCalledTimes(1);
+    expect(handleMediaItemClick).not.toHaveBeenCalled();
 
     await rowAt(wrapper, 1).trigger("contextmenu");
     expect(handleMenuBtnClick).toHaveBeenCalledTimes(1);
@@ -281,6 +283,49 @@ describe("TrackGrid", () => {
       expect.objectContaining({ item_id: "t3" }),
     );
     expect(wrapper.emitted("update:selection")).toBeUndefined();
+  });
+
+  it("opens a folder on double click instead of playing it", async () => {
+    const folder = {
+      item_id: "f",
+      provider: "spotify",
+      name: "Albums",
+      version: "",
+      uri: "spotify://folder/f",
+      external_ids: [],
+      is_playable: false,
+      media_type: MediaType.FOLDER,
+      path: "spotify://albums",
+      image: null,
+    };
+    const wrapper = mountGrid({ rows: [folder] });
+    await rowAt(wrapper, 0).trigger("dblclick");
+    expect(wrapper.emitted("openFolder")?.[0]?.[0]).toMatchObject({
+      path: "spotify://albums",
+    });
+    expect(handlePlayBtnClick).not.toHaveBeenCalled();
+  });
+
+  it("asks the source to jump when no loaded row starts with the letters", async () => {
+    const wrapper = mountGrid();
+    const grid = wrapper.find("[role=grid]");
+    await grid.trigger("keydown", { key: "z" });
+    expect(wrapper.emitted("jumpToLetter")?.[0]).toEqual(["z"]);
+    expect(wrapper.emitted("update:selection")).toBeUndefined();
+  });
+
+  it("sorts any column locally when the owner allows it", async () => {
+    const wrapper = mountGrid({ localSortable: true });
+    const album = wrapper
+      .findAll("[role=columnheader]")
+      .find((h) => h.text().includes("columns.album"))!;
+    await album.trigger("click");
+    expect(wrapper.emitted("update:sortBy")?.at(-1)).toEqual(["local:album"]);
+    await wrapper.setProps({ sortBy: "local:album" });
+    await album.trigger("click");
+    expect(wrapper.emitted("update:sortBy")?.at(-1)).toEqual([
+      "local:album_desc",
+    ]);
   });
 
   it("clears the selection when the listing is replaced", async () => {
