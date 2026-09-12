@@ -5,6 +5,38 @@ The Music Assistant frontend/panel is developed in Vue, development instructions
 This fork adds a desktop **Library manager** (`/library`) for large local
 collections: see [docs/LIBRARY-MANAGER.md](docs/LIBRARY-MANAGER.md).
 
+## Run it on Home Assistant
+
+This frontend ships as a Home Assistant app that wraps the upstream Music
+Assistant server, so nothing has to be built by hand:
+
+1. **Add the app repository.** Settings › Apps › App store › ⋮ ›
+   Repositories, add `https://github.com/trooperthorn/ha_app_music_assistant`
+   (or use the badge in that repository's README).
+2. **Stop or uninstall the official Music Assistant app.** Both apps bind
+   port 8095 on the host network and announce the same discovery service,
+   so only one can run. The data directory is separate; export playlists or
+   settings first if you want to carry them over.
+3. **Install "Music Assistant (Library Manager)"** from the store, start it
+   and open its web UI. The manager is at `/library` ("Library manager" in
+   the navigation).
+4. **Point the Music Assistant integration** in Home Assistant at the new
+   app (same address and port as before).
+
+How it stays current:
+
+- A push to `main` here does not release anything. Run the
+  **Publish fork wheel** workflow (Actions tab) to build the bundle and
+  publish a `vYYYY.MM.DD.N` release carrying the
+  `music_assistant_frontend` wheel and its `SHA256SUMS`.
+- The app repository's **Sync upstream** job runs daily. It picks up the
+  latest upstream server release, this fork's latest wheel and the upstream
+  app definition, opens an auto-merging PR, and a merge there releases a new
+  app version that Home Assistant offers as an update.
+- Fixes to other Music Assistant pieces follow the same pattern: fork the
+  repo, publish a release artifact from it, and add a pin for it to the app
+  repository's Dockerfile and sync script.
+
 ## Recommended IDE Setup
 
 [VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=johnsoncodehk.volar) (and disable Vetur) + [TypeScript Vue Plugin (Volar)](https://marketplace.visualstudio.com/items?itemName=johnsoncodehk.vscode-typescript-vue-plugin).

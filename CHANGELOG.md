@@ -7,6 +7,8 @@
 * **Library manager** at `/library`: source tree, genre / artist / album browser strip with per-column facet dropdowns, dense virtualized sortable track grid with server-backed type-ahead, Now Playing queue and selected-item panel, every pane resizable and remembered per user. See `docs/LIBRARY-MANAGER.md`.
 * **Settings tree** beside every settings page, with Library view and Keyboard pages under User Interface.
 * **Keyboard commands** for playback, selection, navigation chords, pane toggles and a `?` help overlay.
+* **Player picker**: first play with no player opens the picker and falls back to this browser after 8 s; hide / unhide players per user; players that can play together listed as a block; per-player **Audio delay** (`sync_adjust`) for AirPlay and Squeezelite in the card menu.
+* **Home Assistant app** delivery through [trooperthorn/ha_app_music_assistant](https://github.com/trooperthorn/ha_app_music_assistant); `publish-fork.yml` releases the frontend wheel this app installs.
 
 ## [2.9.16](https://github.com/music-assistant/frontend/compare/v2.9.16...v2.9.16) (2024-11-21)
 

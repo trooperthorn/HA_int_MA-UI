@@ -121,6 +121,31 @@
             >
               {{ $t("player_select.active_player_volume_only") }}
             </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+              :model-value="groupCapableTogether"
+              @select.prevent
+              @update:model-value="
+                setBooleanPreference(
+                  PLAYER_SELECT_PREFERENCES.groupCapableTogether,
+                  $event,
+                )
+              "
+            >
+              {{ $t("player_select.group_capable_together") }}
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuCheckboxItem
+              :model-value="showHiddenPlayers"
+              :disabled="hiddenPlayerIds.length === 0"
+              @select.prevent
+              @update:model-value="showHiddenPlayers = $event"
+            >
+              {{
+                $t("player_select.show_hidden_players", [
+                  hiddenPlayerIds.length,
+                ])
+              }}
+            </DropdownMenuCheckboxItem>
           </DropdownMenuContent>
         </DropdownMenu>
         <p class="sr-only">{{ $t("tooltip.select_player") }}</p>
@@ -202,6 +227,7 @@ import {
 import { SearchInput } from "@/components/ui/search-input";
 import { useOrderedPlayers } from "@/composables/useOrderedPlayers";
 import { useUserPreferences } from "@/composables/userPreferences";
+import { hiddenPlayerIds } from "@/helpers/hidden_players";
 import { preventOnScreenKeyboardOnOpen } from "@/helpers/dialog_focus";
 import {
   PLAYER_BAR_POPOUT_COLLISION_PADDING,
@@ -239,6 +265,7 @@ const PLAYER_SELECT_PREFERENCES = {
   showSelectedPlayerFirst: "playerSelect.showSelectedPlayerFirst",
   showActivePlayersFirst: "playerSelect.showActivePlayersFirst",
   showGroupMemberNames: "playerSelect.showGroupMemberNames",
+  groupCapableTogether: "playerSelect.groupCapableTogether",
 } as const;
 
 const playerSearchQuery = ref("");
@@ -262,6 +289,15 @@ const showGroupMemberNames = getPreference<boolean>(
   PLAYER_SELECT_PREFERENCES.showGroupMemberNames,
   true,
 );
+const groupCapableTogether = getPreference<boolean>(
+  PLAYER_SELECT_PREFERENCES.groupCapableTogether,
+  true,
+);
+// session-only: reveals hidden players so they can be unhidden from their menu
+const showHiddenPlayers = ref(false);
+const excludedPlayerIds = computed(() =>
+  showHiddenPlayers.value ? [] : hiddenPlayerIds.value,
+);
 let menuTrigger: HTMLElement | null = null;
 let lastInteractionWasKeyboard = false;
 let restoreFocusOnClose = false;
@@ -276,6 +312,8 @@ const orderedPlayers = useOrderedPlayers({
   selectedPlayerFirst: showSelectedPlayerFirst,
   activePlayersFirst: showActivePlayersFirst,
   includePausedAsActive: true,
+  groupCapableTogether,
+  excludeIds: excludedPlayerIds,
 });
 
 const showSearch = computed(
@@ -478,6 +516,7 @@ function resetPanelState() {
   playerSearchQuery.value = "";
   expandedVolumePlayerIds.clear();
   expandedMemberPlayerIds.clear();
+  showHiddenPlayers.value = false;
 }
 
 function checkDefaultPlayer() {
