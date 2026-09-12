@@ -111,21 +111,20 @@
               </template>
               <template v-else-if="column.id === 'favorite'">
                 <button
+                  v-if="vRow.favorite !== undefined"
                   type="button"
                   class="track-grid__icon-button"
-                  :class="{ 'text-primary': vRow.track.favorite }"
+                  :class="{ 'text-primary': vRow.favorite }"
                   :aria-label="
-                    vRow.track.favorite
-                      ? $t('favorites_remove')
-                      : $t('favorites_add')
+                    vRow.favorite ? $t('favorites_remove') : $t('favorites_add')
                   "
-                  :aria-pressed="vRow.track.favorite"
-                  @click.stop="api.toggleFavorite(vRow.track)"
+                  :aria-pressed="vRow.favorite"
+                  @click.stop="api.toggleFavorite(vRow.track as MediaItem)"
                   @dblclick.stop
                 >
                   <Heart
                     :size="14"
-                    :fill="vRow.track.favorite ? 'currentColor' : 'none'"
+                    :fill="vRow.favorite ? 'currentColor' : 'none'"
                   />
                 </button>
               </template>
@@ -202,6 +201,7 @@ import { api } from "@/plugins/api";
 import { getListItemProviderIconDomain } from "@/plugins/api/helpers";
 import {
   PlaybackState,
+  type MediaItem,
   type MediaItemType,
   type Track,
 } from "@/plugins/api/interfaces";
@@ -211,19 +211,19 @@ import {
   sortByToGridSort,
   TRACK_COLUMNS,
   type GridSort,
-  type LibraryTrack,
-  type TrackColumn,
+  type GridItem,
+  type GridColumn,
   type TrackColumnId,
 } from "../columns";
 
 const props = withDefaults(
   defineProps<{
-    rows: LibraryTrack[];
+    rows: GridItem[];
     loading: boolean;
     rowHeight: number;
     sortBy: string;
-    visibleColumns: TrackColumn[];
-    visibility: Record<TrackColumnId, boolean>;
+    visibleColumns: GridColumn[];
+    visibility: Partial<Record<string, boolean>>;
     parentItem?: MediaItemType;
     // how many rows before the end of the loaded list triggers the next page
     loadAhead?: number;
@@ -233,9 +233,9 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   "update:sortBy": [sortBy: string];
-  "update:selection": [tracks: LibraryTrack[]];
+  "update:selection": [tracks: GridItem[]];
   ensureLoaded: [index: number];
-  toggleColumn: [id: TrackColumnId, visible: boolean];
+  toggleColumn: [id: string, visible: boolean];
   focusSearch: [];
 }>();
 
@@ -258,17 +258,17 @@ const gridTemplate = computed(() => ({
 }));
 
 const sort = computed<GridSort | undefined>(() =>
-  sortByToGridSort(props.sortBy),
+  sortByToGridSort(props.sortBy, props.visibleColumns),
 );
 
-function ariaSort(columnId: TrackColumnId) {
+function ariaSort(columnId: string) {
   if (sort.value?.columnId !== columnId) return undefined;
   return sort.value.desc ? "descending" : "ascending";
 }
 
-function toggleSort(columnId: TrackColumnId) {
+function toggleSort(columnId: string) {
   const desc = sort.value?.columnId === columnId ? !sort.value.desc : false;
-  const next = gridSortToSortBy({ columnId, desc });
+  const next = gridSortToSortBy({ columnId, desc }, props.visibleColumns);
   if (next) emit("update:sortBy", next);
 }
 
@@ -293,12 +293,14 @@ const playingId = computed(() => {
 
 const virtualRows = computed(() =>
   virtualizer.value.getVirtualItems().map((vItem) => {
-    const track = props.rows[vItem.index] as LibraryTrack | undefined;
+    const track = props.rows[vItem.index] as GridItem | undefined;
     return {
       key: String(vItem.key),
       index: vItem.index,
       start: vItem.start,
       track,
+      favorite:
+        track && "favorite" in track ? (track.favorite as boolean) : undefined,
       selected: !!track && selectedUris.value.has(track.uri),
       playing: !!track && track.item_id === playingId.value,
     };
@@ -424,7 +426,7 @@ function onRowDoubleClick(event: MouseEvent, index: number) {
   handleMediaItemClick(track, event.clientX, event.clientY, props.parentItem);
 }
 
-function menuTargets(index: number): LibraryTrack[] {
+function menuTargets(index: number): GridItem[] {
   const track = props.rows[index];
   if (!track) return [];
   return selectedUris.value.has(track.uri) && selectedTracks.value.length > 1

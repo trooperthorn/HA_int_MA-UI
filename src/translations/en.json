@@ -2532,7 +2532,18 @@
             "path": "Path",
             "explicit": "Explicit",
             "popularity": "Popularity",
-            "menu": "Actions"
+            "menu": "Actions",
+            "name": "Name",
+            "owner": "Owner",
+            "type": "Type"
+        },
+        "toggle_tree": "Show or hide the source tree",
+        "tree": {
+            "library": "Library (all sources)",
+            "sources": "Sources",
+            "album_artists": "Album artists",
+            "recently_added": "Recently added",
+            "files_to_edit": "Files to edit"
         },
         "shortcuts": {
             "play_pause": "Play \/ pause",

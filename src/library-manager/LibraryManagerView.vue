@@ -1,6 +1,15 @@
 <template>
   <div class="library-manager">
     <div class="library-manager__toolbar">
+      <Button
+        variant="ghost"
+        size="icon"
+        class="size-8"
+        :aria-label="$t('library_manager.toggle_tree')"
+        @click="setShowTree(!showTree)"
+      >
+        <PanelLeft :size="16" />
+      </Button>
       <h1 class="library-manager__title">{{ $t("library_manager.title") }}</h1>
       <div class="library-manager__search">
         <Search :size="16" class="library-manager__search-icon" />
@@ -16,8 +25,8 @@
       </div>
       <label class="library-manager__toggle">
         <Switch
-          :model-value="favoritesOnly"
-          @update:model-value="favoritesOnly = !!$event"
+          :model-value="toolbar.favoritesOnly"
+          @update:model-value="toolbar.favoritesOnly = !!$event"
         />
         <span>{{ $t("library_manager.favorites_only") }}</span>
       </label>
@@ -45,26 +54,52 @@
       </div>
     </div>
 
-    <TrackGrid
-      ref="grid"
-      class="library-manager__grid"
-      :rows="source.rows.value"
-      :loading="source.loading.value"
-      :row-height="rowHeight"
-      :sort-by="sortBy"
-      :visible-columns="visibleColumns"
-      :visibility="visibility"
-      @update:sort-by="sortBy = $event"
-      @update:selection="selection = $event"
-      @ensure-loaded="source.ensureLoaded"
-      @toggle-column="setColumnVisible"
-      @focus-search="focusSearch"
-    />
+    <SplitterGroup
+      direction="horizontal"
+      auto-save-id="library-manager-main"
+      :storage="storage"
+      class="library-manager__panes"
+    >
+      <SplitterPanel
+        v-if="showTree"
+        id="tree"
+        :order="1"
+        :default-size="PANE_DEFAULTS.treeSize"
+        :min-size="PANE_DEFAULTS.treeMinSize"
+        :max-size="40"
+        class="library-manager__tree"
+      >
+        <SourceTree ref="tree" :active-node="node.node" @select="selectNode" />
+      </SplitterPanel>
+      <SplitterResizeHandle
+        v-if="showTree"
+        id="tree-handle"
+        class="library-manager__handle"
+      />
+      <SplitterPanel id="main" :order="2" class="library-manager__main">
+        <TrackGrid
+          ref="grid"
+          class="library-manager__grid"
+          :rows="source.rows.value"
+          :loading="source.loading.value"
+          :row-height="rowHeight"
+          :sort-by="filter.sortBy"
+          :visible-columns="visibleColumns"
+          :visibility="visibility"
+          @update:sort-by="toolbar.sortBy = $event"
+          @update:selection="selection = $event"
+          @ensure-loaded="source.ensureLoaded"
+          @toggle-column="setColumnVisible"
+          @focus-search="focusSearch"
+        />
+      </SplitterPanel>
+    </SplitterGroup>
   </div>
 </template>
 
 <script setup lang="ts">
-import { RefreshCw, Search } from "@lucide/vue";
+import { PanelLeft, RefreshCw, Search } from "@lucide/vue";
+import { SplitterGroup, SplitterPanel, SplitterResizeHandle } from "reka-ui";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { Button } from "@/components/ui/button";
@@ -76,11 +111,23 @@ import {
   setUserPreference,
   useUserPreferences,
 } from "@/composables/userPreferences";
+import { MediaType } from "@/plugins/api/interfaces";
 import { store } from "@/plugins/store";
+import {
+  columnsForMediaType,
+  sortByForColumns,
+  type GridColumn,
+  type GridItem,
+} from "./columns";
 import { useGridColumns } from "./composables/useGridColumns";
+import { useItemSource } from "./composables/useItemSource";
 import { useKeymap } from "./composables/useKeymap";
-import { useTrackSource, type TrackFilter } from "./composables/useTrackSource";
-import type { LibraryTrack } from "./columns";
+import {
+  useLibraryFilter,
+  type LibraryFilter,
+} from "./composables/useLibraryFilter";
+import { PANE_DEFAULTS, usePaneLayout } from "./composables/usePaneLayout";
+import SourceTree from "./panes/SourceTree.vue";
 import TrackGrid from "./panes/TrackGrid.vue";
 
 defineOptions({ name: "LibraryManager" });
@@ -90,8 +137,14 @@ const DEFAULT_SORT = "name";
 
 const router = useRouter();
 const { getPreference } = useUserPreferences();
-const { visibility, visibleColumns, rowHeight, setColumnVisible } =
-  useGridColumns();
+const {
+  visibility,
+  visibleColumns: visibleTrackColumns,
+  rowHeight,
+  setColumnVisible,
+} = useGridColumns();
+const { storage, showTree, setShowTree } = usePaneLayout();
+const { node, toolbar, filter: rawFilter, selectNode } = useLibraryFilter();
 useKeymap();
 
 // the manager is a desktop workflow; phones get the existing track list
@@ -116,36 +169,57 @@ onBeforeUnmount(() => {
 
 const searchInput = ref("");
 const searchRef = ref<{ $el?: HTMLElement } | null>(null);
-const favoritesOnly = ref(false);
-const selection = ref<LibraryTrack[]>([]);
+const selection = ref<GridItem[]>([]);
 const grid = ref<InstanceType<typeof TrackGrid> | null>(null);
+const tree = ref<InstanceType<typeof SourceTree> | null>(null);
 
+// the grid's sort is remembered per user; the toolbar object is what the
+// filter reads, so the preference feeds it and the grid writes it back
 const storedSort = getPreference<string>(SORT_PREFERENCE_KEY, DEFAULT_SORT);
-const sortBy = computed({
-  get: () => storedSort.value,
-  set: (value: string) => {
-    void setUserPreference(SORT_PREFERENCE_KEY, value);
+watch(
+  storedSort,
+  (value) => {
+    toolbar.sortBy = value;
   },
-});
+  { immediate: true },
+);
+watch(
+  () => toolbar.sortBy,
+  (value) => {
+    if (value !== storedSort.value)
+      void setUserPreference(SORT_PREFERENCE_KEY, value);
+  },
+);
 
 // search is applied a beat after typing stops so a fast typist does not
 // issue a request per keystroke
-const search = ref("");
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 watch(searchInput, (value) => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
-    search.value = value.trim();
+    toolbar.search = value.trim();
   }, 250);
 });
 
-const filter = computed<TrackFilter>(() => ({
-  search: search.value,
-  sortBy: sortBy.value,
-  favoritesOnly: favoritesOnly.value,
+const columns = computed<readonly GridColumn[]>(() =>
+  columnsForMediaType(node.mediaType, node.scope),
+);
+
+const visibleColumns = computed<GridColumn[]>(() =>
+  node.scope === "library" && node.mediaType === MediaType.TRACK
+    ? visibleTrackColumns.value
+    : columns.value.filter((column) => column.fixed || column.defaultVisible),
+);
+
+// a listing only accepts the sort keys its columns carry
+const filter = computed<LibraryFilter>(() => ({
+  ...rawFilter.value,
+  sortBy:
+    sortByForColumns(rawFilter.value.sortBy, columns.value) ??
+    rawFilter.value.sortBy,
 }));
 
-const source = useTrackSource(filter);
+const source = useItemSource(filter);
 
 function focusSearch() {
   const el = searchRef.value?.$el;
@@ -174,7 +248,7 @@ function clearSearch() {
   align-items: center;
   gap: 12px;
   height: 48px;
-  padding: 0 16px;
+  padding: 0 12px 0 8px;
   flex: none;
   border-bottom: 1px solid rgba(var(--v-theme-fg), 0.08);
 }
@@ -217,8 +291,52 @@ function clearSearch() {
   white-space: nowrap;
 }
 
+.library-manager__panes {
+  flex: 1;
+  min-height: 0;
+}
+
+.library-manager__tree {
+  background: rgb(var(--v-theme-panel));
+  min-height: 0;
+}
+
+.library-manager__main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
 .library-manager__grid {
   flex: 1;
   min-height: 0;
+}
+
+.library-manager__handle {
+  width: 6px;
+  flex: none;
+  background: rgb(var(--v-theme-panel));
+  border-left: 1px solid rgba(var(--v-theme-fg), 0.08);
+  border-right: 1px solid rgba(var(--v-theme-fg), 0.08);
+  cursor: col-resize;
+  position: relative;
+}
+
+.library-manager__handle::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 28px;
+  transform: translate(-50%, -50%);
+  border-radius: 1px;
+  background: rgba(var(--v-theme-fg), 0.22);
+}
+
+.library-manager__handle:hover::after,
+.library-manager__handle[data-state="drag"]::after {
+  background: rgb(var(--v-theme-primary));
 }
 </style>

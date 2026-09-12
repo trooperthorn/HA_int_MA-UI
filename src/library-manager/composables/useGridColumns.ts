@@ -49,7 +49,7 @@ export function useGridColumns() {
 
   const rowHeight = computed(() => ROW_HEIGHT_BY_DENSITY[density.value]);
 
-  async function setColumnVisible(id: TrackColumnId, visible: boolean) {
+  async function setColumnVisible(id: string, visible: boolean) {
     await setUserPreference(GRID_COLUMNS_PREFERENCE_KEY, {
       ...preference.value,
       visibility: { ...preference.value.visibility, [id]: visible },
