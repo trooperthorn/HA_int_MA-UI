@@ -117,7 +117,7 @@ jobs:
         run: |
           pnpm build
           rm -rf dist music_assistant_frontend.egg-info
-          python3 -m build --wheel
+          python3 -m build
           .github/scripts/verify-python-package.sh
           (cd dist && sha256sum -- *.whl > SHA256SUMS)
           cat dist/SHA256SUMS
