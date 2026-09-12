@@ -254,7 +254,8 @@ describe("SourceTree", () => {
     expect(wrapper.emitted("select")?.at(-1)?.[0]).toMatchObject({
       scope: "library",
       node: "source:spotify--1.genres",
-      mediaType: MediaType.GENRE,
+      mediaType: MediaType.TRACK,
+      leadFacet: "genre",
       provider: ["spotify--1"],
     });
   });
@@ -353,8 +354,8 @@ describe("SourceTree", () => {
       .trigger("click");
     expect(wrapper.emitted("select")?.at(-1)?.[0]).toMatchObject({
       scope: "library",
-      mediaType: MediaType.ARTIST,
-      albumArtistsOnly: true,
+      mediaType: MediaType.TRACK,
+      leadFacet: "album_artist",
     });
 
     await rows()
@@ -419,7 +420,8 @@ describe("SourceTree", () => {
     >;
     expect(selected).toMatchObject({
       node: "library.artists",
-      mediaType: MediaType.ARTIST,
+      mediaType: MediaType.TRACK,
+      leadFacet: "artist",
     });
     expect(selected.albumArtistsOnly).toBeUndefined();
   });

@@ -2639,6 +2639,7 @@
             "go_to_album": "Go to album",
             "go_to_artist": "Go to artist",
             "more": "More actions"
-        }
+        },
+        "playing_here": "No player was picked, so this browser plays it."
     }
 }

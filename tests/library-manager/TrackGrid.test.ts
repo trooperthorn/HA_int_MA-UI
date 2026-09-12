@@ -9,7 +9,12 @@ import {
   handleMenuBtnClick,
   handlePlayBtnClick,
 } from "@/helpers/media_item_actions";
-import { enableAutoUnmount, mount, type VueWrapper } from "@vue/test-utils";
+import {
+  enableAutoUnmount,
+  flushPromises,
+  mount,
+  type VueWrapper,
+} from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MediaType } from "@/plugins/api/interfaces";
 import { track } from "../fixtures/track";
@@ -92,6 +97,10 @@ vi.mock("@tanstack/vue-virtual", async () => {
       }),
   };
 });
+
+vi.mock("@/library-manager/playerGate", () => ({
+  ensurePlayer: async () => true,
+}));
 
 enableAutoUnmount(afterEach);
 
@@ -225,6 +234,7 @@ describe("TrackGrid", () => {
     await rowAt(wrapper, 2).trigger("click");
 
     await grid.trigger("keydown", { key: "Enter" });
+    await flushPromises();
     expect(handlePlayBtnClick).toHaveBeenCalledTimes(1);
     expect(vi.mocked(handlePlayBtnClick).mock.calls[0][0]).toMatchObject({
       item_id: "t2",
@@ -256,6 +266,7 @@ describe("TrackGrid", () => {
   it("plays the item on double click and opens the menu on right click and the button", async () => {
     const wrapper = mountGrid();
     await rowAt(wrapper, 0).trigger("dblclick");
+    await flushPromises();
     expect(handlePlayBtnClick).toHaveBeenCalledTimes(1);
     expect(handleMediaItemClick).not.toHaveBeenCalled();
 

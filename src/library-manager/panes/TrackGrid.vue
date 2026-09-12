@@ -197,6 +197,7 @@ import {
   handleMenuBtnClick,
   handlePlayBtnClick,
 } from "@/helpers/media_item_actions";
+import { ensurePlayer } from "../playerGate";
 import { api } from "@/plugins/api";
 import { getListItemProviderIconDomain } from "@/plugins/api/helpers";
 import {
@@ -449,14 +450,18 @@ function onRowDoubleClick(event: MouseEvent, index: number) {
     handleMediaItemClick(item, event.clientX, event.clientY, props.parentItem);
     return;
   }
-  handlePlayBtnClick(
-    item,
-    event.clientX,
-    event.clientY,
-    props.parentItem,
-    false,
-    props.sortBy,
-  );
+  const { clientX, clientY } = event;
+  void ensurePlayer().then((ready) => {
+    if (!ready) return;
+    void handlePlayBtnClick(
+      item,
+      clientX,
+      clientY,
+      props.parentItem,
+      false,
+      props.sortBy,
+    );
+  });
 }
 
 function menuTargets(index: number): GridItem[] {
@@ -586,14 +591,17 @@ function onKeydown(event: KeyboardEvent) {
       }
       {
         const rect = gridRef.value?.getBoundingClientRect();
-        handlePlayBtnClick(
-          track,
-          rect?.left ?? 0,
-          rect?.top ?? 0,
-          props.parentItem,
-          false,
-          props.sortBy,
-        );
+        void ensurePlayer().then((ready) => {
+          if (!ready) return;
+          void handlePlayBtnClick(
+            track,
+            rect?.left ?? 0,
+            rect?.top ?? 0,
+            props.parentItem,
+            false,
+            props.sortBy,
+          );
+        });
       }
       return;
     }

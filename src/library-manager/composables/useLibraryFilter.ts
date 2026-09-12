@@ -1,5 +1,6 @@
 import { computed, reactive } from "vue";
 import { MediaType } from "@/plugins/api/interfaces";
+import type { BrowserFacet } from "../browserFacets";
 
 export type FilterScope = "library" | "browse";
 
@@ -31,6 +32,9 @@ export interface NodeFilter {
   filesToEdit?: boolean;
   // forces a sort the node implies (Recently added), ignoring the grid's
   sortOverride?: string;
+  // a listing node (Artists, Albums, ...) puts its facet in the browser's
+  // first column; the grid keeps listing tracks
+  leadFacet?: BrowserFacet;
 }
 
 // what the browser strip has picked

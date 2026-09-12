@@ -190,7 +190,9 @@ const libraryNode = (
 });
 
 // the listings every source offers, in the order they appear under a source;
-// the library gets them all, a provider only the ones its features back
+// the library gets them all, a provider only the ones its features back.
+// Each puts its facet in the browser's first column and lists tracks below
+// it; the grid always shows songs.
 const SOURCE_LISTINGS: Array<{
   id: string;
   labelKey: string;
@@ -205,7 +207,7 @@ const SOURCE_LISTINGS: Array<{
     icon: ListMusic,
     countKey: "playlists",
     feature: ProviderFeature.LIBRARY_PLAYLISTS,
-    filter: { mediaType: MediaType.PLAYLIST },
+    filter: { mediaType: MediaType.TRACK, leadFacet: "playlist" },
   },
   {
     id: "artists",
@@ -213,7 +215,7 @@ const SOURCE_LISTINGS: Array<{
     icon: Users,
     countKey: "artists",
     feature: ProviderFeature.LIBRARY_ARTISTS,
-    filter: { mediaType: MediaType.ARTIST },
+    filter: { mediaType: MediaType.TRACK, leadFacet: "artist" },
   },
   {
     id: "album_artists",
@@ -221,7 +223,7 @@ const SOURCE_LISTINGS: Array<{
     icon: Users,
     countKey: "album_artists",
     feature: ProviderFeature.LIBRARY_ARTISTS,
-    filter: { mediaType: MediaType.ARTIST, albumArtistsOnly: true },
+    filter: { mediaType: MediaType.TRACK, leadFacet: "album_artist" },
   },
   {
     id: "genres",
@@ -229,7 +231,7 @@ const SOURCE_LISTINGS: Array<{
     icon: Tag,
     countKey: "genres",
     feature: ProviderFeature.LIBRARY_ARTISTS,
-    filter: { mediaType: MediaType.GENRE },
+    filter: { mediaType: MediaType.TRACK, leadFacet: "genre" },
   },
   {
     id: "albums",
@@ -237,7 +239,7 @@ const SOURCE_LISTINGS: Array<{
     icon: Disc3,
     countKey: "albums",
     feature: ProviderFeature.LIBRARY_ALBUMS,
-    filter: { mediaType: MediaType.ALBUM },
+    filter: { mediaType: MediaType.TRACK, leadFacet: "album" },
   },
 ];
 
