@@ -78,6 +78,8 @@ const props = defineProps<{
   artist?: ItemRef;
   album?: ItemRef;
   albumArtistsOnly?: boolean;
+  // narrow every column to one source's items
+  provider?: string[];
   storage: PaneStorage;
 }>();
 
@@ -96,15 +98,16 @@ const artistIds = computed(() => (props.artist ? [props.artist.item_id] : []));
 const albumIds = computed(() => (props.album ? [props.album.item_id] : []));
 const selectedGenreIds = computed(() => props.genres.map((genre) => genre.id));
 
-const base = {
+const base = computed(() => ({
   scope: "library" as const,
   favoritesOnly: false,
   sortBy: "name",
-};
+  provider: props.provider,
+}));
 
 const genreList = useItemSource(
   computed<LibraryFilter>(() => ({
-    ...base,
+    ...base.value,
     node: "browser.genres",
     mediaType: MediaType.GENRE,
     search: genreSearch.value,
@@ -113,7 +116,7 @@ const genreList = useItemSource(
 
 const artistList = useItemSource(
   computed<LibraryFilter>(() => ({
-    ...base,
+    ...base.value,
     node: "browser.artists",
     mediaType: MediaType.ARTIST,
     search: artistSearch.value,
@@ -125,7 +128,7 @@ const artistList = useItemSource(
 
 const albumList = useItemSource(
   computed<LibraryFilter>(() => ({
-    ...base,
+    ...base.value,
     node: "browser.albums",
     mediaType: MediaType.ALBUM,
     search: albumSearch.value,
