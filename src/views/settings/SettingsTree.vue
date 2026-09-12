@@ -106,7 +106,8 @@ async function loadChildren() {
   try {
     const configs = await api.getCoreConfigs();
     coreConfigs.value = configs
-      .slice()
+      // the task list node below stands in for the background tasks module
+      .filter((config) => config.domain !== "background_tasks")
       .sort((a, b) => coreName(a.domain).localeCompare(coreName(b.domain)));
   } catch (err) {
     console.error("[SettingsTree] core configs failed", err);

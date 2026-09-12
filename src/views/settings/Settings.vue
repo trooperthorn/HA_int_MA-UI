@@ -73,9 +73,9 @@
         v-if="treeLayout"
         id="settings-tree"
         :order="1"
-        :default-size="22"
-        :min-size="14"
-        :max-size="40"
+        :default-size="26"
+        :min-size="18"
+        :max-size="45"
         class="settings-body__tree"
       >
         <SettingsTree />
