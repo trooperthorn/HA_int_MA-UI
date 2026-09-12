@@ -17,10 +17,10 @@
           class="track-grid__cell track-grid__cell--header"
           :class="[
             `track-grid__cell--${column.align}`,
-            { 'track-grid__cell--sortable': !!column.sortKey },
+            { 'track-grid__cell--sortable': canSort(column) },
           ]"
           :aria-sort="ariaSort(column.id)"
-          @click="column.sortKey && toggleSort(column.id)"
+          @click="toggleSort(column.id)"
         >
           <template v-if="column.id === 'favorite'">
             <Heart :size="14" />
@@ -200,13 +200,16 @@ import {
 import { api } from "@/plugins/api";
 import { getListItemProviderIconDomain } from "@/plugins/api/helpers";
 import {
+  MediaType,
   PlaybackState,
+  type BrowseFolder,
   type MediaItem,
   type MediaItemType,
   type Track,
 } from "@/plugins/api/interfaces";
 import { store } from "@/plugins/store";
 import {
+  gridSortToLocalSort,
   gridSortToSortBy,
   sortByToGridSort,
   TRACK_COLUMNS,
@@ -227,8 +230,11 @@ const props = withDefaults(
     parentItem?: MediaItemType;
     // how many rows before the end of the loaded list triggers the next page
     loadAhead?: number;
+    // columns without a server sort key sort in the browser (the owner
+    // pages the whole listing in first)
+    localSortable?: boolean;
   }>(),
-  { loadAhead: 50, parentItem: undefined },
+  { loadAhead: 50, parentItem: undefined, localSortable: false },
 );
 
 const emit = defineEmits<{
@@ -237,6 +243,8 @@ const emit = defineEmits<{
   ensureLoaded: [index: number];
   toggleColumn: [id: string, visible: boolean];
   focusSearch: [];
+  jumpToLetter: [letters: string];
+  openFolder: [folder: BrowseFolder];
 }>();
 
 const gridRef = ref<HTMLElement | null>(null);
@@ -266,9 +274,18 @@ function ariaSort(columnId: string) {
   return sort.value.desc ? "descending" : "ascending";
 }
 
+function canSort(column: GridColumn): boolean {
+  if (column.sortKey) return true;
+  return props.localSortable && !!(column.sortText ?? column.text);
+}
+
 function toggleSort(columnId: string) {
+  const column = props.visibleColumns.find((c) => c.id === columnId);
+  if (!column || !canSort(column)) return;
   const desc = sort.value?.columnId === columnId ? !sort.value.desc : false;
-  const next = gridSortToSortBy({ columnId, desc }, props.visibleColumns);
+  const next = column.sortKey
+    ? gridSortToSortBy({ columnId, desc }, props.visibleColumns)
+    : gridSortToLocalSort({ columnId, desc });
   if (next) emit("update:sortBy", next);
 }
 
@@ -421,9 +438,25 @@ function onRowClick(event: MouseEvent, index: number) {
 }
 
 function onRowDoubleClick(event: MouseEvent, index: number) {
-  const track = props.rows[index];
-  if (!track) return;
-  handleMediaItemClick(track, event.clientX, event.clientY, props.parentItem);
+  const item = props.rows[index];
+  if (!item) return;
+  // a folder opens; anything playable plays, as a library manager expects
+  if (item.media_type === MediaType.FOLDER) {
+    emit("openFolder", item as BrowseFolder);
+    return;
+  }
+  if (!item.is_playable) {
+    handleMediaItemClick(item, event.clientX, event.clientY, props.parentItem);
+    return;
+  }
+  handlePlayBtnClick(
+    item,
+    event.clientX,
+    event.clientY,
+    props.parentItem,
+    false,
+    props.sortBy,
+  );
 }
 
 function menuTargets(index: number): GridItem[] {
@@ -493,6 +526,8 @@ function typeAheadJump(char: string) {
       return;
     }
   }
+  // nothing paged in starts with it; the source can look further
+  emit("jumpToLetter", typeAhead);
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -588,9 +623,14 @@ function scrollToTrack(itemId: string) {
   if (index >= 0) moveFocus(index, false);
 }
 
+function scrollToIndex(index: number) {
+  if (index >= 0 && index < props.rows.length) moveFocus(index, false);
+}
+
 defineExpose({
   focus: () => gridRef.value?.focus(),
   scrollToTrack,
+  scrollToIndex,
   selectAll,
   clearSelection,
 });

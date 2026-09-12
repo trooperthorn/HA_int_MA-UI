@@ -1,7 +1,11 @@
 import {
   DEFAULT_COLUMN_VISIBILITY,
+  gridSortToLocalSort,
   gridSortToSortBy,
+  localSortToGridSort,
+  sortByForColumns,
   sortByToGridSort,
+  sortItemsLocally,
   TRACK_COLUMN_BY_ID,
   TRACK_COLUMNS,
   TRACK_SORT_KEYS,
@@ -68,6 +72,41 @@ describe("track columns", () => {
       gridSortToSortBy({ columnId: "album", desc: false }),
     ).toBeUndefined();
     expect(sortByToGridSort("play_count")).toBeUndefined();
+  });
+
+  it("keeps a local sort in the browser and asks the server for its natural order", () => {
+    expect(gridSortToLocalSort({ columnId: "album", desc: true })).toBe(
+      "local:album_desc",
+    );
+    expect(localSortToGridSort("local:year")).toEqual({
+      columnId: "year",
+      desc: false,
+    });
+    expect(sortByToGridSort("local:album", TRACK_COLUMNS)).toEqual({
+      columnId: "album",
+      desc: false,
+    });
+    expect(sortByForColumns("local:album", TRACK_COLUMNS)).toBe("name");
+
+    const rows = [
+      track({ item_id: "1", name: "b", duration: 30 }),
+      track({ item_id: "2", name: "a", duration: 10 }),
+      track({ item_id: "3", name: "c", duration: 20 }),
+    ];
+    expect(
+      sortItemsLocally(
+        rows,
+        { columnId: "title", desc: false },
+        TRACK_COLUMNS,
+      ).map((row) => row.item_id),
+    ).toEqual(["2", "1", "3"]);
+    expect(
+      sortItemsLocally(
+        rows,
+        { columnId: "duration", desc: true },
+        TRACK_COLUMNS,
+      ).map((row) => row.item_id),
+    ).toEqual(["1", "3", "2"]);
   });
 
   it("renders cell text from a library track", () => {

@@ -7,6 +7,7 @@ import {
   type Track,
 } from "@/plugins/api/interfaces";
 import { formatDuration, getArtistsString } from "@/helpers/utils";
+import { getListItemProviderIconDomain } from "@/plugins/api/helpers";
 
 // Library listings carry two stats fields the item interfaces leave out
 // because they only exist for database items: seconds since epoch of the
@@ -57,6 +58,8 @@ export interface GridColumn<Id extends string = ItemColumnId> {
   fixed?: boolean;
   // text shown in the cell; icon columns (favorite, source, menu) have none
   text?: (item: GridItem) => string;
+  // what a local sort compares when the cell shows an icon rather than text
+  sortText?: (item: GridItem) => string;
 }
 
 export type TrackColumn = GridColumn<TrackColumnId>;
@@ -106,6 +109,7 @@ const FAVORITE: GridColumn = {
   width: 40,
   align: "center",
   defaultVisible: true,
+  sortText: (item) => ("favorite" in item && item.favorite ? "1" : "0"),
 };
 
 const SOURCE: GridColumn = {
@@ -114,6 +118,7 @@ const SOURCE: GridColumn = {
   width: 48,
   align: "center",
   defaultVisible: true,
+  sortText: (item) => getListItemProviderIconDomain(item),
 };
 
 const LAST_PLAYED: GridColumn = {
@@ -310,6 +315,7 @@ export const ALBUM_COLUMNS: readonly GridColumn[] = [
   {
     id: "artist",
     labelKey: "library_manager.columns.artist",
+    sortKey: "album_artist_name",
     width: 200,
     align: "left",
     defaultVisible: true,
@@ -427,10 +433,49 @@ export interface GridSort {
   desc: boolean;
 }
 
+// a sort applied in the browser to a fully loaded listing, on any column
+export const LOCAL_SORT_PREFIX = "local:";
+
+export function localSortToGridSort(sortBy: string): GridSort | undefined {
+  if (!sortBy.startsWith(LOCAL_SORT_PREFIX)) return undefined;
+  const rest = sortBy.slice(LOCAL_SORT_PREFIX.length);
+  const desc = rest.endsWith("_desc");
+  return { columnId: desc ? rest.slice(0, -"_desc".length) : rest, desc };
+}
+
+export function gridSortToLocalSort(sort: GridSort): string {
+  return `${LOCAL_SORT_PREFIX}${sort.columnId}${sort.desc ? "_desc" : ""}`;
+}
+
+export function sortItemsLocally(
+  items: GridItem[],
+  sort: GridSort,
+  columns: readonly GridColumn[],
+): GridItem[] {
+  const column = columns.find((candidate) => candidate.id === sort.columnId);
+  const text = column?.sortText ?? column?.text;
+  if (!text) return items;
+  const collator = new Intl.Collator(undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+  const sorted = items
+    .map((item, index) => ({ item, index, key: text(item) }))
+    .sort((a, b) => collator.compare(a.key, b.key) || a.index - b.index)
+    .map((entry) => entry.item);
+  return sort.desc ? sorted.reverse() : sorted;
+}
+
 export function sortByToGridSort(
   sortBy: string,
   columns: readonly GridColumn[] = TRACK_COLUMNS,
 ): GridSort | undefined {
+  const local = localSortToGridSort(sortBy);
+  if (local) {
+    return columns.some((candidate) => candidate.id === local.columnId)
+      ? local
+      : undefined;
+  }
   const desc = sortBy.endsWith("_desc");
   const key = desc ? sortBy.slice(0, -"_desc".length) : sortBy;
   const column = columns.find((candidate) => candidate.sortKey === key);
@@ -451,6 +496,12 @@ export function sortByForColumns(
   sortBy: string,
   columns: readonly GridColumn[],
 ): string | undefined {
+  if (localSortToGridSort(sortBy)) {
+    // a local sort never reaches the server; ask for the natural order
+    return columns.some((column) => column.sortKey === "name")
+      ? "name"
+      : undefined;
+  }
   if (sortByToGridSort(sortBy, columns)) return sortBy;
   return columns.some((column) => column.sortKey === "name")
     ? "name"

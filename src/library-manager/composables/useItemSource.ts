@@ -12,6 +12,8 @@ import type { GridItem } from "../columns";
 import type { LibraryFilter } from "./useLibraryFilter";
 
 export const TRACK_PAGE_SIZE = 200;
+// page size when the whole listing is wanted at once
+export const LOAD_ALL_PAGE_SIZE = 2000;
 
 export type ItemFilter = LibraryFilter;
 
@@ -108,6 +110,7 @@ export function useItemSource(filter: Ref<ItemFilter>) {
   const total = ref<number | undefined>(undefined);
   const loading = ref(false);
   const allLoaded = ref(false);
+  const loadingAll = ref(false);
   const updateAvailable = ref(false);
 
   let generation = 0;
@@ -122,8 +125,62 @@ export function useItemSource(filter: Ref<ItemFilter>) {
       !!filter.value.search ||
       (filter.value.provider?.length ?? 0) > 0 ||
       (filter.value.genreIds?.length ?? 0) > 0 ||
-      !!filter.value.filesToEdit,
+      !!filter.value.filesToEdit ||
+      !!filter.value.artist ||
+      !!filter.value.album,
   );
+
+  // listings the server returns whole rather than paged
+  function oneShotRequest(current: ItemFilter): Promise<GridItem[]> | null {
+    if (current.scope === "browse") {
+      // the ".." entry browses back up; the tree is the way up here
+      return api
+        .browse(current.browsePath, store.activePlayerId)
+        .then((items) =>
+          items.filter(
+            (item) =>
+              item.media_type !== MediaType.FOLDER || item.name !== "..",
+          ),
+        );
+    }
+    if (current.mediaType === MediaType.TRACK && current.album) {
+      return api.getAlbumTracks(current.album.item_id, current.album.provider);
+    }
+    if (current.mediaType === MediaType.TRACK && current.artist) {
+      return api.getArtistTracks(
+        current.artist.item_id,
+        current.artist.provider,
+      );
+    }
+    if (current.mediaType === MediaType.ALBUM && current.artist) {
+      return api.getArtistAlbums(
+        current.artist.item_id,
+        current.artist.provider,
+      );
+    }
+    return null;
+  }
+
+  // one-shot lists honour the toolbar's search and favorites filter locally
+  function applyLocalFilter(current: ItemFilter, items: GridItem[]) {
+    const needle = current.search.trim().toLowerCase();
+    return items.filter((item) => {
+      if (current.favoritesOnly && "favorite" in item && !item.favorite) {
+        return false;
+      }
+      if (!needle) return true;
+      const haystack = [
+        item.name,
+        "artists" in item && Array.isArray(item.artists)
+          ? item.artists.map((artist) => artist.name).join(" ")
+          : "",
+        "album" in item && item.album ? item.album.name : "",
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(needle);
+    });
+  }
 
   function storeCount(mediaType: MediaType): number | undefined {
     switch (mediaType) {
@@ -158,7 +215,7 @@ export function useItemSource(filter: Ref<ItemFilter>) {
 
   async function refreshTotal(forGeneration: number) {
     const current = filter.value;
-    if (current.scope === "browse") {
+    if (current.scope === "browse" || current.artist || current.album) {
       total.value = undefined;
       return;
     }
@@ -229,17 +286,10 @@ export function useItemSource(filter: Ref<ItemFilter>) {
     const current = filter.value;
     loading.value = true;
 
+    const oneShot = oneShotRequest(current);
     let request: Promise<GridItem[]>;
-    if (current.scope === "browse") {
-      // the ".." entry browses back up; the tree is the way up here
-      request = api
-        .browse(current.browsePath, store.activePlayerId)
-        .then((items) =>
-          items.filter(
-            (item) =>
-              item.media_type !== MediaType.FOLDER || item.name !== "..",
-          ),
-        );
+    if (oneShot) {
+      request = oneShot.then((items) => applyLocalFilter(current, items));
     } else if (current.filesToEdit) {
       // pages are consumed in order; a jump ahead still has to walk the raw
       // pages between, so the sequential fetch is the only correct one
@@ -254,7 +304,7 @@ export function useItemSource(filter: Ref<ItemFilter>) {
 
     const run = request
       .then((items) => {
-        if (current.scope === "browse") {
+        if (oneShot) {
           if (forGeneration !== generation) return;
           loadedPages.add(page);
           rows.value = items;
@@ -285,6 +335,113 @@ export function useItemSource(filter: Ref<ItemFilter>) {
     void loadPage(index - (index % TRACK_PAGE_SIZE));
   }
 
+  // the text the server sorted a listing by, for jumping through it by letter
+  function sortKeyText(item: GridItem, sortBy: string): string | undefined {
+    const key = sortBy.endsWith("_desc") ? sortBy.slice(0, -5) : sortBy;
+    switch (key) {
+      case "name":
+        return item.name;
+      case "sort_name":
+        return item.sort_name ?? item.name;
+      case "track_artist_name":
+      case "album_artist_name":
+        return "artists" in item && Array.isArray(item.artists)
+          ? item.artists[0]?.name
+          : undefined;
+      default:
+        return undefined;
+    }
+  }
+
+  /**
+   * Index of the first row whose sort text starts with `letters`, paging in
+   * whatever the search needs. Fully loaded listings are scanned; paged ones
+   * are bisected by page against the server's own order (about log2(pages)
+   * requests, which for twenty thousand tracks is seven). Undefined when the
+   * listing is not sorted by a name, or nothing matches.
+   */
+  async function jumpToLetter(letters: string): Promise<number | undefined> {
+    const current = filter.value;
+    const needle = letters.toLowerCase();
+    const textOf = (item: GridItem | undefined) =>
+      item ? sortKeyText(item, current.sortBy)?.toLowerCase() : undefined;
+    if (!needle || textOf(rows.value.find(Boolean)) === undefined) {
+      return undefined;
+    }
+    const desc = current.sortBy.endsWith("_desc");
+    const matches = (index: number) =>
+      textOf(rows.value[index])?.startsWith(needle) ?? false;
+    const before = (index: number) => {
+      const text = textOf(rows.value[index]);
+      if (text === undefined) return false;
+      return desc ? text > needle : text < needle;
+    };
+
+    if (allLoaded.value || current.filesToEdit) {
+      const index = rows.value.findIndex((_, i) => matches(i));
+      return index >= 0 ? index : undefined;
+    }
+
+    if (total.value === undefined) return undefined;
+    const forGeneration = generation;
+    let lo = 0;
+    let hi = Math.max(0, Math.ceil(total.value / TRACK_PAGE_SIZE) - 1);
+    while (lo < hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      await loadPage(mid * TRACK_PAGE_SIZE);
+      if (forGeneration !== generation) return undefined;
+      if (before(mid * TRACK_PAGE_SIZE)) lo = mid + 1;
+      else hi = mid;
+    }
+    // the run of matches may begin in the page before the one we landed on
+    const start = Math.max(0, lo - 1) * TRACK_PAGE_SIZE;
+    await loadPage(start);
+    await loadPage(lo * TRACK_PAGE_SIZE);
+    if (forGeneration !== generation) return undefined;
+    const end = Math.min(rows.value.length, (lo + 1) * TRACK_PAGE_SIZE);
+    for (let index = start; index < end; index++) {
+      if (matches(index)) return index;
+    }
+    return undefined;
+  }
+
+  /**
+   * Page the whole listing in so it can be sorted here on any column. A
+   * filter change part-way drops the result.
+   */
+  async function loadAll(): Promise<void> {
+    if (allLoaded.value || loadingAll.value) return;
+    const current = filter.value;
+    if (oneShotRequest(current) || current.filesToEdit) return;
+    const forGeneration = generation;
+    loadingAll.value = true;
+    loading.value = true;
+    try {
+      const all: GridItem[] = [];
+      for (;;) {
+        const items = await fetchLibraryPage(
+          current,
+          LOAD_ALL_PAGE_SIZE,
+          all.length,
+        );
+        if (forGeneration !== generation) return;
+        all.push(...items);
+        rows.value = all.slice();
+        if (items.length < LOAD_ALL_PAGE_SIZE) break;
+      }
+      for (let page = 0; page * TRACK_PAGE_SIZE < all.length; page++) {
+        loadedPages.add(page);
+      }
+      allLoaded.value = true;
+      total.value = all.length;
+    } finally {
+      if (forGeneration === generation) {
+        loadingAll.value = false;
+        loading.value = inFlight.size > 0;
+      }
+    }
+  }
+
   function reload() {
     generation += 1;
     loadedPages.clear();
@@ -292,13 +449,16 @@ export function useItemSource(filter: Ref<ItemFilter>) {
     rawOffset = 0;
     rows.value = [];
     allLoaded.value = false;
+    loadingAll.value = false;
     updateAvailable.value = false;
     loading.value = false;
     void refreshTotal(generation);
     void loadPage(0);
   }
 
-  watch(filter, reload, { deep: true, immediate: true });
+  // callers hand over a fresh object on every change; only a change in
+  // content is a new listing
+  watch(() => JSON.stringify(filter.value), reload, { immediate: true });
 
   const unsubscribeAdded = api.subscribe(
     EventType.MEDIA_ITEM_ADDED,
@@ -316,10 +476,13 @@ export function useItemSource(filter: Ref<ItemFilter>) {
   });
 
   return {
+    jumpToLetter,
+    loadAll,
     rows,
     total,
     loading,
     allLoaded,
+    loadingAll,
     updateAvailable,
     ensureLoaded,
     reload,

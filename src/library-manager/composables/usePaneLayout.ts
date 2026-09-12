@@ -11,11 +11,14 @@ export interface PaneLayoutPreference {
   // the group's autoSaveId; keeping that string per group is all we need
   groups?: Record<string, string>;
   showTree?: boolean;
+  showStrip?: boolean;
 }
 
 export const PANE_DEFAULTS = {
   treeSize: 18,
   treeMinSize: 10,
+  stripSize: 24,
+  stripMinSize: 8,
 } as const;
 
 /**
@@ -48,6 +51,7 @@ export function usePaneLayout() {
   };
 
   const showTree = computed(() => preference.value.showTree !== false);
+  const showStrip = computed(() => preference.value.showStrip !== false);
 
   async function setShowTree(value: boolean) {
     await setUserPreference(PANE_LAYOUT_PREFERENCE_KEY, {
@@ -56,10 +60,17 @@ export function usePaneLayout() {
     });
   }
 
+  async function setShowStrip(value: boolean) {
+    await setUserPreference(PANE_LAYOUT_PREFERENCE_KEY, {
+      ...preference.value,
+      showStrip: value,
+    });
+  }
+
   async function reset() {
     for (const key of Object.keys(pending)) delete pending[key];
     await setUserPreference(PANE_LAYOUT_PREFERENCE_KEY, {});
   }
 
-  return { storage, showTree, setShowTree, reset };
+  return { storage, showTree, showStrip, setShowTree, setShowStrip, reset };
 }

@@ -196,6 +196,76 @@ describe("useItemSource", () => {
     expect(syncListeners).toHaveLength(0);
   });
 
+  it("jumps to a letter by bisecting the server's own order", async () => {
+    // 1,000 tracks named a000..a999 then z000.. so "z" starts at index 1000
+    const names = (offset: number) =>
+      Array.from({ length: TRACK_PAGE_SIZE }, (_, i) => {
+        const n = offset + i;
+        return n < 1000
+          ? `a${String(n).padStart(3, "0")}`
+          : `z${String(n - 1000).padStart(3, "0")}`;
+      });
+    mockGetLibraryTracks.mockImplementation(async (...args) => {
+      const offset = args[3] ?? 0;
+      return names(offset).map((name, i) =>
+        track({ item_id: `t${offset + i}`, name }),
+      );
+    });
+    const { store } = await import("@/plugins/store");
+    (store as { libraryTracksCount?: number }).libraryTracksCount = 1400;
+    const source = scope.run(() => useItemSource(filter))!;
+    await flushPromises();
+
+    const index = await source.jumpToLetter("z");
+    expect(index).toBe(1000);
+    expect(source.rows.value[1000]?.name).toBe("z000");
+    // bisection touched a handful of pages, not all seven
+    const offsets = mockGetLibraryTracks.mock.calls.map((call) => call[3]);
+    expect(offsets.length).toBeLessThan(7);
+    expect(await source.jumpToLetter("q")).toBeUndefined();
+  });
+
+  it("ignores a filter object that only changed identity", async () => {
+    mockGetLibraryTracks.mockResolvedValue(page(0, 3));
+    const source = scope.run(() => useItemSource(filter))!;
+    await flushPromises();
+    expect(mockGetLibraryTracks).toHaveBeenCalledTimes(1);
+
+    filter.value = { ...filter.value };
+    await flushPromises();
+    expect(mockGetLibraryTracks).toHaveBeenCalledTimes(1);
+    expect(source.rows.value).toHaveLength(3);
+
+    filter.value = { ...filter.value, search: "x" };
+    await flushPromises();
+    expect(mockGetLibraryTracks).toHaveBeenCalledTimes(2);
+  });
+
+  it("pages the whole listing in for a local sort", async () => {
+    mockGetLibraryTracks.mockImplementation(async (...args) => {
+      const limit = args[2] ?? 0;
+      const offset = args[3] ?? 0;
+      const remaining = Math.max(0, 2500 - offset);
+      return page(offset, Math.min(limit, remaining));
+    });
+    const source = scope.run(() => useItemSource(filter))!;
+    await flushPromises();
+    expect(source.rows.value).toHaveLength(TRACK_PAGE_SIZE);
+
+    await source.loadAll();
+    expect(source.rows.value).toHaveLength(2500);
+    expect(source.allLoaded.value).toBe(true);
+    expect(source.total.value).toBe(2500);
+    const limits = mockGetLibraryTracks.mock.calls.map((call) => call[2]);
+    expect(limits.slice(1)).toEqual([2000, 2000]);
+
+    // a second call is a no-op and a later page request does nothing
+    await source.loadAll();
+    source.ensureLoaded(2400);
+    await flushPromises();
+    expect(mockGetLibraryTracks).toHaveBeenCalledTimes(3);
+  });
+
   it("lists album artists through the artists endpoint with its own count", async () => {
     mockGetLibraryArtists.mockResolvedValue(
       Array.from({ length: 12 }, (_, i) =>

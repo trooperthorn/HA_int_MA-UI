@@ -269,7 +269,10 @@ collide with a browser shortcut and cannot fire while typing.
 | Select all / none | Ctrl+A / Shift+Ctrl+A | Ctrl+A | `Ctrl+A` / `Shift+Ctrl+A` | grid selection - only the rows that have been paged in; selecting the whole library needs a server-side batch action (follow-up) |
 | First / last row, page | Home / End | Home / End | `Home` `End` `PgUp` `PgDn`, `Shift+` extends | grid |
 | Move in list | Up / Down | Up / Down | `Up` / `Down`, `Shift+Up/Down` extends | grid |
-| Type-ahead jump in a column | - | - | letters while grid focused (Explorer-style) | replaces "any key opens search"; searches paged-in rows only - the browser strip's per-column search (Phase 3) is the way to jump anywhere in 22k tracks |
+| Type-ahead jump in a column | - | - | letters while the grid or a browser column is focused (Explorer-style) | replaces "any key opens search"; scans paged-in rows first, then bisects the server's own order by page (about seven requests for 22k tracks) when the listing is sorted by a name |
+| Sort by column | - | - | click a header | server sort where the server has a key (name, artist, length, last played, date added; albums also year and album artist); every other column (album, year, genre, favorite, source) sorts in the browser - narrowed lists and provider folders arrive whole, and the full library pages itself in first (2,000 per request, "Loading n of m to sort" in the status line, about ten seconds for 22k tracks) |
+| Resize panes | - | drag | drag the handles | tree width, browser-strip height, and each browser column's width are reka-ui splitters whose layouts are stored in the user's preferences (`libraryManager.panes`) |
+| Play selected | Enter / double-click | Enter / double-click | `Enter` or double-click | `handlePlayBtnClick`; a double-clicked folder opens instead |
 | Focus search | Ctrl+F | Ctrl+F, F3 | `/` and `Ctrl+K` (exists) | `CommandCenter` |
 | Sort by column | - | - | `s` then `1-9` (column index) | grid sort |
 | Go to Now Playing | - | F6 | `g` `n` | tree select |
