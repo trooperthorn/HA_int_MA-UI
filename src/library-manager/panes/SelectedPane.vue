@@ -108,6 +108,7 @@ import {
 } from "@/plugins/api/interfaces";
 import { eventbus } from "@/plugins/eventbus";
 import type { GridItem } from "../columns";
+import { ensurePlayer } from "../playerGate";
 
 const props = defineProps<{
   items: GridItem[];
@@ -207,27 +208,40 @@ const actions = computed<PaneAction[]>(() => {
       id: "play",
       icon: Play,
       label: t("play_now"),
-      run: (event) =>
-        single
-          ? void handlePlayBtnClick(
+      run: (event) => {
+        const { clientX, clientY } = event;
+        void ensurePlayer().then((ready) => {
+          if (!ready) return;
+          if (single) {
+            void handlePlayBtnClick(
               current,
-              event.clientX,
-              event.clientY,
+              clientX,
+              clientY,
               props.parentItem,
-            )
-          : void api.playMedia(all),
+            );
+          } else {
+            void api.playMedia(all);
+          }
+        });
+      },
     },
     {
       id: "play_next",
       icon: ListEnd,
       label: t("play_next"),
-      run: () => void api.playMedia(all, QueueOption.NEXT),
+      run: () =>
+        void ensurePlayer().then((ready) => {
+          if (ready) void api.playMedia(all, QueueOption.NEXT);
+        }),
     },
     {
       id: "add_to_queue",
       icon: ListPlus,
       label: t("library_manager.selected.add_to_queue"),
-      run: () => void api.playMedia(all, QueueOption.ADD),
+      run: () =>
+        void ensurePlayer().then((ready) => {
+          if (ready) void api.playMedia(all, QueueOption.ADD);
+        }),
     },
   ];
   if (single && "favorite" in current) {

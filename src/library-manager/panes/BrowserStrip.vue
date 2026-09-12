@@ -69,6 +69,8 @@ const props = defineProps<{
   picks: BrowserPicks;
   // narrow every column to one source's items
   provider?: string[];
+  // the facet a tree listing node asks the first column to show
+  leadFacet?: BrowserFacet;
   storage: PaneStorage;
 }>();
 
@@ -98,12 +100,25 @@ const facetOptions = computed(() =>
 function setFacet(index: number, value: string) {
   if (!isBrowserFacet(value) || facets.value[index] === value) return;
   const next = facets.value.slice();
+  // a facet already shown elsewhere moves there instead of appearing twice
+  const other = next.indexOf(value);
+  if (other >= 0) next[other] = next[index];
   next[index] = value;
   facets.value = next;
   void setUserPreference(BROWSER_FACETS_PREFERENCE_KEY, next);
   // whatever the column had picked no longer applies
-  emit("update:picks", clearFrom(index));
+  emit("update:picks", clearFrom(Math.min(index, other < 0 ? index : other)));
 }
+
+// a tree listing node leads with its facet and starts from a clean pick
+watch(
+  () => props.leadFacet,
+  (facet) => {
+    if (!facet) return;
+    if (facets.value[0] !== facet) setFacet(0, facet);
+    emit("update:picks", { genres: [] });
+  },
+);
 
 // ---- lists -----------------------------------------------------------------
 

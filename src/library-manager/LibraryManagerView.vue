@@ -132,6 +132,7 @@
               :storage="storage"
               :picks="browser"
               :provider="node.provider"
+              :lead-facet="node.leadFacet"
               @update:picks="setPicks"
             />
           </SplitterPanel>
@@ -289,6 +290,7 @@ import {
   type LibraryFilter,
 } from "./composables/useLibraryFilter";
 import { PANE_DEFAULTS, usePaneLayout } from "./composables/usePaneLayout";
+import { ensurePlayer } from "./playerGate";
 import BrowserStrip from "./panes/BrowserStrip.vue";
 import QueuePane from "./panes/QueuePane.vue";
 import SelectedPane from "./panes/SelectedPane.vue";
@@ -544,13 +546,19 @@ async function locateNowPlaying() {
 useKeymap({
   actions: {
     playSelectedNext: () => {
-      if (selection.value.length) {
-        void api.playMedia(selection.value, QueueOption.NEXT);
+      const items = selection.value;
+      if (items.length) {
+        void ensurePlayer().then((ready) => {
+          if (ready) void api.playMedia(items, QueueOption.NEXT);
+        });
       }
     },
     addSelectedToQueue: () => {
-      if (selection.value.length) {
-        void api.playMedia(selection.value, QueueOption.ADD);
+      const items = selection.value;
+      if (items.length) {
+        void ensurePlayer().then((ready) => {
+          if (ready) void api.playMedia(items, QueueOption.ADD);
+        });
       }
     },
     locateNowPlaying: () => void locateNowPlaying(),

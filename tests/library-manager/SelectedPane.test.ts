@@ -42,6 +42,10 @@ vi.mock("@/components/ProviderIcon.vue", () => ({
   default: { name: "ProviderIcon", props: ["domain"], template: "<i />" },
 }));
 
+vi.mock("@/library-manager/playerGate", () => ({
+  ensurePlayer: async () => true,
+}));
+
 enableAutoUnmount(afterEach);
 
 const artist = {
