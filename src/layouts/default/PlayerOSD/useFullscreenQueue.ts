@@ -33,8 +33,23 @@ import { useDisplay } from "vuetify";
 
 export type QueueItemState = "played" | "playing" | "buffered" | "upcoming";
 
-export function useFullscreenQueue(showLyrics: Ref<boolean>) {
+export interface FullscreenQueueOptions {
+  // whether the list is on screen; defaults to the fullscreen player's queue
+  // panel so another host (the library manager's queue pane) can supply its own
+  visible?: Ref<boolean>;
+}
+
+export function useFullscreenQueue(
+  showLyrics: Ref<boolean>,
+  options: FullscreenQueueOptions = {},
+) {
   const { name } = useDisplay();
+
+  const listVisible =
+    options.visible ??
+    computed(() => store.showFullscreenPlayer && store.showQueueItems);
+  // the list is usable when its host shows it and lyrics are not covering it
+  const queueVisible = computed(() => listVisible.value && !showLyrics.value);
 
   // Marquee sync group shared by the (non-playing) hovered rows.
   const hoveredMarqueeSync = new MarqueeTextSync();
@@ -335,8 +350,7 @@ export function useFullscreenQueue(showLyrics: Ref<boolean>) {
 
   // Focus the now-playing track when the queue list becomes visible.
   watch(
-    () =>
-      store.showFullscreenPlayer && store.showQueueItems && !showLyrics.value,
+    queueVisible,
     (visible) => {
       if (!visible) return;
       followCurrent.value = true;
@@ -350,13 +364,7 @@ export function useFullscreenQueue(showLyrics: Ref<boolean>) {
   watch(
     () => store.activePlayerQueue?.current_index,
     (index) => {
-      if (
-        index == null ||
-        !store.showFullscreenPlayer ||
-        !store.showQueueItems ||
-        showLyrics.value
-      )
-        return;
+      if (index == null || !queueVisible.value) return;
       if (followCurrent.value) nextTick(() => focusCurrent("smooth"));
     },
   );
@@ -372,11 +380,7 @@ export function useFullscreenQueue(showLyrics: Ref<boolean>) {
       (evt: EventMessage) => {
         if (evt.object_id != store.activePlayerQueue?.queue_id) return;
         invalidate();
-        if (
-          store.showFullscreenPlayer &&
-          store.showQueueItems &&
-          followCurrent.value
-        ) {
+        if (listVisible.value && followCurrent.value) {
           nextTick(() => requestAnimationFrame(() => focusCurrent("auto")));
         }
       },
@@ -389,11 +393,7 @@ export function useFullscreenQueue(showLyrics: Ref<boolean>) {
     () => store.activePlayerId,
     () => {
       invalidate(true);
-      if (
-        store.showFullscreenPlayer &&
-        store.showQueueItems &&
-        !showLyrics.value
-      ) {
+      if (queueVisible.value) {
         followCurrent.value = true;
         nextTick(() => requestAnimationFrame(() => focusCurrent("auto")));
       }
@@ -403,6 +403,9 @@ export function useFullscreenQueue(showLyrics: Ref<boolean>) {
 
   return {
     queueScrollRef,
+    itemAt,
+    focusCurrent,
+    followCurrent,
     virtualRows,
     totalItems,
     upNextCount,

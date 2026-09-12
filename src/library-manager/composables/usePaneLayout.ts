@@ -12,6 +12,8 @@ export interface PaneLayoutPreference {
   groups?: Record<string, string>;
   showTree?: boolean;
   showStrip?: boolean;
+  showQueue?: boolean;
+  showSelected?: boolean;
 }
 
 export const PANE_DEFAULTS = {
@@ -19,7 +21,13 @@ export const PANE_DEFAULTS = {
   treeMinSize: 10,
   stripSize: 24,
   stripMinSize: 8,
+  rightSize: 24,
+  rightMinSize: 14,
+  queueSize: 55,
+  queueMinSize: 15,
 } as const;
+
+type PaneFlag = "showTree" | "showStrip" | "showQueue" | "showSelected";
 
 /**
  * Splitter sizes and pane visibility, stored in the user's preferences so
@@ -50,27 +58,39 @@ export function usePaneLayout() {
     },
   };
 
-  const showTree = computed(() => preference.value.showTree !== false);
-  const showStrip = computed(() => preference.value.showStrip !== false);
+  const flag = (key: PaneFlag) =>
+    computed(() => preference.value[key] !== false);
+  const showTree = flag("showTree");
+  const showStrip = flag("showStrip");
+  const showQueue = flag("showQueue");
+  const showSelected = flag("showSelected");
 
-  async function setShowTree(value: boolean) {
+  async function setFlag(key: PaneFlag, value: boolean) {
     await setUserPreference(PANE_LAYOUT_PREFERENCE_KEY, {
       ...preference.value,
-      showTree: value,
+      [key]: value,
     });
   }
-
-  async function setShowStrip(value: boolean) {
-    await setUserPreference(PANE_LAYOUT_PREFERENCE_KEY, {
-      ...preference.value,
-      showStrip: value,
-    });
-  }
+  const setShowTree = (value: boolean) => setFlag("showTree", value);
+  const setShowStrip = (value: boolean) => setFlag("showStrip", value);
+  const setShowQueue = (value: boolean) => setFlag("showQueue", value);
+  const setShowSelected = (value: boolean) => setFlag("showSelected", value);
 
   async function reset() {
     for (const key of Object.keys(pending)) delete pending[key];
     await setUserPreference(PANE_LAYOUT_PREFERENCE_KEY, {});
   }
 
-  return { storage, showTree, showStrip, setShowTree, setShowStrip, reset };
+  return {
+    storage,
+    showTree,
+    showStrip,
+    showQueue,
+    showSelected,
+    setShowTree,
+    setShowStrip,
+    setShowQueue,
+    setShowSelected,
+    reset,
+  };
 }
