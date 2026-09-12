@@ -6,7 +6,25 @@
     :aria-multiselectable="multiple"
   >
     <div class="browser-column__head">
-      <span class="browser-column__title">{{ title }}</span>
+      <select
+        v-if="facetOptions"
+        class="browser-column__facet"
+        :value="facet"
+        :aria-label="$t('library_manager.browser_facet')"
+        @change="
+          emit('update:facet', ($event.target as HTMLSelectElement).value)
+        "
+        @keydown.stop
+      >
+        <option
+          v-for="option in facetOptions"
+          :key="option.value"
+          :value="option.value"
+        >
+          {{ option.label }}
+        </option>
+      </select>
+      <span v-else class="browser-column__title">{{ title }}</span>
       <Spinner v-if="loading" class="size-3" />
       <div class="browser-column__search">
         <Search :size="12" class="browser-column__search-icon" />
@@ -76,13 +94,22 @@ const props = withDefaults(
     selectedIds: string[];
     multiple?: boolean;
     search: string;
+    // what the column lists, chosen from a dropdown in its head
+    facet?: string;
+    facetOptions?: Array<{ value: string; label: string }>;
   }>(),
-  { total: undefined, multiple: false },
+  {
+    total: undefined,
+    multiple: false,
+    facet: undefined,
+    facetOptions: undefined,
+  },
 );
 
 const emit = defineEmits<{
   "update:selectedIds": [ids: string[]];
   "update:search": [search: string];
+  "update:facet": [facet: string];
   ensureLoaded: [index: number];
   jumpToLetter: [letters: string];
 }>();
@@ -256,6 +283,32 @@ defineExpose({
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: rgba(var(--v-theme-fg), 0.62);
+}
+
+.browser-column__facet {
+  max-width: 50%;
+  height: 20px;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  outline: none;
+}
+
+.browser-column__facet:hover,
+.browser-column__facet:focus-visible {
+  background: rgba(var(--v-theme-fg), 0.08);
+}
+
+.browser-column__facet option {
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+  color: rgb(var(--v-theme-fg));
+  background: rgb(var(--v-theme-panel));
 }
 
 .browser-column__search {

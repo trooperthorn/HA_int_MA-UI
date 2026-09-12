@@ -5,63 +5,55 @@
     :storage="storage"
     class="browser-strip"
   >
-    <SplitterPanel id="genres" :order="1" :min-size="10">
-      <BrowserColumn
-        ref="genreColumn"
-        :title="$t('genre')"
-        :items="genreList.rows.value"
-        :total="genreList.total.value"
-        :loading="genreList.loading.value"
-        :selected-ids="genreIds"
-        :search="genreSearch"
-        multiple
-        @update:selected-ids="pickGenres"
-        @update:search="genreSearch = $event"
-        @ensure-loaded="genreList.ensureLoaded"
-        @jump-to-letter="jump(genreList, genreColumn, $event)"
+    <template v-for="(column, index) in columns" :key="column.panelId">
+      <SplitterResizeHandle
+        v-if="index > 0"
+        :id="`${column.panelId}-handle`"
+        class="browser-strip__handle"
       />
-    </SplitterPanel>
-    <SplitterResizeHandle id="genres-handle" class="browser-strip__handle" />
-    <SplitterPanel id="artists" :order="2" :min-size="10">
-      <BrowserColumn
-        ref="artistColumn"
-        :title="$t('artist')"
-        :items="artistList.rows.value"
-        :total="artistList.total.value"
-        :loading="artistList.loading.value"
-        :selected-ids="artistIds"
-        :search="artistSearch"
-        @update:selected-ids="pickArtist"
-        @update:search="artistSearch = $event"
-        @ensure-loaded="artistList.ensureLoaded"
-        @jump-to-letter="jump(artistList, artistColumn, $event)"
-      />
-    </SplitterPanel>
-    <SplitterResizeHandle id="artists-handle" class="browser-strip__handle" />
-    <SplitterPanel id="albums" :order="3" :min-size="10">
-      <BrowserColumn
-        ref="albumColumn"
-        :title="$t('album')"
-        :items="albumList.rows.value"
-        :total="albumList.total.value"
-        :loading="albumList.loading.value"
-        :selected-ids="albumIds"
-        :search="albumSearch"
-        @update:selected-ids="pickAlbum"
-        @update:search="albumSearch = $event"
-        @ensure-loaded="albumList.ensureLoaded"
-        @jump-to-letter="jump(albumList, albumColumn, $event)"
-      />
-    </SplitterPanel>
+      <SplitterPanel :id="column.panelId" :order="index + 1" :min-size="10">
+        <BrowserColumn
+          :ref="(el) => setColumnRef(index, el)"
+          :title="column.title"
+          :facet="column.facet"
+          :facet-options="facetOptions"
+          :items="column.list.rows.value"
+          :total="column.list.total.value"
+          :loading="column.list.loading.value"
+          :selected-ids="column.selectedIds"
+          :search="searches[index]"
+          :multiple="column.def.multiple"
+          @update:facet="setFacet(index, $event)"
+          @update:selected-ids="pick(index, $event)"
+          @update:search="searches[index] = $event"
+          @ensure-loaded="column.list.ensureLoaded"
+          @jump-to-letter="jump(index, $event)"
+        />
+      </SplitterPanel>
+    </template>
   </SplitterGroup>
 </template>
 
 <script setup lang="ts">
 import { SplitterGroup, SplitterPanel, SplitterResizeHandle } from "reka-ui";
-import { computed, ref } from "vue";
-import { MediaType } from "@/plugins/api/interfaces";
+import { computed, ref, watch, type ComponentPublicInstance } from "vue";
+import { useI18n } from "vue-i18n";
+import {
+  setUserPreference,
+  useUserPreferences,
+} from "@/composables/userPreferences";
+import {
+  BROWSER_FACETS,
+  BROWSER_FACETS_PREFERENCE_KEY,
+  facetDef,
+  isBrowserFacet,
+  normalizeFacets,
+  type BrowserFacet,
+} from "../browserFacets";
+import type { GridItem } from "../columns";
 import { useItemSource } from "../composables/useItemSource";
 import type {
+  BrowserPicks,
   GenreRef,
   ItemRef,
   LibraryFilter,
@@ -74,120 +66,181 @@ interface PaneStorage {
 }
 
 const props = defineProps<{
-  genres: GenreRef[];
-  artist?: ItemRef;
-  album?: ItemRef;
-  albumArtistsOnly?: boolean;
+  picks: BrowserPicks;
   // narrow every column to one source's items
   provider?: string[];
   storage: PaneStorage;
 }>();
 
 const emit = defineEmits<{
-  "update:genres": [genres: GenreRef[]];
-  "update:artist": [artist: ItemRef | undefined];
-  "update:album": [album: ItemRef | undefined];
+  "update:picks": [picks: BrowserPicks];
 }>();
 
-const genreSearch = ref("");
-const artistSearch = ref("");
-const albumSearch = ref("");
+const { t } = useI18n();
+const { getPreference } = useUserPreferences();
 
-const genreIds = computed(() => props.genres.map((genre) => String(genre.id)));
-const artistIds = computed(() => (props.artist ? [props.artist.item_id] : []));
-const albumIds = computed(() => (props.album ? [props.album.item_id] : []));
-const selectedGenreIds = computed(() => props.genres.map((genre) => genre.id));
+// ---- facets: what each of the three columns lists ---------------------------
 
-const base = computed(() => ({
-  scope: "library" as const,
-  favoritesOnly: false,
-  sortBy: "name",
-  provider: props.provider,
-}));
+const storedFacets = getPreference<unknown>(BROWSER_FACETS_PREFERENCE_KEY, []);
+const facets = ref<BrowserFacet[]>(normalizeFacets(storedFacets.value));
+watch(storedFacets, (value) => {
+  const next = normalizeFacets(value);
+  if (next.join() !== facets.value.join()) facets.value = next;
+});
 
-const genreList = useItemSource(
-  computed<LibraryFilter>(() => ({
-    ...base.value,
-    node: "browser.genres",
-    mediaType: MediaType.GENRE,
-    search: genreSearch.value,
+const facetOptions = computed(() =>
+  BROWSER_FACETS.map((facet) => ({
+    value: facet.id,
+    label: t(facet.labelKey),
   })),
 );
 
-const artistList = useItemSource(
-  computed<LibraryFilter>(() => ({
-    ...base.value,
-    node: "browser.artists",
-    mediaType: MediaType.ARTIST,
-    search: artistSearch.value,
-    albumArtistsOnly: props.albumArtistsOnly,
-    genreIds:
-      selectedGenreIds.value.length > 0 ? selectedGenreIds.value : undefined,
-  })),
-);
-
-const albumList = useItemSource(
-  computed<LibraryFilter>(() => ({
-    ...base.value,
-    node: "browser.albums",
-    mediaType: MediaType.ALBUM,
-    search: albumSearch.value,
-    genreIds:
-      selectedGenreIds.value.length > 0 ? selectedGenreIds.value : undefined,
-    artist: props.artist,
-  })),
-);
-
-const genreColumn = ref<InstanceType<typeof BrowserColumn> | null>(null);
-const artistColumn = ref<InstanceType<typeof BrowserColumn> | null>(null);
-const albumColumn = ref<InstanceType<typeof BrowserColumn> | null>(null);
-
-async function jump(
-  list: ReturnType<typeof useItemSource>,
-  column: InstanceType<typeof BrowserColumn> | null,
-  letters: string,
-) {
-  const index = await list.jumpToLetter(letters);
-  if (index !== undefined) column?.scrollToIndex(index);
+function setFacet(index: number, value: string) {
+  if (!isBrowserFacet(value) || facets.value[index] === value) return;
+  const next = facets.value.slice();
+  next[index] = value;
+  facets.value = next;
+  void setUserPreference(BROWSER_FACETS_PREFERENCE_KEY, next);
+  // whatever the column had picked no longer applies
+  emit("update:picks", clearFrom(index));
 }
 
-function pickGenres(ids: string[]) {
-  const picked: GenreRef[] = [];
-  for (const id of ids) {
-    const numeric = Number(id);
-    if (Number.isNaN(numeric)) continue;
-    const known =
-      props.genres.find((genre) => genre.id === numeric) ??
-      genreList.rows.value.find((item) => item?.item_id === id);
-    picked.push({ id: numeric, name: known?.name ?? id });
+// ---- lists -----------------------------------------------------------------
+
+const searches = ref<string[]>(["", "", ""]);
+
+const genreIds = computed(() =>
+  props.picks.genres.length > 0
+    ? props.picks.genres.map((genre) => genre.id)
+    : undefined,
+);
+
+// every column narrows by what the others picked, as far as the server can:
+// genres narrow everything, an artist narrows albums
+function filterFor(index: number): LibraryFilter {
+  const facet = facetDef(facets.value[index]);
+  const filter: LibraryFilter = {
+    scope: "library",
+    node: `browser.${index}.${facet.id}`,
+    mediaType: facet.mediaType,
+    provider: props.provider,
+    favoritesOnly: false,
+    sortBy: "name",
+    search: searches.value[index],
+  };
+  if (facet.id !== "genre") filter.genreIds = genreIds.value;
+  if (facet.id === "album_artist") filter.albumArtistsOnly = true;
+  if (facet.id === "album") filter.artist = props.picks.artist;
+  return filter;
+}
+
+const lists = [0, 1, 2].map((index) =>
+  useItemSource(computed(() => filterFor(index))),
+);
+
+// ---- picks -----------------------------------------------------------------
+
+const toRef = (item: GridItem): ItemRef => ({
+  item_id: item.item_id,
+  provider: item.provider,
+  name: item.name,
+});
+
+function selectedIdsFor(facet: BrowserFacet): string[] {
+  switch (facet) {
+    case "genre":
+      return props.picks.genres.map((genre) => String(genre.id));
+    case "artist":
+    case "album_artist":
+      return props.picks.artist ? [props.picks.artist.item_id] : [];
+    case "album":
+      return props.picks.album ? [props.picks.album.item_id] : [];
+    case "playlist":
+      return props.picks.playlist ? [props.picks.playlist.item_id] : [];
   }
-  emit("update:genres", picked);
 }
 
-function pickArtist(ids: string[]) {
-  const id = ids[0];
-  const item = id
-    ? artistList.rows.value.find((row) => row?.item_id === id)
-    : undefined;
+function withPick(
+  picks: BrowserPicks,
+  facet: BrowserFacet,
+  ids: string[],
+  rows: GridItem[],
+): BrowserPicks {
+  const first = ids[0];
+  const item = first ? rows.find((row) => row?.item_id === first) : undefined;
+  const itemRef = item ? toRef(item) : undefined;
+  switch (facet) {
+    case "genre": {
+      const genres: GenreRef[] = [];
+      for (const id of ids) {
+        const numeric = Number(id);
+        if (Number.isNaN(numeric)) continue;
+        const known =
+          props.picks.genres.find((genre) => genre.id === numeric) ??
+          rows.find((row) => row?.item_id === id);
+        genres.push({ id: numeric, name: known?.name ?? id });
+      }
+      return { ...picks, genres };
+    }
+    case "artist":
+    case "album_artist":
+      return { ...picks, artist: itemRef };
+    case "album":
+      return { ...picks, album: itemRef };
+    case "playlist":
+      return { ...picks, playlist: itemRef };
+  }
+}
+
+// the columns to the right of `index` lose their picks
+function clearFrom(index: number): BrowserPicks {
+  let next: BrowserPicks = { ...props.picks };
+  for (let i = index + 1; i < facets.value.length; i++) {
+    next = withPick(next, facets.value[i], [], []);
+  }
+  return next;
+}
+
+function pick(index: number, ids: string[]) {
+  const facet = facets.value[index];
   emit(
-    "update:artist",
-    item
-      ? { item_id: item.item_id, provider: item.provider, name: item.name }
-      : undefined,
+    "update:picks",
+    withPick(clearFrom(index), facet, ids, lists[index].rows.value),
   );
 }
 
-function pickAlbum(ids: string[]) {
-  const id = ids[0];
-  const item = id
-    ? albumList.rows.value.find((row) => row?.item_id === id)
-    : undefined;
-  emit(
-    "update:album",
-    item
-      ? { item_id: item.item_id, provider: item.provider, name: item.name }
-      : undefined,
-  );
+// ---- columns ---------------------------------------------------------------
+
+const columns = computed(() =>
+  facets.value.map((facet, index) => {
+    const def = facetDef(facet);
+    return {
+      panelId: `column-${index}`,
+      facet,
+      def,
+      title: t(def.labelKey),
+      list: lists[index],
+      selectedIds: selectedIdsFor(facet),
+    };
+  }),
+);
+
+const columnRefs = ref<Array<InstanceType<typeof BrowserColumn> | null>>([
+  null,
+  null,
+  null,
+]);
+
+function setColumnRef(
+  index: number,
+  el: Element | ComponentPublicInstance | null,
+) {
+  columnRefs.value[index] = el as InstanceType<typeof BrowserColumn> | null;
+}
+
+async function jump(index: number, letters: string) {
+  const at = await lists[index].jumpToLetter(letters);
+  if (at !== undefined) columnRefs.value[index]?.scrollToIndex(at);
 }
 </script>
 

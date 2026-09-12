@@ -112,14 +112,9 @@
           >
             <BrowserStrip
               :storage="storage"
-              :genres="browser.genres"
-              :artist="browser.artist"
-              :album="browser.album"
-              :album-artists-only="node.albumArtistsOnly"
+              :picks="browser"
               :provider="node.provider"
-              @update:genres="setGenres"
-              @update:artist="setArtist"
-              @update:album="setAlbum"
+              @update:picks="setPicks"
             />
           </SplitterPanel>
           <SplitterResizeHandle
@@ -240,6 +235,8 @@ const {
   setGenres,
   setArtist,
   setAlbum,
+  setPlaylist,
+  setPicks,
   clearBrowser,
 } = useLibraryFilter();
 useKeymap();
@@ -284,6 +281,14 @@ const chips = computed<FilterChip[]>(() => {
       kind: t("album"),
       label: active.album.name,
       clear: () => setAlbum(undefined),
+    });
+  }
+  if (active.playlist) {
+    list.push({
+      key: "playlist",
+      kind: t("playlist"),
+      label: active.playlist.name,
+      clear: () => setPlaylist(undefined),
     });
   }
   return list;

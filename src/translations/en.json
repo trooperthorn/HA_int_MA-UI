@@ -2546,7 +2546,8 @@
             "sources": "Sources",
             "album_artists": "Album artists",
             "recently_added": "Recently added",
-            "files_to_edit": "Files to edit"
+            "files_to_edit": "Files to edit",
+            "album_artist": "Album artist"
         },
         "shortcuts": {
             "play_pause": "Play \/ pause",
@@ -2557,6 +2558,7 @@
             "volume_up": "Volume up",
             "volume_down": "Volume down",
             "mute_toggle": "Mute \/ unmute"
-        }
+        },
+        "browser_facet": "What this column lists"
     }
 }
