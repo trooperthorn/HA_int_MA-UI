@@ -20,6 +20,24 @@
       >
         <PanelTop :size="16" />
       </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        class="size-8"
+        :aria-label="$t('library_manager.toggle_queue')"
+        @click="setShowQueue(!showQueue)"
+      >
+        <PanelRight :size="16" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        class="size-8"
+        :aria-label="$t('library_manager.toggle_selected')"
+        @click="setShowSelected(!showSelected)"
+      >
+        <PanelBottom :size="16" />
+      </Button>
       <h1 class="library-manager__title">{{ $t("library_manager.title") }}</h1>
       <div class="library-manager__search">
         <Search :size="16" class="library-manager__search-icon" />
@@ -169,12 +187,66 @@
           </SplitterPanel>
         </SplitterGroup>
       </SplitterPanel>
+      <SplitterResizeHandle
+        v-if="rightVisible"
+        id="right-handle"
+        class="library-manager__handle"
+      />
+      <SplitterPanel
+        v-if="rightVisible"
+        id="right"
+        :order="3"
+        :default-size="PANE_DEFAULTS.rightSize"
+        :min-size="PANE_DEFAULTS.rightMinSize"
+        :max-size="45"
+        class="library-manager__right"
+      >
+        <SplitterGroup
+          direction="vertical"
+          auto-save-id="library-manager-right"
+          :storage="storage"
+          class="library-manager__main-group"
+        >
+          <SplitterPanel
+            v-if="showQueue"
+            id="queue"
+            :order="1"
+            :default-size="PANE_DEFAULTS.queueSize"
+            :min-size="PANE_DEFAULTS.queueMinSize"
+            class="library-manager__pane"
+          >
+            <QueuePane :visible="showQueue" />
+          </SplitterPanel>
+          <SplitterResizeHandle
+            v-if="showQueue && showSelected"
+            id="right-row-handle"
+            class="library-manager__handle library-manager__handle--row"
+          />
+          <SplitterPanel
+            v-if="showSelected"
+            id="selected"
+            :order="2"
+            :min-size="PANE_DEFAULTS.queueMinSize"
+            class="library-manager__pane"
+          >
+            <SelectedPane :items="selection" />
+          </SplitterPanel>
+        </SplitterGroup>
+      </SplitterPanel>
     </SplitterGroup>
   </div>
 </template>
 
 <script setup lang="ts">
-import { PanelLeft, PanelTop, RefreshCw, Search, X } from "@lucide/vue";
+import {
+  PanelBottom,
+  PanelLeft,
+  PanelRight,
+  PanelTop,
+  RefreshCw,
+  Search,
+  X,
+} from "@lucide/vue";
 import { SplitterGroup, SplitterPanel, SplitterResizeHandle } from "reka-ui";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -207,6 +279,8 @@ import {
 } from "./composables/useLibraryFilter";
 import { PANE_DEFAULTS, usePaneLayout } from "./composables/usePaneLayout";
 import BrowserStrip from "./panes/BrowserStrip.vue";
+import QueuePane from "./panes/QueuePane.vue";
+import SelectedPane from "./panes/SelectedPane.vue";
 import SourceTree from "./panes/SourceTree.vue";
 import TrackGrid from "./panes/TrackGrid.vue";
 
@@ -224,8 +298,20 @@ const {
   rowHeight,
   setColumnVisible,
 } = useGridColumns();
-const { storage, showTree, showStrip, setShowTree, setShowStrip } =
-  usePaneLayout();
+const {
+  storage,
+  showTree,
+  showStrip,
+  showQueue,
+  showSelected,
+  setShowTree,
+  setShowStrip,
+  setShowQueue,
+  setShowSelected,
+} = usePaneLayout();
+
+// the right column holds the queue over the selected item; it goes with both
+const rightVisible = computed(() => showQueue.value || showSelected.value);
 const {
   node,
   toolbar,
@@ -495,6 +581,18 @@ function clearSearch() {
   flex-direction: column;
   min-height: 0;
   min-width: 0;
+}
+
+.library-manager__right {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background: rgb(var(--v-theme-panel));
+}
+
+.library-manager__pane {
+  min-height: 0;
 }
 
 .library-manager__main-group {

@@ -2559,6 +2559,20 @@
             "volume_down": "Volume down",
             "mute_toggle": "Mute \/ unmute"
         },
-        "browser_facet": "What this column lists"
+        "browser_facet": "What this column lists",
+        "toggle_queue": "Show or hide the queue",
+        "toggle_selected": "Show or hide the selected item panel",
+        "queue": {
+            "locate": "Scroll to the current track",
+            "clear": "Clear the queue"
+        },
+        "selected": {
+            "title": "Selected",
+            "empty": "Select an item in the list to see its details",
+            "add_to_queue": "Add to queue",
+            "go_to_album": "Go to album",
+            "go_to_artist": "Go to artist",
+            "more": "More actions"
+        }
     }
 }

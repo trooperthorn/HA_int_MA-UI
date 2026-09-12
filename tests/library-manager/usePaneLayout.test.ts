@@ -40,6 +40,18 @@ describe("usePaneLayout", () => {
     expect(mocks.setUserPreference).toHaveBeenCalledTimes(1);
   });
 
+  it("shows the queue and selected panes unless the user hid them", async () => {
+    mocks.preference.value = { showSelected: false };
+    const layout = usePaneLayout();
+    expect(layout.showQueue.value).toBe(true);
+    expect(layout.showSelected.value).toBe(false);
+    await layout.setShowQueue(false);
+    expect(mocks.setUserPreference).toHaveBeenCalledWith(
+      "libraryManager.panes",
+      { showSelected: false, showQueue: false },
+    );
+  });
+
   it("shows the tree unless the user hid it", async () => {
     const layout = usePaneLayout();
     expect(layout.showTree.value).toBe(true);
