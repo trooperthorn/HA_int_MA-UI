@@ -16,9 +16,11 @@ const {
   mockGetLibraryArtists,
   mockGetLibraryArtistsCount,
   mockBrowse,
+  mockGetPlaylistTracks,
   mockSubscribe,
   syncListeners,
 } = vi.hoisted(() => ({
+  mockGetPlaylistTracks: vi.fn<MusicAssistantApi["getPlaylistTracks"]>(),
   mockGetLibraryTracks: vi.fn<MusicAssistantApi["getLibraryTracks"]>(),
   mockGetLibraryTracksCount:
     vi.fn<MusicAssistantApi["getLibraryTracksCount"]>(),
@@ -37,6 +39,7 @@ vi.mock("@/plugins/api", () => {
     getLibraryArtists: mockGetLibraryArtists,
     getLibraryArtistsCount: mockGetLibraryArtistsCount,
     browse: mockBrowse,
+    getPlaylistTracks: mockGetPlaylistTracks,
     subscribe: mockSubscribe,
   };
   return { api, default: api };
@@ -317,6 +320,36 @@ describe("useItemSource", () => {
     source.ensureLoaded(4);
     await flushPromises();
     expect(mockBrowse).toHaveBeenCalledTimes(1);
+  });
+
+  it("lists a picked playlist's tracks, narrowed by an artist picked beside it", async () => {
+    const artistOf = (name: string) =>
+      ({
+        item_id: name,
+        provider: "library",
+        name,
+        media_type: MediaType.ARTIST,
+      }) as unknown as ReturnType<typeof track>["artists"][number];
+    mockGetPlaylistTracks.mockResolvedValue([
+      track({ item_id: "t1", name: "One", artists: [artistOf("Muse")] }),
+      track({
+        item_id: "t2",
+        name: "Two",
+        artists: [artistOf("Someone Else")],
+      }),
+    ]);
+    filter.value = {
+      ...filter.value,
+      playlist: { item_id: "p1", provider: "spotify--1", name: "Mix" },
+      artist: { item_id: "a1", provider: "library", name: "Muse" },
+    };
+    const source = scope.run(() => useItemSource(filter))!;
+    await flushPromises();
+
+    expect(mockGetPlaylistTracks).toHaveBeenCalledWith("p1", "spotify--1");
+    expect(source.rows.value.map((row) => row.item_id)).toEqual(["t1"]);
+    expect(source.allLoaded.value).toBe(true);
+    expect(mockGetLibraryTracks).not.toHaveBeenCalled();
   });
 
   it("keeps pulling raw pages until a files-to-edit page is full", async () => {

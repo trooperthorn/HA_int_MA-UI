@@ -127,7 +127,8 @@ export function useItemSource(filter: Ref<ItemFilter>) {
       (filter.value.genreIds?.length ?? 0) > 0 ||
       !!filter.value.filesToEdit ||
       !!filter.value.artist ||
-      !!filter.value.album,
+      !!filter.value.album ||
+      !!filter.value.playlist,
   );
 
   // listings the server returns whole rather than paged
@@ -141,6 +142,28 @@ export function useItemSource(filter: Ref<ItemFilter>) {
             (item) =>
               item.media_type !== MediaType.FOLDER || item.name !== "..",
           ),
+        );
+    }
+    if (current.mediaType === MediaType.TRACK && current.playlist) {
+      // a playlist's tracks come whole; an artist or album picked beside it
+      // narrows them here by name
+      const { artist, album } = current;
+      return api
+        .getPlaylistTracks(current.playlist.item_id, current.playlist.provider)
+        .then((items) =>
+          items
+            .filter(
+              (item): item is Track => item.media_type === MediaType.TRACK,
+            )
+            .filter((item) => {
+              if (
+                artist &&
+                !item.artists.some((entry) => entry.name === artist.name)
+              ) {
+                return false;
+              }
+              return !album || item.album?.name === album.name;
+            }),
         );
     }
     if (current.mediaType === MediaType.TRACK && current.album) {
@@ -215,7 +238,12 @@ export function useItemSource(filter: Ref<ItemFilter>) {
 
   async function refreshTotal(forGeneration: number) {
     const current = filter.value;
-    if (current.scope === "browse" || current.artist || current.album) {
+    if (
+      current.scope === "browse" ||
+      current.artist ||
+      current.album ||
+      current.playlist
+    ) {
       total.value = undefined;
       return;
     }

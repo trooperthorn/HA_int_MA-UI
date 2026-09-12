@@ -41,4 +41,28 @@ describe("useLibraryFilter", () => {
     expect(filter.value.filesToEdit).toBeUndefined();
     expect(filter.value.browsePath).toBe("spotify://");
   });
+
+  it("applies the strip's picks to tracks only and clears them together", () => {
+    const { filter, setPicks, selectNode, clearBrowser } = useLibraryFilter();
+    const playlist = { item_id: "p1", provider: "spotify--1", name: "Mix" };
+    const artist = { item_id: "a1", provider: "library", name: "Muse" };
+    setPicks({ genres: [{ id: 7, name: "Rock" }], artist, playlist });
+    expect(filter.value).toMatchObject({
+      genreIds: [7],
+      artist,
+      playlist,
+    });
+
+    selectNode({
+      scope: "library",
+      node: "library.albums",
+      mediaType: MediaType.ALBUM,
+    });
+    expect(filter.value.artist).toEqual(artist);
+    expect(filter.value.playlist).toBeUndefined();
+
+    clearBrowser();
+    expect(filter.value.genreIds).toBeUndefined();
+    expect(filter.value.artist).toBeUndefined();
+  });
 });
