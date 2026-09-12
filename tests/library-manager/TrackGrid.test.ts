@@ -200,6 +200,17 @@ describe("TrackGrid", () => {
     await grid.trigger("keydown", { key: "End" });
     expect(emittedSelection(wrapper)?.map((t) => t.item_id)).toEqual(["t4"]);
 
+    const chord = await (async () => {
+      const count = (wrapper.emitted("update:selection") ?? []).length;
+      await grid.trigger("keydown", {
+        key: "ArrowUp",
+        ctrlKey: true,
+        altKey: true,
+      });
+      return (wrapper.emitted("update:selection") ?? []).length - count;
+    })();
+    expect(chord).toBe(0);
+
     await grid.trigger("keydown", { key: "a", ctrlKey: true });
     expect(emittedSelection(wrapper)).toHaveLength(5);
 

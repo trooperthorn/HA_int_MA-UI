@@ -497,6 +497,8 @@ function onKeydown(event: KeyboardEvent) {
   if (store.dialogActive || store.showPlayersMenu) return;
   const ctrl = event.ctrlKey || event.metaKey;
   const focused = focusIndex.value;
+  // ctrl/alt arrow chords belong to the playback keymap, not the grid
+  if ((ctrl || event.altKey) && event.key.startsWith("Arrow")) return;
   switch (event.key) {
     case "ArrowDown":
       event.preventDefault();
