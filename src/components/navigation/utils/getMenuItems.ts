@@ -8,6 +8,7 @@ import {
   Disc3,
   Droplet,
   Folder,
+  LayoutList,
   ListMusic,
   MicVocal,
   Music2,
@@ -105,6 +106,14 @@ const MENU_ITEM_REGISTRY: MenuItemDefinition[] = [
     path: "/browse",
     isLibraryNode: true,
     group: "explore",
+  },
+  {
+    id: "librarymanager",
+    label: "library_manager.title",
+    icon: LayoutList,
+    path: "/library",
+    isLibraryNode: true,
+    group: "library",
   },
   {
     id: "artists",

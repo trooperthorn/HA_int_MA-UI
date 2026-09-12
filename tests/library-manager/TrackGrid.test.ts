@@ -1,0 +1,286 @@
+import {
+  DEFAULT_COLUMN_VISIBILITY,
+  TRACK_COLUMNS,
+  type LibraryTrack,
+} from "@/library-manager/columns";
+import TrackGrid from "@/library-manager/panes/TrackGrid.vue";
+import { eventbus } from "@/plugins/eventbus";
+import {
+  handleMediaItemClick,
+  handleMenuBtnClick,
+  handlePlayBtnClick,
+} from "@/helpers/media_item_actions";
+import { enableAutoUnmount, mount, type VueWrapper } from "@vue/test-utils";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { track } from "../fixtures/track";
+
+const mockToggleFavorite = vi.hoisted(() => vi.fn());
+
+vi.mock("@/plugins/api", () => {
+  const api = {
+    providers: {},
+    providerManifests: {},
+    toggleFavorite: mockToggleFavorite,
+  };
+  return { api, default: api };
+});
+
+vi.mock("@/plugins/store", async () => {
+  const { reactive } = await import("vue");
+  return {
+    store: reactive({
+      dialogActive: false,
+      showPlayersMenu: false,
+      activePlayer: undefined,
+      curQueueItem: undefined,
+    }),
+  };
+});
+
+vi.mock("@/helpers/media_item_actions", () => ({
+  handleMediaItemClick: vi.fn(),
+  handleMenuBtnClick: vi.fn(),
+  handlePlayBtnClick: vi.fn(),
+}));
+
+vi.mock("@/plugins/eventbus", () => ({
+  eventbus: { emit: vi.fn(), on: vi.fn(), off: vi.fn() },
+}));
+
+vi.mock("@/plugins/api/helpers", () => ({
+  getListItemProviderIconDomain: () => "library",
+}));
+
+const stubComponent = vi.hoisted(() => (name: string) => ({
+  default: { name, template: "<div><slot /></div>" },
+}));
+
+vi.mock("@/components/ProviderIcon.vue", () => stubComponent("ProviderIcon"));
+vi.mock("@/components/ui/dropdown-menu", () => {
+  const stub = (name: string) => ({ name, template: "<div><slot /></div>" });
+  return {
+    DropdownMenu: stub("DropdownMenu"),
+    DropdownMenuCheckboxItem: stub("DropdownMenuCheckboxItem"),
+    DropdownMenuContent: stub("DropdownMenuContent"),
+    DropdownMenuLabel: stub("DropdownMenuLabel"),
+    DropdownMenuSeparator: stub("DropdownMenuSeparator"),
+    DropdownMenuTrigger: stub("DropdownMenuTrigger"),
+  };
+});
+
+// happy-dom has no layout, so the virtualizer is replaced with one that
+// lays every row out at the estimated height
+const mockScrollToIndex = vi.hoisted(() => vi.fn());
+vi.mock("@tanstack/vue-virtual", async () => {
+  const { computed } = await import("vue");
+  return {
+    useVirtualizer: (options: {
+      value: { count: number; estimateSize: () => number };
+    }) =>
+      computed(() => {
+        const { count, estimateSize } = options.value;
+        const size = estimateSize();
+        return {
+          getVirtualItems: () =>
+            Array.from({ length: count }, (_, index) => ({
+              index,
+              key: index,
+              start: index * size,
+              size,
+            })),
+          getTotalSize: () => count * size,
+          scrollToIndex: mockScrollToIndex,
+          measure: vi.fn(),
+          measureElement: vi.fn(),
+        };
+      }),
+  };
+});
+
+enableAutoUnmount(afterEach);
+
+const rows: LibraryTrack[] = Array.from({ length: 5 }, (_, i) =>
+  track({ item_id: `t${i}`, name: `Track ${i}`, track_number: i + 1 }),
+);
+
+const visibleColumns = TRACK_COLUMNS.filter(
+  (column) => column.fixed || DEFAULT_COLUMN_VISIBILITY[column.id],
+);
+
+function mountGrid(overrides: Record<string, unknown> = {}) {
+  return mount(TrackGrid, {
+    props: {
+      rows,
+      loading: false,
+      rowHeight: 28,
+      sortBy: "name",
+      visibleColumns,
+      visibility: { ...DEFAULT_COLUMN_VISIBILITY },
+      ...overrides,
+    },
+    global: { mocks: { $t: (key: string) => key } },
+    attachTo: document.body,
+  });
+}
+
+const rowAt = (wrapper: VueWrapper, index: number) =>
+  wrapper.findAll(".track-grid__row")[index];
+
+const emittedSelection = (wrapper: VueWrapper) =>
+  (wrapper.emitted("update:selection") ?? []).at(-1)?.[0] as
+    | LibraryTrack[]
+    | undefined;
+
+describe("TrackGrid", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("renders a row per track with the visible columns", () => {
+    const wrapper = mountGrid();
+    expect(wrapper.findAll(".track-grid__row")).toHaveLength(5);
+    expect(rowAt(wrapper, 2).text()).toContain("Track 2");
+    expect(rowAt(wrapper, 2).findAll("[role=gridcell]")).toHaveLength(
+      visibleColumns.length,
+    );
+  });
+
+  it("asks for the pages that are on screen and ahead of it", () => {
+    const wrapper = mountGrid();
+    const asked = (wrapper.emitted("ensureLoaded") ?? []).map((e) => e[0]);
+    expect(asked).toContain(rows.length);
+    expect(asked).toContain(rows.length - 1);
+  });
+
+  it("sorts by a sortable column and flips direction on the second click", async () => {
+    const wrapper = mountGrid();
+    const headers = wrapper.findAll("[role=columnheader]");
+    const title = headers.find((h) => h.text().includes("columns.title"))!;
+    const album = headers.find((h) => h.text().includes("columns.album"))!;
+
+    await title.trigger("click");
+    expect(wrapper.emitted("update:sortBy")?.at(-1)).toEqual(["name_desc"]);
+
+    await wrapper.setProps({ sortBy: "name_desc" });
+    await title.trigger("click");
+    expect(wrapper.emitted("update:sortBy")?.at(-1)).toEqual(["name"]);
+
+    await album.trigger("click");
+    expect(wrapper.emitted("update:sortBy")).toHaveLength(2);
+  });
+
+  it("selects with click, shift-click and ctrl-click", async () => {
+    const wrapper = mountGrid();
+    await rowAt(wrapper, 1).trigger("click");
+    expect(emittedSelection(wrapper)?.map((t) => t.item_id)).toEqual(["t1"]);
+
+    await rowAt(wrapper, 3).trigger("click", { shiftKey: true });
+    expect(emittedSelection(wrapper)?.map((t) => t.item_id)).toEqual([
+      "t1",
+      "t2",
+      "t3",
+    ]);
+
+    await rowAt(wrapper, 2).trigger("click", { ctrlKey: true });
+    expect(emittedSelection(wrapper)?.map((t) => t.item_id)).toEqual([
+      "t1",
+      "t3",
+    ]);
+  });
+
+  it("moves with the arrow keys, extends with shift and selects all with ctrl+a", async () => {
+    const wrapper = mountGrid();
+    const grid = wrapper.find("[role=grid]");
+    await grid.trigger("keydown", { key: "ArrowDown" });
+    expect(emittedSelection(wrapper)?.map((t) => t.item_id)).toEqual(["t0"]);
+
+    await grid.trigger("keydown", { key: "ArrowDown" });
+    await grid.trigger("keydown", { key: "ArrowDown", shiftKey: true });
+    expect(emittedSelection(wrapper)?.map((t) => t.item_id)).toEqual([
+      "t1",
+      "t2",
+    ]);
+    expect(mockScrollToIndex).toHaveBeenLastCalledWith(2, { align: "auto" });
+
+    await grid.trigger("keydown", { key: "End" });
+    expect(emittedSelection(wrapper)?.map((t) => t.item_id)).toEqual(["t4"]);
+
+    await grid.trigger("keydown", { key: "a", ctrlKey: true });
+    expect(emittedSelection(wrapper)).toHaveLength(5);
+
+    await grid.trigger("keydown", { key: "A", ctrlKey: true, shiftKey: true });
+    expect(emittedSelection(wrapper)).toHaveLength(0);
+  });
+
+  it("plays on enter, edits on shift+enter and hands / to the search box", async () => {
+    const wrapper = mountGrid();
+    const grid = wrapper.find("[role=grid]");
+    await rowAt(wrapper, 2).trigger("click");
+
+    await grid.trigger("keydown", { key: "Enter" });
+    expect(handlePlayBtnClick).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(handlePlayBtnClick).mock.calls[0][0]).toMatchObject({
+      item_id: "t2",
+    });
+
+    await grid.trigger("keydown", { key: "Enter", shiftKey: true });
+    expect(eventbus.emit).toHaveBeenCalledWith(
+      "editItemDialog",
+      expect.objectContaining({ item_id: "t2" }),
+    );
+
+    await grid.trigger("keydown", { key: "/" });
+    expect(wrapper.emitted("focusSearch")).toHaveLength(1);
+  });
+
+  it("jumps to the first row whose title starts with the typed letters", async () => {
+    const wrapper = mountGrid({
+      rows: [
+        track({ item_id: "a", name: "Alpha" }),
+        track({ item_id: "b", name: "Bravo" }),
+        track({ item_id: "c", name: "Charlie" }),
+      ],
+    });
+    const grid = wrapper.find("[role=grid]");
+    await grid.trigger("keydown", { key: "c" });
+    expect(emittedSelection(wrapper)?.map((t) => t.item_id)).toEqual(["c"]);
+  });
+
+  it("opens the item on double click and the menu on right click and the button", async () => {
+    const wrapper = mountGrid();
+    await rowAt(wrapper, 0).trigger("dblclick");
+    expect(handleMediaItemClick).toHaveBeenCalledTimes(1);
+
+    await rowAt(wrapper, 1).trigger("contextmenu");
+    expect(handleMenuBtnClick).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(handleMenuBtnClick).mock.calls[0][0]).toHaveLength(1);
+
+    await rowAt(wrapper, 4).find(".track-grid__menu").trigger("click");
+    expect(handleMenuBtnClick).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(handleMenuBtnClick).mock.calls[1][5]).toBe("name");
+  });
+
+  it("uses the whole selection for the menu when the row is part of it", async () => {
+    const wrapper = mountGrid();
+    await rowAt(wrapper, 0).trigger("click");
+    await rowAt(wrapper, 2).trigger("click", { shiftKey: true });
+    await rowAt(wrapper, 1).trigger("contextmenu");
+    expect(vi.mocked(handleMenuBtnClick).mock.calls[0][0]).toHaveLength(3);
+  });
+
+  it("toggles the favorite from the heart without selecting the row", async () => {
+    const wrapper = mountGrid();
+    await rowAt(wrapper, 3).find("[aria-label=favorites_add]").trigger("click");
+    expect(mockToggleFavorite).toHaveBeenCalledWith(
+      expect.objectContaining({ item_id: "t3" }),
+    );
+    expect(wrapper.emitted("update:selection")).toBeUndefined();
+  });
+
+  it("clears the selection when the listing is replaced", async () => {
+    const wrapper = mountGrid();
+    await rowAt(wrapper, 0).trigger("click");
+    await wrapper.setProps({ rows: [] });
+    expect(emittedSelection(wrapper)).toEqual([]);
+  });
+});
