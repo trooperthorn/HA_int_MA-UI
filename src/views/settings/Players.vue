@@ -362,10 +362,17 @@ const getAllFilteredPlayers = function () {
     });
   }
 
-  return filtered.sort((a, b) =>
-    getPlayerName(a).localeCompare(getPlayerName(b)),
+  // the browser / app audio players are per-device conveniences; the
+  // household's players list first
+  return filtered.sort(
+    (a, b) =>
+      Number(isWebAudioPlayer(a)) - Number(isWebAudioPlayer(b)) ||
+      getPlayerName(a).localeCompare(getPlayerName(b)),
   );
 };
+
+const isWebAudioPlayer = (config: PlayerConfig) =>
+  config.provider === "sendspin";
 
 // watchers
 watch(
@@ -527,10 +534,6 @@ watch(
 
 .player-unavailable {
   opacity: 0.7;
-}
-
-.player-needs-setup {
-  border-left: 3px solid rgb(var(--v-theme-warning));
 }
 
 .player-warning-inline {

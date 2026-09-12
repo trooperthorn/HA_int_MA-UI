@@ -24,6 +24,9 @@ import { isPhoneSizedScreen } from "./breakpoint";
 interface Store {
   activePlayerId?: string;
   showPlayersMenu: boolean;
+  // set with showPlayersMenu by the Now Playing screen: the only reason to
+  // open the picker from there is to change the group, so its members show
+  expandActivePlayerGroup: boolean;
   showFullscreenPlayer: boolean;
   frameless: boolean;
   showQueueItems: boolean;
@@ -61,6 +64,7 @@ interface Store {
 export const store: Store = reactive({
   activePlayerId: undefined,
   showPlayersMenu: false,
+  expandActivePlayerGroup: false,
   showFullscreenPlayer: false,
   frameless: false,
   showQueueItems: false,

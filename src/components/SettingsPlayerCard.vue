@@ -171,14 +171,12 @@ const handleSetup = () => {
   opacity: 0.7;
 }
 
-.player-needs-setup {
-  border-left: 3px solid rgb(var(--v-theme-warning));
-}
-
+/* the setup notice inside the card is the warning; no accent bar on the edge */
 .player-warning-card {
   background: rgba(var(--v-theme-warning), 0.08);
+  border: 1px solid rgba(var(--v-theme-warning), 0.35);
   border-radius: 8px;
-  margin: 8px 0 0 0;
+  margin: 12px 0 0 0;
   padding: 8px 12px;
 }
 
