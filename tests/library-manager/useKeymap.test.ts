@@ -1,10 +1,15 @@
 import { useKeymap } from "@/library-manager/composables/useKeymap";
 import {
   BROWSER_OWNED_KEYS,
+  CHORD_PREFIXES,
+  CHORD_TIMEOUT_MS,
   comboMatches,
   findBinding,
+  findChord,
+  isChord,
   KEY_BINDINGS,
 } from "@/library-manager/keymap";
+import { comboParts, THEN } from "@/library-manager/keymapDisplay";
 import { store } from "@/plugins/store";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,9 +23,12 @@ const mocks = vi.hoisted(() => ({
   playerCommandVolumeUp: vi.fn(),
   playerCommandVolumeDown: vi.fn(),
   playerCommandVolumeMute: vi.fn(),
+  push: vi.fn(),
 }));
 
 vi.mock("@/plugins/api", () => ({ api: mocks, default: mocks }));
+
+vi.mock("vue-router", () => ({ useRouter: () => ({ push: mocks.push }) }));
 
 vi.mock("@/plugins/store", async () => {
   const { reactive } = await import("vue");
@@ -28,6 +36,7 @@ vi.mock("@/plugins/store", async () => {
     store: reactive({
       dialogActive: false,
       showPlayersMenu: false,
+      showFullscreenPlayer: false,
       activePlayer: { player_id: "p1", volume_muted: false, elapsed_time: 42 },
       activePlayerQueue: { elapsed_time: 65 },
     }),
@@ -36,9 +45,29 @@ vi.mock("@/plugins/store", async () => {
 
 enableAutoUnmount(afterEach);
 
+const actions = {
+  playSelectedNext: vi.fn(),
+  addSelectedToQueue: vi.fn(),
+  locateNowPlaying: vi.fn(),
+  toggleFavorite: vi.fn(),
+  toggleSelectedPane: vi.fn(),
+  addToPlaylist: vi.fn(),
+  goNowPlaying: vi.fn(),
+  goLibrary: vi.fn(),
+  goArtists: vi.fn(),
+  goAlbums: vi.fn(),
+  goGenres: vi.fn(),
+  goPlaylists: vi.fn(),
+  sortByColumn: vi.fn(),
+  refresh: vi.fn(),
+  toggleStrip: vi.fn(),
+  toggleQueuePane: vi.fn(),
+  showHelp: vi.fn(),
+};
+
 const Host = defineComponent({
   setup() {
-    useKeymap();
+    useKeymap({ actions });
     return () =>
       h("div", [
         h("input", { id: "field" }),
@@ -72,11 +101,27 @@ describe("keymap table", () => {
     }
   });
 
-  it("has unique ids and combos", () => {
+  it("has unique ids and combos, and every view handler is wired by the host", () => {
     const ids = KEY_BINDINGS.map((b) => b.id);
     const combos = KEY_BINDINGS.flatMap((b) => b.keys);
     expect(new Set(ids).size).toBe(ids.length);
     expect(new Set(combos).size).toBe(combos.length);
+    for (const binding of KEY_BINDINGS) {
+      if (binding.handler in actions) continue;
+      expect([
+        "playPause",
+        "nextTrack",
+        "previousTrack",
+        "seekBack",
+        "seekForward",
+        "volumeUp",
+        "volumeDown",
+        "muteToggle",
+        "playerPicker",
+        "fullscreenPlayer",
+        "preferences",
+      ]).toContain(binding.handler);
+    }
   });
 
   it("matches modifiers exactly", () => {
@@ -101,14 +146,33 @@ describe("keymap table", () => {
     expect(
       findBinding(new KeyboardEvent("keydown", { key: " ", shiftKey: true })),
     ).toBeUndefined();
+    // "?" is typed with Shift on most layouts
+    expect(
+      findBinding(new KeyboardEvent("keydown", { key: "?", shiftKey: true }))
+        ?.handler,
+    ).toBe("showHelp");
+  });
+
+  it("knows its chords", () => {
+    expect(isChord("g a")).toBe(true);
+    expect(isChord(" ")).toBe(false);
+    expect(CHORD_PREFIXES).toEqual(["g", "s"]);
+    expect(findChord("g", "A")?.binding.handler).toBe("goArtists");
+    expect(findChord("s", "3")?.combo).toBe("s 3");
+    expect(findChord("g", "z")).toBeUndefined();
+    expect(comboParts("g n")).toEqual(["G", THEN, "N"]);
+    expect(comboParts("ctrl+alt+ArrowUp")).toEqual(["Ctrl", "Alt", "↑"]);
+    expect(comboParts(" ")).toEqual(["Space"]);
   });
 });
 
 describe("useKeymap", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useRealTimers();
     store.dialogActive = false;
     store.showPlayersMenu = false;
+    store.showFullscreenPlayer = false;
   });
 
   it("drives the active player from the keyboard", () => {
@@ -141,6 +205,74 @@ describe("useKeymap", () => {
     expect(mocks.playerCommandSeek).toHaveBeenLastCalledWith("p1", 75);
     press(plain, "ArrowLeft", { ctrlKey: true, shiftKey: true });
     expect(mocks.playerCommandSeek).toHaveBeenLastCalledWith("p1", 55);
+  });
+
+  it("hands the view its bindings and opens app surfaces", () => {
+    const wrapper = mount(Host, { attachTo: document.body });
+    const plain = wrapper.find("#plain").element;
+
+    press(plain, "Enter", { ctrlKey: true, shiftKey: true });
+    expect(actions.playSelectedNext).toHaveBeenCalledTimes(1);
+    press(plain, "Enter", { ctrlKey: true });
+    expect(actions.addSelectedToQueue).toHaveBeenCalledTimes(1);
+    press(plain, "l", { ctrlKey: true });
+    expect(actions.locateNowPlaying).toHaveBeenCalledTimes(1);
+    press(plain, "L", { ctrlKey: true, shiftKey: true });
+    expect(actions.toggleFavorite).toHaveBeenCalledTimes(1);
+    press(plain, "i", { ctrlKey: true });
+    expect(actions.toggleSelectedPane).toHaveBeenCalledTimes(1);
+    press(plain, "P", { ctrlKey: true, shiftKey: true });
+    expect(actions.addToPlaylist).toHaveBeenCalledTimes(1);
+    press(plain, "r", { ctrlKey: true, altKey: true });
+    expect(actions.refresh).toHaveBeenCalledTimes(1);
+    press(plain, "b", { ctrlKey: true });
+    expect(actions.toggleStrip).toHaveBeenCalledTimes(1);
+    press(plain, "q", { ctrlKey: true, altKey: true });
+    expect(actions.toggleQueuePane).toHaveBeenCalledTimes(1);
+    press(plain, "?", { shiftKey: true });
+    expect(actions.showHelp).toHaveBeenCalledTimes(1);
+
+    press(plain, "p", { ctrlKey: true, altKey: true });
+    expect(store.showPlayersMenu).toBe(true);
+    store.showPlayersMenu = false;
+    press(plain, "F", { ctrlKey: true, shiftKey: true });
+    expect(store.showFullscreenPlayer).toBe(true);
+    press(plain, ",", { ctrlKey: true });
+    expect(mocks.push).toHaveBeenCalledWith({ name: "settings" });
+  });
+
+  it("runs two-key chords and forgets a prefix after the timeout", () => {
+    vi.useFakeTimers();
+    const wrapper = mount(Host, { attachTo: document.body });
+    const plain = wrapper.find("#plain").element;
+
+    const first = press(plain, "g");
+    expect(first.defaultPrevented).toBe(true);
+    press(plain, "a");
+    expect(actions.goArtists).toHaveBeenCalledTimes(1);
+
+    press(plain, "g");
+    press(plain, "p");
+    expect(actions.goPlaylists).toHaveBeenCalledTimes(1);
+
+    press(plain, "s");
+    press(plain, "3");
+    expect(actions.sortByColumn).toHaveBeenCalledWith(3);
+
+    // an unknown second key ends the chord without firing anything
+    press(plain, "g");
+    press(plain, "z");
+    expect(actions.goLibrary).not.toHaveBeenCalled();
+
+    press(plain, "g");
+    vi.advanceTimersByTime(CHORD_TIMEOUT_MS + 10);
+    press(plain, "l");
+    expect(actions.goLibrary).not.toHaveBeenCalled();
+
+    // a chord prefix never types into a field
+    press(wrapper.find("#field").element, "g");
+    press(wrapper.find("#field").element, "n");
+    expect(actions.goNowPlaying).not.toHaveBeenCalled();
   });
 
   it("stays out of the way while typing, in dialogs and on buttons", () => {

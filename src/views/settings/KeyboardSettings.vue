@@ -18,27 +18,23 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="binding in KEY_BINDINGS" :key="binding.id">
-          <td>{{ $t(binding.labelKey) }}</td>
+        <tr v-for="row in rows" :key="row.labelKey">
+          <td>{{ $t(row.labelKey) }}</td>
           <td>
             <span
-              v-for="combo in binding.keys"
-              :key="combo"
+              v-for="(combo, index) in row.combos"
+              :key="index"
               class="keyboard-settings__combo"
             >
-              <Kbd v-for="part in parts(combo)" :key="part">{{ part }}</Kbd>
+              <template v-for="(part, i) in combo" :key="i">
+                <span v-if="part === THEN" class="keyboard-settings__then">
+                  {{ $t("library_manager.shortcuts.then") }}
+                </span>
+                <Kbd v-else>{{ part }}</Kbd>
+              </template>
             </span>
           </td>
-          <td>{{ $t(`settings.keyboard.scope_${binding.scope}`) }}</td>
-        </tr>
-        <tr v-for="row in GRID_KEYS" :key="row.label">
-          <td>{{ $t(row.label) }}</td>
-          <td>
-            <span class="keyboard-settings__combo">
-              <Kbd v-for="part in row.keys" :key="part">{{ part }}</Kbd>
-            </span>
-          </td>
-          <td>{{ $t("settings.keyboard.scope_grid") }}</td>
+          <td>{{ $t(`settings.keyboard.scope_${row.scope}`) }}</td>
         </tr>
       </tbody>
     </table>
@@ -48,40 +44,31 @@
 <script setup lang="ts">
 import { Keyboard } from "@lucide/vue";
 import { Kbd } from "@/components/ui/kbd";
-import { KEY_BINDINGS } from "@/library-manager/keymap";
+import { KEY_BINDINGS, LOCAL_KEY_ROWS } from "@/library-manager/keymap";
+import { comboParts, THEN } from "@/library-manager/keymapDisplay";
 import SettingsHeaderCard from "./SettingsHeaderCard.vue";
 
-// keys the grid and browser handle themselves (not routed through the keymap)
-const GRID_KEYS: Array<{ label: string; keys: string[] }> = [
-  { label: "settings.keyboard.grid_letter", keys: ["A", "…", "Z"] },
-  { label: "settings.keyboard.grid_play", keys: ["Enter"] },
-  { label: "settings.keyboard.grid_menu", keys: ["Shift", "Enter"] },
-  { label: "settings.keyboard.grid_select_all", keys: ["Ctrl", "A"] },
-  { label: "settings.keyboard.grid_search", keys: ["/"] },
-  { label: "settings.keyboard.queue_remove", keys: ["Delete"] },
+const rows = [
+  ...KEY_BINDINGS.map((binding) => ({
+    labelKey: binding.labelKey,
+    scope: binding.scope,
+    combos:
+      binding.id === "sort_by_column"
+        ? [["S", THEN, "1", "…", "9"]]
+        : binding.keys.map(comboParts),
+  })),
+  ...LOCAL_KEY_ROWS.map((local) => ({
+    labelKey: local.labelKey,
+    scope: local.scope,
+    combos: [local.keys],
+  })),
 ];
-
-const KEY_NAMES: Record<string, string> = {
-  " ": "Space",
-  ArrowUp: "↑",
-  ArrowDown: "↓",
-  ArrowLeft: "←",
-  ArrowRight: "→",
-};
-
-function parts(combo: string): string[] {
-  return combo.split("+").map((part) => {
-    if (part in KEY_NAMES) return KEY_NAMES[part];
-    if (part.length === 1) return part.toUpperCase();
-    return part.charAt(0).toUpperCase() + part.slice(1);
-  });
-}
 </script>
 
 <style scoped>
 .keyboard-settings {
   width: 100%;
-  max-width: 720px;
+  max-width: 760px;
   border-collapse: collapse;
   font-size: 13px;
 }
@@ -104,7 +91,14 @@ function parts(combo: string): string[] {
 
 .keyboard-settings__combo {
   display: inline-flex;
-  gap: 4px;
+  align-items: center;
+  gap: 3px;
   margin-right: 10px;
+}
+
+.keyboard-settings__then {
+  font-size: 11px;
+  color: rgba(var(--v-theme-fg), 0.5);
+  padding: 0 2px;
 }
 </style>

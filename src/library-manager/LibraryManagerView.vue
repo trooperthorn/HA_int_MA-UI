@@ -234,6 +234,7 @@
         </SplitterGroup>
       </SplitterPanel>
     </SplitterGroup>
+    <ShortcutHelp v-model:open="helpOpen" />
   </div>
 </template>
 
@@ -260,7 +261,16 @@ import {
   setUserPreference,
   useUserPreferences,
 } from "@/composables/userPreferences";
-import { MediaType, type BrowseFolder } from "@/plugins/api/interfaces";
+import { eventbus } from "@/plugins/eventbus";
+import { togglePlayerQueue } from "@/helpers/player_queue";
+import { api } from "@/plugins/api";
+import {
+  MediaType,
+  QueueOption,
+  type BrowseFolder,
+  type MediaItemType,
+  type Track,
+} from "@/plugins/api/interfaces";
 import { store } from "@/plugins/store";
 import {
   columnsForMediaType,
@@ -274,6 +284,7 @@ import { useGridColumns } from "./composables/useGridColumns";
 import { useItemSource } from "./composables/useItemSource";
 import { useKeymap } from "./composables/useKeymap";
 import {
+  LIBRARY_NODES,
   useLibraryFilter,
   type LibraryFilter,
 } from "./composables/useLibraryFilter";
@@ -281,6 +292,7 @@ import { PANE_DEFAULTS, usePaneLayout } from "./composables/usePaneLayout";
 import BrowserStrip from "./panes/BrowserStrip.vue";
 import QueuePane from "./panes/QueuePane.vue";
 import SelectedPane from "./panes/SelectedPane.vue";
+import ShortcutHelp from "./panes/ShortcutHelp.vue";
 import SourceTree from "./panes/SourceTree.vue";
 import TrackGrid from "./panes/TrackGrid.vue";
 
@@ -325,7 +337,6 @@ const {
   setPicks,
   clearBrowser,
 } = useLibraryFilter();
-useKeymap();
 
 // the browser narrows library listings, whole or per source; browsed folders
 // have nothing to narrow
@@ -508,6 +519,70 @@ function clearSearch() {
   searchInput.value = "";
   grid.value?.focus();
 }
+
+// ---- keyboard ----------------------------------------------------------------
+
+const helpOpen = ref(false);
+
+// the playing track's row, if it is paged in; otherwise its name is looked
+// up the way a typed letter is
+async function locateNowPlaying() {
+  const current = store.curQueueItem?.media_item as Track | undefined;
+  if (!current) return;
+  const index = displayRows.value.findIndex(
+    (row) => row?.item_id === current.item_id,
+  );
+  if (index >= 0) {
+    grid.value?.scrollToIndex(index);
+  } else {
+    await jumpToLetter(current.name);
+    grid.value?.scrollToTrack(current.item_id);
+  }
+  grid.value?.focus();
+}
+
+useKeymap({
+  actions: {
+    playSelectedNext: () => {
+      if (selection.value.length) {
+        void api.playMedia(selection.value, QueueOption.NEXT);
+      }
+    },
+    addSelectedToQueue: () => {
+      if (selection.value.length) {
+        void api.playMedia(selection.value, QueueOption.ADD);
+      }
+    },
+    locateNowPlaying: () => void locateNowPlaying(),
+    toggleFavorite: () => {
+      for (const item of selection.value) {
+        if ("favorite" in item) api.toggleFavorite(item);
+      }
+    },
+    toggleSelectedPane: () => void setShowSelected(!showSelected.value),
+    addToPlaylist: () => {
+      const tracks = selection.value.filter(
+        (item) => item.media_type === MediaType.TRACK,
+      );
+      if (tracks.length) {
+        eventbus.emit("playlistdialog", { items: tracks as MediaItemType[] });
+      }
+    },
+    goNowPlaying: togglePlayerQueue,
+    goLibrary: () => selectNode(LIBRARY_NODES.library),
+    goArtists: () => selectNode(LIBRARY_NODES.artists),
+    goAlbums: () => selectNode(LIBRARY_NODES.albums),
+    goGenres: () => selectNode(LIBRARY_NODES.genres),
+    goPlaylists: () => selectNode(LIBRARY_NODES.playlists),
+    sortByColumn: (column) => grid.value?.sortByIndex(column),
+    refresh: () => source.reload(),
+    toggleStrip: () => void setShowStrip(!showStrip.value),
+    toggleQueuePane: () => void setShowQueue(!showQueue.value),
+    showHelp: () => {
+      helpOpen.value = true;
+    },
+  },
+});
 </script>
 
 <style scoped>

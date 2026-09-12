@@ -59,6 +59,33 @@ export const LIBRARY_TRACKS_NODE: NodeFilter = {
   mediaType: MediaType.TRACK,
 };
 
+// the library nodes the "g" chords jump to; ids match the source tree's
+export const LIBRARY_NODES: Readonly<
+  Record<"library" | "artists" | "albums" | "genres" | "playlists", NodeFilter>
+> = {
+  library: { scope: "library", node: "library", mediaType: MediaType.TRACK },
+  artists: {
+    scope: "library",
+    node: "library.artists",
+    mediaType: MediaType.ARTIST,
+  },
+  albums: {
+    scope: "library",
+    node: "library.albums",
+    mediaType: MediaType.ALBUM,
+  },
+  genres: {
+    scope: "library",
+    node: "library.genres",
+    mediaType: MediaType.GENRE,
+  },
+  playlists: {
+    scope: "library",
+    node: "library.playlists",
+    mediaType: MediaType.PLAYLIST,
+  },
+};
+
 export function useLibraryFilter() {
   const node = reactive<NodeFilter>({ ...LIBRARY_TRACKS_NODE });
   const toolbar = reactive({
