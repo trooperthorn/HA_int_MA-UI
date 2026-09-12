@@ -318,6 +318,11 @@ Implementation:
 
 ## Phase 7 - polish, docs, release
 
+Status 2026-09-12: phases 0-6 merged (PRs #1-#8); docs and changelog in
+this phase. The fork cannot run `release.yml` as-is: it needs the
+upstream `musicassistant-bot` GitHub App, a PyPI token and write access
+to the server repo. Publishing the fork's build is a separate decision.
+
 - Mobile: `/library` redirects to the existing `/tracks` view below the
   `md` breakpoint; the manager is desktop-only by design.
 - `docs/LIBRARY-MANAGER.md`, CHANGELOG, screenshots from the live
