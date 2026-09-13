@@ -1,5 +1,20 @@
 # Music Assistant Remote Access
 
+> **The setup sections below describe an architecture that is no longer the one
+> in this repository.** They walk through deploying a signaling server from a
+> `signaling-server/` directory, wiring a `webrtc_gateway.py`, and building with
+> `VITE_REMOTE_MODE` and `VITE_SIGNALING_URL`. None of those exist here.
+>
+> What actually ships is `src/plugins/remote/`, against the signaling endpoint
+> hardcoded in `connection-manager.ts`. The server it talks to is authenticated
+> by **DTLS certificate pinning** — `crypto-utils.ts` checks the certificate
+> fingerprint in the SDP against the Remote ID, strips fingerprints it cannot
+> verify, and requires every one of them to match. That is the control doing the
+> work, and the sections below do not mention it.
+>
+> The Security Considerations section near the end is still broadly accurate.
+> Read the rest as history.
+
 This document describes how to set up and use remote access to your Music Assistant server from anywhere, without requiring port forwarding or VPN setup.
 
 ## Overview

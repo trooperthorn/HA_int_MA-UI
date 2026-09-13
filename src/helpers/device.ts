@@ -1,15 +1,49 @@
-import MobileDetect from "mobile-detect";
-
 export type DeviceType = "desktop" | "phone" | "tablet";
 
-const md = new MobileDetect(window.navigator.userAgent);
+/**
+ * The User-Agent Client Hints surface, where the browser has it.
+ *
+ * `mobile` is the browser's own answer to the question the regexes below have
+ * to guess at, so it is preferred wherever it exists. It says nothing about
+ * tablets: Chrome reports `mobile: false` on an Android tablet, which is why
+ * the tablet test stays a UA test.
+ */
+type UserAgentData = { mobile?: boolean };
+
+const ua = window.navigator.userAgent;
+const uaData = (
+  window.navigator as Navigator & { userAgentData?: UserAgentData }
+).userAgentData;
+
+// iPadOS 13 and later report a desktop Safari user agent. The touch points are
+// what give it away -- a real Mac reports 0, and a trackpad does not change that.
+const isIPadOS =
+  /Macintosh/.test(ua) && (window.navigator.maxTouchPoints ?? 0) > 1;
+
+// Android tablets are Android without the "Mobile" token; phones carry it.
+const looksLikeTablet =
+  /\b(iPad|Tablet|PlayBook|Silk)\b/i.test(ua) ||
+  (/Android/i.test(ua) && !/Mobile/i.test(ua)) ||
+  isIPadOS;
+
+const looksLikeMobile =
+  uaData?.mobile ??
+  /Android|iPhone|iPod|IEMobile|BlackBerry|Opera Mini|Mobile/i.test(ua);
 
 // All resolved once from the user agent, so they never change while the app runs.
 // The flags say nothing about the viewport and overlap: a phone or tablet is also
 // mobile, while mobile on its own means the device could not be sized as either.
-export const IS_TABLET_UA = Boolean(md.tablet());
-export const IS_PHONE_UA = Boolean(md.phone());
-export const IS_MOBILE_UA = Boolean(md.mobile());
+//
+// Replaces mobile-detect, which was last published in 2021 and carried a device
+// regex table that stopped being updated with it. These derive the same three
+// answers from Client Hints where the browser offers them and a short user-agent
+// test where it does not; every consumer reads the constants below, not the
+// mechanism. Note that breakpoint.ts treats these as an override that forces the
+// mobile layout on, with a viewport-width fallback underneath -- so a device that
+// matches nothing here still gets the right layout by size.
+export const IS_TABLET_UA = looksLikeTablet;
+export const IS_PHONE_UA = !looksLikeTablet && looksLikeMobile;
+export const IS_MOBILE_UA = looksLikeTablet || looksLikeMobile;
 
 export const DEVICE_TYPE: DeviceType = IS_TABLET_UA
   ? "tablet"
