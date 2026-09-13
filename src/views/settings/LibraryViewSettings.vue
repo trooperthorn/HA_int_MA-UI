@@ -162,6 +162,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { TRACK_COLUMNS } from "@/library-manager/columns";
+import { Scope } from "@/plugins/api/interfaces";
 import {
   ROW_HEIGHT_BY_DENSITY,
   useGridColumns,
@@ -204,7 +205,9 @@ async function resetAll() {
 
 // ---- click behaviour: core config of the queue controller ---------------------
 
-const isAdmin = computed(() => authManager.isAdmin());
+// writes core config of the queue controller, so it takes the same scope
+// upstream gives the system settings section
+const isAdmin = computed(() => authManager.hasScope(Scope.CONFIG_CORE_WRITE));
 const clickAction = ref("browse");
 const playAction = ref("play_from_here");
 const savingClick = ref(false);

@@ -31,8 +31,12 @@ vi.mock("@/plugins/eventbus", () => ({ eventbus: { emit: mocks.emit } }));
 vi.mock("vue-router", () => ({ useRouter: () => ({ push: mocks.push }) }));
 
 vi.mock("vue-i18n", () => ({
-  useI18n: () => ({ t: (key: string) => key }),
+  useI18n: () => ({ t: (key: string) => key, te: () => false }),
 }));
+
+// upstream components in this tree now reach for the app-wide translator,
+// which would otherwise build a real i18n instance off the mocked vue-i18n
+vi.mock("@/plugins/i18n", () => ({ $t: (key: string) => key }));
 
 vi.mock("@/components/MediaItemThumb.vue", () => ({
   default: { name: "MediaItemThumb", props: ["item"], template: "<i />" },
