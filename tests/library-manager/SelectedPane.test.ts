@@ -164,6 +164,27 @@ describe("SelectedPane", () => {
     expect(mocks.handleMenuBtnClick).toHaveBeenCalled();
   });
 
+  it("splits into a details half and an artwork half", () => {
+    const item = track({ item_id: "t1", name: "Uprising", artists: [artist] });
+    const details = mount(SelectedPane, {
+      props: { items: [item], variant: "details" },
+      global: { mocks: { $t: (key: string) => key } },
+    });
+    expect(details.find(".selected-pane__name").text()).toBe("Uprising");
+    expect(details.find("[data-action=play]").exists()).toBe(true);
+    expect(details.findComponent({ name: "MediaItemThumb" }).exists()).toBe(
+      false,
+    );
+
+    const art = mount(SelectedPane, {
+      props: { items: [item], variant: "art" },
+      global: { mocks: { $t: (key: string) => key } },
+    });
+    expect(art.findComponent({ name: "MediaItemThumb" }).exists()).toBe(true);
+    expect(art.find(".selected-pane__name").exists()).toBe(false);
+    expect(art.find("[data-action=play]").exists()).toBe(false);
+  });
+
   it("keeps only the actions that take several items", async () => {
     const other = track({ item_id: "t2", name: "Mercy", artists: [artist] });
     const wrapper = mountPane([song, other]);
