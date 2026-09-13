@@ -63,6 +63,7 @@ vi.mock("@/components/ui/dropdown-menu", () => {
     DropdownMenu: stub("DropdownMenu"),
     DropdownMenuCheckboxItem: stub("DropdownMenuCheckboxItem"),
     DropdownMenuContent: stub("DropdownMenuContent"),
+    DropdownMenuItem: stub("DropdownMenuItem"),
     DropdownMenuLabel: stub("DropdownMenuLabel"),
     DropdownMenuSeparator: stub("DropdownMenuSeparator"),
     DropdownMenuTrigger: stub("DropdownMenuTrigger"),
@@ -277,6 +278,42 @@ describe("TrackGrid", () => {
     await rowAt(wrapper, 4).find(".track-grid__menu").trigger("click");
     expect(handleMenuBtnClick).toHaveBeenCalledTimes(2);
     expect(vi.mocked(handleMenuBtnClick).mock.calls[1][5]).toBe("name");
+  });
+
+  it("hands the owner's menu entries along with the row menu", async () => {
+    const menuItems = vi.fn(() => [
+      { label: "library_manager.filter_by_artist" },
+    ]);
+    const wrapper = mountGrid({ menuItems });
+    await rowAt(wrapper, 1).trigger("contextmenu");
+    expect(menuItems).toHaveBeenCalledWith([
+      expect.objectContaining({ item_id: "t1" }),
+    ]);
+    expect(vi.mocked(handleMenuBtnClick).mock.calls[0][6]).toEqual({
+      extraItems: [{ label: "library_manager.filter_by_artist" }],
+    });
+  });
+
+  it("resizes a column by dragging its header edge and resets it on double click", async () => {
+    const wrapper = mountGrid();
+    const handle = wrapper.find('[data-resize="artist"]');
+    await handle.trigger("pointerdown", { clientX: 100, pointerId: 1 });
+    await handle.trigger("pointermove", { clientX: 160 });
+    // the drag shows live, before the owner has been told
+    const header = wrapper.find(".track-grid__header");
+    expect(header.attributes("style")).toContain("240px");
+    expect(wrapper.emitted("resizeColumn")).toBeUndefined();
+
+    await handle.trigger("pointerup", { clientX: 160 });
+    expect(wrapper.emitted("resizeColumn")).toEqual([["artist", 240]]);
+    // no sort was toggled by the drag
+    expect(wrapper.emitted("update:sortBy")).toBeUndefined();
+
+    await handle.trigger("dblclick");
+    expect(wrapper.emitted("resizeColumn")?.at(-1)).toEqual([
+      "artist",
+      undefined,
+    ]);
   });
 
   it("uses the whole selection for the menu when the row is part of it", async () => {

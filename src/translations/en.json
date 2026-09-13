@@ -2657,7 +2657,11 @@
             "cue_audio_missing": "CUE sheet without its audio file",
             "invalid_musicbrainz_id": "Invalid MusicBrainz id",
             "failed_to_process": "Failed to import"
-        }
+        },
+        "filter_by_artist": "Filter by artist",
+        "filter_by_album": "Filter by album",
+        "filter_by_genre": "Filter by genre",
+        "reset_column_widths": "Reset column widths"
     },
     "preference_save_failed": "Your preference could not be saved and was set back."
 }

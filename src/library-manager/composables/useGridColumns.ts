@@ -6,6 +6,7 @@ import {
 import {
   DEFAULT_COLUMN_VISIBILITY,
   TRACK_COLUMNS,
+  type GridColumn,
   type TrackColumn,
   type TrackColumnId,
 } from "../columns";
@@ -23,7 +24,11 @@ export const ROW_HEIGHT_BY_DENSITY: Readonly<Record<GridDensity, number>> = {
 export interface GridColumnsPreference {
   visibility?: Partial<Record<TrackColumnId, boolean>>;
   density?: GridDensity;
+  // column widths the user dragged, in px, by column id (any listing)
+  widths?: Partial<Record<string, number>>;
 }
+
+export const MIN_COLUMN_WIDTH = 40;
 
 export function useGridColumns() {
   const { getPreference } = useUserPreferences();
@@ -37,9 +42,23 @@ export function useGridColumns() {
     ...preference.value.visibility,
   }));
 
+  // the user's widths laid over any column set (the track grid, a browse
+  // or issues listing)
+  function applyWidths<T extends GridColumn<string>>(
+    columns: readonly T[],
+  ): T[] {
+    const widths = preference.value.widths ?? {};
+    return columns.map((column) => {
+      const width = widths[column.id];
+      return width ? { ...column, width } : column;
+    });
+  }
+
   const visibleColumns = computed<TrackColumn[]>(() =>
-    TRACK_COLUMNS.filter(
-      (column) => column.fixed || visibility.value[column.id],
+    applyWidths(
+      TRACK_COLUMNS.filter(
+        (column) => column.fixed || visibility.value[column.id],
+      ),
     ),
   );
 
@@ -63,6 +82,22 @@ export function useGridColumns() {
     });
   }
 
+  // undefined puts the column back to its default width
+  async function setColumnWidth(id: string, width: number | undefined) {
+    const widths = { ...preference.value.widths };
+    if (width === undefined) delete widths[id];
+    else widths[id] = Math.max(MIN_COLUMN_WIDTH, Math.round(width));
+    await setUserPreference(GRID_COLUMNS_PREFERENCE_KEY, {
+      ...preference.value,
+      widths,
+    });
+  }
+
+  async function resetColumnWidths() {
+    const { widths: _widths, ...rest } = preference.value;
+    await setUserPreference(GRID_COLUMNS_PREFERENCE_KEY, rest);
+  }
+
   async function reset() {
     await setUserPreference(GRID_COLUMNS_PREFERENCE_KEY, {});
   }
@@ -72,7 +107,10 @@ export function useGridColumns() {
     visibleColumns,
     density,
     rowHeight,
+    applyWidths,
     setColumnVisible,
+    setColumnWidth,
+    resetColumnWidths,
     setDensity,
     reset,
   };
