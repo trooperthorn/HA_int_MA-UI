@@ -105,11 +105,42 @@
         :max-size="40"
         class="library-manager__tree"
       >
-        <SourceTree
-          ref="tree"
-          :active-node="node.node"
-          @select="selectFromTree"
-        />
+        <!-- the selected item's details and actions sit under the tree;
+             its artwork is under the queue on the right -->
+        <SplitterGroup
+          direction="vertical"
+          auto-save-id="library-manager-left"
+          :storage="storage"
+          class="library-manager__main-group"
+        >
+          <SplitterPanel
+            id="tree-body"
+            :order="1"
+            :min-size="PANE_DEFAULTS.queueMinSize"
+            class="library-manager__pane"
+          >
+            <SourceTree
+              ref="tree"
+              :active-node="node.node"
+              @select="selectFromTree"
+            />
+          </SplitterPanel>
+          <SplitterResizeHandle
+            v-if="showSelected"
+            id="left-row-handle"
+            class="library-manager__handle library-manager__handle--row"
+          />
+          <SplitterPanel
+            v-if="showSelected"
+            id="selected-details"
+            :order="2"
+            :default-size="PANE_DEFAULTS.selectedDetailsSize"
+            :min-size="PANE_DEFAULTS.queueMinSize"
+            class="library-manager__pane"
+          >
+            <SelectedPane :items="selection" variant="details" />
+          </SplitterPanel>
+        </SplitterGroup>
       </SplitterPanel>
       <SplitterResizeHandle
         v-if="showTree"
@@ -237,7 +268,7 @@
             :min-size="PANE_DEFAULTS.queueMinSize"
             class="library-manager__pane"
           >
-            <SelectedPane :items="selection" />
+            <SelectedPane :items="selection" variant="art" />
           </SplitterPanel>
         </SplitterGroup>
       </SplitterPanel>

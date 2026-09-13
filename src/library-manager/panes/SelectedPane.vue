@@ -13,57 +13,65 @@
       {{ $t("library_manager.selected.empty") }}
     </div>
 
-    <div v-else class="selected-pane__body">
-      <div class="selected-pane__art">
+    <div
+      v-else
+      class="selected-pane__body"
+      :class="{ 'selected-pane__body--art': variant === 'art' }"
+    >
+      <div v-if="variant !== 'details'" class="selected-pane__art">
         <MediaItemThumb :item="item" size="100%" />
       </div>
-      <div class="selected-pane__name" :title="item.name">{{ item.name }}</div>
-      <div
-        v-if="artistLine"
-        class="selected-pane__line selected-pane__line--strong"
-      >
-        {{ artistLine }}
-      </div>
-      <div v-if="albumLine" class="selected-pane__line">{{ albumLine }}</div>
-      <div
-        v-if="formatLine"
-        class="selected-pane__line selected-pane__line--muted"
-      >
-        {{ formatLine }}
-      </div>
-      <div class="selected-pane__sources">
-        <ProviderIcon
-          v-for="mapping in mappings"
-          :key="mapping.provider_instance"
-          :domain="mapping.provider_domain"
-          :size="14"
-          :title="mapping.provider_instance"
-        />
-      </div>
-      <div v-if="pathLine" class="selected-pane__path" :title="pathLine">
-        {{ pathLine }}
-      </div>
-
-      <TooltipProvider :delay-duration="300">
-        <div class="selected-pane__actions" role="toolbar">
-          <Tooltip v-for="action in actions" :key="action.id">
-            <TooltipTrigger as-child>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                class="selected-pane__action"
-                :class="{ 'selected-pane__action--on': action.active }"
-                :aria-label="action.label"
-                :data-action="action.id"
-                @click="action.run($event)"
-              >
-                <component :is="action.icon" :size="16" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">{{ action.label }}</TooltipContent>
-          </Tooltip>
+      <template v-if="variant !== 'art'">
+        <div class="selected-pane__name" :title="item.name">
+          {{ item.name }}
         </div>
-      </TooltipProvider>
+        <div
+          v-if="artistLine"
+          class="selected-pane__line selected-pane__line--strong"
+        >
+          {{ artistLine }}
+        </div>
+        <div v-if="albumLine" class="selected-pane__line">{{ albumLine }}</div>
+        <div
+          v-if="formatLine"
+          class="selected-pane__line selected-pane__line--muted"
+        >
+          {{ formatLine }}
+        </div>
+        <div class="selected-pane__sources">
+          <ProviderIcon
+            v-for="mapping in mappings"
+            :key="mapping.provider_instance"
+            :domain="mapping.provider_domain"
+            :size="14"
+            :title="mapping.provider_instance"
+          />
+        </div>
+        <div v-if="pathLine" class="selected-pane__path" :title="pathLine">
+          {{ pathLine }}
+        </div>
+
+        <TooltipProvider :delay-duration="300">
+          <div class="selected-pane__actions" role="toolbar">
+            <Tooltip v-for="action in actions" :key="action.id">
+              <TooltipTrigger as-child>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  class="selected-pane__action"
+                  :class="{ 'selected-pane__action--on': action.active }"
+                  :aria-label="action.label"
+                  :data-action="action.id"
+                  @click="action.run($event)"
+                >
+                  <component :is="action.icon" :size="16" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">{{ action.label }}</TooltipContent>
+            </Tooltip>
+          </div>
+        </TooltipProvider>
+      </template>
     </div>
   </div>
 </template>
@@ -110,11 +118,18 @@ import { eventbus } from "@/plugins/eventbus";
 import type { GridItem } from "../columns";
 import { ensurePlayer } from "../playerGate";
 
-const props = defineProps<{
-  items: GridItem[];
-  // the listing the items came from, so play continues through it
-  parentItem?: MediaItemType;
-}>();
+const props = withDefaults(
+  defineProps<{
+    items: GridItem[];
+    // the listing the items came from, so play continues through it
+    parentItem?: MediaItemType;
+    // the pane is shown in two places: the text and actions under the
+    // source tree ("details"), the artwork under the queue ("art"); "full"
+    // is both in one
+    variant?: "full" | "details" | "art";
+  }>(),
+  { parentItem: undefined, variant: "full" },
+);
 
 const { t } = useI18n();
 const router = useRouter();
@@ -367,6 +382,11 @@ const actions = computed<PaneAction[]>(() => {
   padding: 12px;
 }
 
+/* a short pane scrolls rather than squeezing the text lines to nothing */
+.selected-pane__body > * {
+  flex: none;
+}
+
 .selected-pane__art {
   width: min(100%, 220px);
   aspect-ratio: 1;
@@ -375,6 +395,19 @@ const actions = computed<PaneAction[]>(() => {
   border-radius: 8px;
   overflow: hidden;
   background: rgba(var(--v-theme-fg), 0.06);
+}
+
+/* the artwork alone fills whatever the pane gives it */
+.selected-pane__body--art {
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+}
+
+.selected-pane__body--art .selected-pane__art {
+  width: min(100%, calc(100vh - 200px));
+  max-height: 100%;
+  margin-bottom: 0;
 }
 
 .selected-pane__name {
