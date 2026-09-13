@@ -8,7 +8,7 @@ import {
   RepeatMode,
 } from "@/plugins/api/interfaces";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
-import { IconRepeat, IconRepeatOff, IconRepeatOnce } from "@tabler/icons-vue";
+import { Repeat, Repeat1, RepeatOff } from "@lucide/vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { nextTick, reactive } from "vue";
 import { playerQueue } from "../fixtures/playerQueue";
@@ -115,7 +115,7 @@ describe("RepeatBtn", () => {
       expect(isDisabled(wrapper)).toBe(true);
       // nothing is playing, so the button reads off rather than showing the
       // repeat-one icon it falls through to when no mode is set at all
-      expect(wrapper.findComponent(IconRepeatOff).exists()).toBe(true);
+      expect(wrapper.findComponent(RepeatOff).exists()).toBe(true);
     });
 
     it("is disabled on an inactive queue", () => {
@@ -168,7 +168,7 @@ describe("RepeatBtn", () => {
         player: playerOnSource({ repeat_mode: RepeatMode.ALL }),
       });
 
-      expect(wrapper.findComponent(IconRepeat).exists()).toBe(true);
+      expect(wrapper.findComponent(Repeat).exists()).toBe(true);
 
       await button(wrapper).trigger("click");
 
@@ -186,7 +186,7 @@ describe("RepeatBtn", () => {
       const live = reactive(playerOnSource({ repeat_mode: RepeatMode.OFF }));
       const wrapper = mountButton({ player: live });
 
-      expect(wrapper.findComponent(IconRepeatOff).exists()).toBe(true);
+      expect(wrapper.findComponent(RepeatOff).exists()).toBe(true);
 
       live.source_list = [
         playerSource({
@@ -198,7 +198,7 @@ describe("RepeatBtn", () => {
       ];
       await nextTick();
 
-      expect(wrapper.findComponent(IconRepeat).exists()).toBe(true);
+      expect(wrapper.findComponent(Repeat).exists()).toBe(true);
     });
 
     it("renders repeat-one when the source reports it", () => {
@@ -206,7 +206,7 @@ describe("RepeatBtn", () => {
         player: playerOnSource({ repeat_mode: RepeatMode.ONE }),
       });
 
-      expect(wrapper.findComponent(IconRepeatOnce).exists()).toBe(true);
+      expect(wrapper.findComponent(Repeat1).exists()).toBe(true);
     });
 
     // the source has not reported its ordering yet, so the control reads as off
@@ -215,7 +215,7 @@ describe("RepeatBtn", () => {
       const wrapper = mountButton({ player: playerOnSource() });
 
       expect(isDisabled(wrapper)).toBe(false);
-      expect(wrapper.findComponent(IconRepeatOff).exists()).toBe(true);
+      expect(wrapper.findComponent(RepeatOff).exists()).toBe(true);
     });
 
     it("is disabled for a source that cannot repeat", async () => {
