@@ -1,0 +1,210 @@
+# Keeps this fork's distance from music-assistant/frontend visible and small.
+#
+# A fork that stops merging upstream stops receiving upstream's security fixes,
+# and the cost of catching up grows with the gap until a security merge is a
+# project rather than a morning. This runs weekly, merges upstream/main onto a
+# branch and opens a PR for review.
+#
+# It deliberately does NOT auto-merge. An upstream merge can carry breaking
+# changes, backend-contract changes and conflicts with the library-manager
+# work; it is reviewed by a person. When the merge does not apply cleanly the
+# job fails with the conflicting paths listed in the run summary, which is the
+# signal to do it by hand.
+name: Merge upstream
+
+on:
+  schedule:
+    - cron: "41 8 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: merge-upstream-${{ github.repository }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  UPSTREAM: https://github.com/music-assistant/frontend.git
+  BRANCH: automation/upstream-merge
+
+jobs:
+  merge:
+    name: Merge upstream into a review branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Measure the distance from upstream
+        id: distance
+        shell: bash
+        run: |
+          set -euo pipefail
+          git remote add upstream "$UPSTREAM"
+          git fetch --quiet upstream main
+          behind="$(git rev-list --count HEAD..upstream/main)"
+          ahead="$(git rev-list --count upstream/main..HEAD)"
+          echo "behind=$behind" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Distance from upstream"
+            echo ""
+            echo "- this fork is **$ahead** commits ahead of \`upstream/main\`"
+            echo "- this fork is **$behind** commits behind"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$behind" -eq 0 ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Nothing to merge." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Verify release-automation credentials are configured
+        if: steps.distance.outputs.behind != '0'
+        env:
+          APP_CLIENT_ID: ${{ vars.RELEASE_AUTOMATION_CLIENT_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.RELEASE_AUTOMATION_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$APP_CLIENT_ID" ] || [ -z "$APP_PRIVATE_KEY" ]; then
+            echo "::error::Configure RELEASE_AUTOMATION_CLIENT_ID and RELEASE_AUTOMATION_PRIVATE_KEY."
+            exit 1
+          fi
+
+      - name: Create short-lived release-automation token
+        if: steps.distance.outputs.behind != '0'
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.RELEASE_AUTOMATION_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_AUTOMATION_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Resolve the GitHub App commit identity
+        if: steps.distance.outputs.behind != '0'
+        id: app-identity
+        env:
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_USER_ID="$(gh api "/users/${APP_SLUG}[bot]" --jq .id)"
+          printf 'name=%s[bot]\n' "$APP_SLUG" >> "$GITHUB_OUTPUT"
+          printf 'email=%s+%s[bot]@users.noreply.github.com\n' \
+            "$APP_USER_ID" "$APP_SLUG" >> "$GITHUB_OUTPUT"
+
+      # The merge is attempted on a branch recreated from main every run, so a
+      # stale attempt from last week is never carried forward.
+      - name: Merge upstream onto the review branch
+        if: steps.distance.outputs.behind != '0'
+        id: merge
+        env:
+          BOT_EMAIL: ${{ steps.app-identity.outputs.email }}
+          BOT_NAME: ${{ steps.app-identity.outputs.name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "$BOT_NAME"
+          git config user.email "$BOT_EMAIL"
+          git switch --force-create "$BRANCH"
+          if git merge --no-edit --no-ff upstream/main; then
+            echo "conflicted=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Report the conflicts and leave the tree clean. Committing a merge
+          # with conflict markers in it would be worse than failing.
+          conflicts="$(git diff --name-only --diff-filter=U)"
+          git merge --abort
+          {
+            echo ""
+            echo "## Merge conflicts"
+            echo ""
+            echo "\`upstream/main\` does not apply cleanly. Merge it locally:"
+            echo ""
+            echo '```bash'
+            echo "git fetch upstream main && git switch -c $BRANCH main && git merge upstream/main"
+            echo '```'
+            echo ""
+            echo "Conflicting paths:"
+            echo ""
+            echo '```'
+            echo "$conflicts"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::upstream/main conflicts with this fork; merge it by hand."
+          exit 1
+
+      - name: Describe what the merge brings in
+        if: steps.merge.outputs.conflicted == 'false'
+        id: describe
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "### Upstream commits in this merge"
+            echo ""
+            # -n rather than `| head`, which would fire SIGPIPE at git under pipefail
+            git log -n 60 --no-merges --format='- %s (%h)' HEAD^1..upstream/main
+            echo ""
+            echo "### Files changed"
+            echo ""
+            echo '```'
+            git diff --stat HEAD^1 HEAD | tail -30
+            echo '```'
+          } > body.md
+          cat body.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Push the review branch
+        if: steps.merge.outputs.conflicted == 'false'
+        env:
+          TOKEN: ${{ steps.app-token.outputs.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          REMOTE_SHA="$(git ls-remote --heads origin "refs/heads/$BRANCH" | awk '{print $1}')"
+          if [ -z "$REMOTE_SHA" ]; then
+            git push --set-upstream origin "HEAD:refs/heads/$BRANCH"
+          else
+            git push --force-with-lease="refs/heads/$BRANCH:$REMOTE_SHA" origin "HEAD:refs/heads/$BRANCH"
+          fi
+
+      - name: Create or refresh the merge PR
+        if: steps.merge.outputs.conflicted == 'false'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          BEHIND: ${{ steps.distance.outputs.behind }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TITLE="Merge upstream music-assistant/frontend"
+          {
+            echo "Weekly merge of \`music-assistant/frontend@main\`, which this fork was"
+            echo "**$BEHIND** commits behind when the branch was built."
+            echo ""
+            echo "Review this rather than rubber-stamping it: an upstream merge can change"
+            echo "the server API contract the fork talks to, and it can touch the same files"
+            echo "as the library-manager work. CI runs here, so a green result means the"
+            echo "fork's own tests still pass against upstream's changes -- not that the"
+            echo "behaviour is unchanged."
+            echo ""
+            cat body.md
+            echo ""
+            echo "## Types of changes"
+            echo ""
+            echo "- [x] Maintenance / chore -- \`maintenance\`"
+          } > pr-body.md
+          PR_NUMBER="$(gh pr list --repo "$GITHUB_REPOSITORY" \
+            --head "$BRANCH" --base main --state open \
+            --json number --jq '.[0].number // empty')"
+          if [ -z "$PR_NUMBER" ]; then
+            gh pr create --repo "$GITHUB_REPOSITORY" \
+              --head "$BRANCH" --base main --title "$TITLE" --body-file pr-body.md
+          else
+            gh pr edit "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body-file pr-body.md
+          fi
