@@ -177,6 +177,8 @@ export const handleMenuBtnClick = function (
   const mediaItems: MediaItemTypeOrItemMapping[] = Array.isArray(item)
     ? item
     : [item];
+  // the options only travel when a caller set them, so callers without any
+  // still make the same call as before
   showContextMenuForMediaItem(
     mediaItems,
     parentItem,
@@ -185,7 +187,7 @@ export const handleMenuBtnClick = function (
     includePlayMenuItems,
     includePlayMenuItems,
     sortBy,
-    options,
+    ...(options ? [options] : []),
   );
 };
 
