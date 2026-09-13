@@ -236,6 +236,7 @@ import {
   playerBarEndAnchor,
 } from "@/helpers/player_bar";
 import {
+  canEditPlayerGroup,
   isBuiltinPlayer,
   isPlayerActive,
   isSelectablePlayer,
@@ -349,6 +350,14 @@ watch(
         activeElement instanceof HTMLElement && activeElement !== document.body
           ? activeElement
           : null;
+      if (store.expandActivePlayerGroup) {
+        store.expandActivePlayerGroup = false;
+        const active = store.activePlayer;
+        if (active && canEditPlayerGroup(active)) {
+          expandedVolumePlayerIds.delete(active.player_id);
+          expandedMemberPlayerIds.add(active.player_id);
+        }
+      }
       void scrollSelectedPlayerIntoView();
       return;
     }

@@ -122,7 +122,7 @@
             <v-card-title
               v-else
               :style="`font-size: ${titleFontSize};font-weight:600;cursor:pointer;`"
-              @click="store.showPlayersMenu = true"
+              @click="openPlayersMenu"
             >
               <MarqueeText :sync="playerMarqueeSync">
                 {{ store.activePlayer?.name || $t("no_player") }}
@@ -469,7 +469,7 @@
             :aria-label="playerSelectLabel"
             :aria-expanded="store.showPlayersMenu"
             aria-haspopup="dialog"
-            @click="store.showPlayersMenu = true"
+            @click="openPlayersMenu"
           >
             <PlayerIcon
               :icon="store.activePlayer?.icon"
@@ -971,6 +971,13 @@ const parseUri = function (uri: string | undefined) {
   }
 
   return null;
+};
+
+// the picker opened from here shows the active player's group members at
+// once: changing the group is the reason to open it from Now Playing
+const openPlayersMenu = function () {
+  store.expandActivePlayerGroup = true;
+  store.showPlayersMenu = true;
 };
 
 const navigateOrSearch = function (searchTerm: string, uri?: string) {

@@ -20,9 +20,11 @@
           "
           class="w-full h-full"
         >
+          <!-- cover: wide or tall art fills the square instead of leaving bands -->
           <v-img
             class="media-thumb"
             style="border-radius: 4px"
+            cover
             :src="getMediaImageUrl(store.activePlayer.current_media.image_url)"
             :alt="$t('tooltip.artwork')"
           />

@@ -2649,5 +2649,6 @@
             "more": "More actions"
         },
         "playing_here": "No player was picked, so this browser plays it."
-    }
+    },
+    "preference_save_failed": "Your preference could not be saved and was set back."
 }

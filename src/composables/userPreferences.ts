@@ -1,5 +1,7 @@
 import { computed, ComputedRef } from "vue";
+import { toast } from "vue-sonner";
 import { api } from "@/plugins/api";
+import { $t } from "@/plugins/i18n";
 import { store } from "@/plugins/store";
 
 export interface ItemsListingPreferences {
@@ -20,25 +22,30 @@ export interface ItemsListingPreferences {
 
 /**
  * Standalone helper — usable outside Vue component setup (e.g. composables).
- * Sets a single user preference key, deep-clones the value, and persists to the server.
+ * Sets a single user preference key, deep-clones the value, and persists to
+ * the server. The value shows immediately; if the server refuses it the
+ * previous value comes back, the usual error toast is shown and the promise
+ * resolves false, so a caller that must know (an onboarding step) can wait
+ * for the save instead of assuming it.
  */
 export async function setUserPreference(
   key: string,
   value: unknown,
-): Promise<void> {
+): Promise<boolean> {
   if (!store.currentUser) {
     console.warn("Cannot set preference: no user logged in");
-    return;
+    return false;
   }
 
   if (!store.currentUser.preferences) {
     store.currentUser.preferences = {};
   }
 
+  const previousPreferences = store.currentUser.preferences;
   const plainValue = JSON.parse(JSON.stringify(value));
 
   const updatedPreferences = {
-    ...store.currentUser.preferences,
+    ...previousPreferences,
     [key]: plainValue,
   };
 
@@ -48,8 +55,15 @@ export async function setUserPreference(
     await api.updateUser(store.currentUser.user_id, {
       preferences: updatedPreferences,
     });
+    return true;
   } catch (error) {
     console.error("Failed to update user preferences:", error);
+    // roll back only if nothing newer has been written meanwhile
+    if (store.currentUser?.preferences === updatedPreferences) {
+      store.currentUser.preferences = previousPreferences;
+    }
+    toast.error($t("preference_save_failed"));
+    return false;
   }
 }
 
@@ -81,8 +95,8 @@ export function useUserPreferences() {
    * Set a preference value in user preferences
    * Updates optimistically on the client and sends to server
    */
-  async function setPreference(key: string, value: unknown): Promise<void> {
-    await setUserPreference(key, value);
+  async function setPreference(key: string, value: unknown): Promise<boolean> {
+    return setUserPreference(key, value);
   }
 
   /**

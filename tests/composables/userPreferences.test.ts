@@ -27,8 +27,13 @@ vi.mock("@/plugins/store", () => ({
   store: storeMock,
 }));
 
+const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }));
+vi.mock("vue-sonner", () => ({ toast: { error: toastError } }));
+vi.mock("@/plugins/i18n", () => ({ $t: (key: string) => key }));
+
 import {
   pruneStaleProviderFilters,
+  setUserPreference,
   useUserPreferences,
 } from "@/composables/userPreferences";
 
@@ -174,5 +179,41 @@ describe("pruneStaleProviderFilters", () => {
     await pruneStaleProviderFilters();
 
     expect(storeMock.currentUser.preferences).toEqual({});
+  });
+});
+
+describe("userPreferences - failed saves", () => {
+  beforeEach(() => {
+    mockUpdateUser.mockReset();
+    toastError.mockReset();
+    storeMock.currentUser = { user_id: "u1", preferences: { theme: "dark" } };
+  });
+
+  it("resolves true and keeps the value when the server accepts it", async () => {
+    mockUpdateUser.mockResolvedValue(user());
+    await expect(setUserPreference("theme", "light")).resolves.toBe(true);
+    expect(storeMock.currentUser?.preferences?.theme).toBe("light");
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it("rolls the value back, tells the user and resolves false when it fails", async () => {
+    mockUpdateUser.mockRejectedValue(new Error("offline"));
+    await expect(setUserPreference("theme", "light")).resolves.toBe(false);
+    expect(storeMock.currentUser?.preferences?.theme).toBe("dark");
+    expect(toastError).toHaveBeenCalledWith("preference_save_failed");
+  });
+
+  it("does not undo a newer save when an older one fails", async () => {
+    let rejectFirst: (error: Error) => void = () => {};
+    mockUpdateUser
+      .mockImplementationOnce(
+        () => new Promise((_, reject) => (rejectFirst = reject)),
+      )
+      .mockResolvedValue(user());
+    const first = setUserPreference("theme", "light");
+    await setUserPreference("theme", "sepia");
+    rejectFirst(new Error("offline"));
+    await expect(first).resolves.toBe(false);
+    expect(storeMock.currentUser?.preferences?.theme).toBe("sepia");
   });
 });
