@@ -377,11 +377,10 @@ export const showContextMenuForMediaItem = async function (
 
   const menuTargets = await withFullItemDetails(mediaItems);
 
-  const contextMenuItems = await getContextMenuItems(
-    menuTargets,
-    parentItem,
-    options,
-  );
+  const contextMenuItems = [
+    ...(options?.extraItems ?? []),
+    ...(await getContextMenuItems(menuTargets, parentItem, options)),
+  ];
 
   let menuItems: ContextMenuItem[] = [];
 
@@ -480,6 +479,9 @@ export interface ContextMenuOptions {
   // true when the menu is opened from the sidebar shortcuts list,
   // enabling actions that only make sense there (e.g. move up/down).
   shortcutContext?: boolean;
+  // items the caller adds ahead of the standard ones (the library
+  // manager's "Filter by ..." entries)
+  extraItems?: ContextMenuItem[];
 }
 
 export const getContextMenuItems = async function (

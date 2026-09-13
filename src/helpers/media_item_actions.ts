@@ -3,6 +3,7 @@
 import {
   showContextMenuForMediaItem,
   showPlayMenuForMediaItem,
+  type ContextMenuOptions,
 } from "@/layouts/default/ItemContextMenu.vue";
 import { api } from "@/plugins/api";
 import { itemIsAvailable } from "@/plugins/api/helpers";
@@ -171,6 +172,7 @@ export const handleMenuBtnClick = function (
   parentItem?: MediaItemType,
   includePlayMenuItems = true,
   sortBy?: string,
+  options?: ContextMenuOptions,
 ) {
   const mediaItems: MediaItemTypeOrItemMapping[] = Array.isArray(item)
     ? item
@@ -183,6 +185,7 @@ export const handleMenuBtnClick = function (
     includePlayMenuItems,
     includePlayMenuItems,
     sortBy,
+    options,
   );
 };
 

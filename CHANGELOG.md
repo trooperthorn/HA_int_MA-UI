@@ -5,6 +5,7 @@
 ### Features
 
 * **Library manager** at `/library`: source tree, genre / artist / album browser strip with per-column facet dropdowns, dense virtualized sortable track grid with server-backed type-ahead, Now Playing queue and selected-item panel, every pane resizable and remembered per user. See `docs/LIBRARY-MANAGER.md`.
+* **Grid columns** resize by dragging a header edge (double-click puts the default back, the column picker has *Reset column widths*); widths are remembered per user and apply to every listing. A track's right-click menu gains **Filter by artist / album / genre**, which narrows the browser strip to that pick.
 * **Navigation**: one flat section — Music Library, Party, Radio, Discover, Search, Browse (then audiobooks, podcasts and the remaining plugins) — and Settings; the Artists / Albums / Tracks / Playlists / Genres entries are gone, those views live inside the library manager. Settings tree rows keep the icon on the left with the label left-aligned.
 * **Settings tree** beside every settings page, with Library view and Keyboard pages under User Interface.
 * **Keyboard commands** for playback, selection, navigation chords, pane toggles and a `?` help overlay.

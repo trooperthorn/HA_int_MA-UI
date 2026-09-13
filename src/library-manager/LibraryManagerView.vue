@@ -177,10 +177,13 @@
               :visible-columns="visibleColumns"
               :visibility="visibility"
               :local-sortable="localSortable"
+              :menu-items="filterMenuItems"
               @update:sort-by="toolbar.sortBy = $event"
               @update:selection="selection = $event"
               @ensure-loaded="source.ensureLoaded"
               @toggle-column="setColumnVisible"
+              @resize-column="setColumnWidth"
+              @reset-column-widths="resetColumnWidths"
               @focus-search="focusSearch"
               @jump-to-letter="jumpToLetter"
               @open-folder="openFolder"
@@ -241,14 +244,18 @@
 
 <script setup lang="ts">
 import {
+  Disc3,
   PanelBottom,
   PanelLeft,
   PanelRight,
   PanelTop,
   RefreshCw,
   Search,
+  Tag,
+  Users,
   X,
 } from "@lucide/vue";
+import type { ContextMenuItem } from "@/helpers/context_menu_item";
 import { SplitterGroup, SplitterPanel, SplitterResizeHandle } from "reka-ui";
 import {
   computed,
@@ -317,7 +324,10 @@ const {
   visibility,
   visibleColumns: visibleTrackColumns,
   rowHeight,
+  applyWidths,
   setColumnVisible,
+  setColumnWidth,
+  resetColumnWidths,
 } = useGridColumns();
 const {
   storage,
@@ -461,8 +471,78 @@ const columns = computed<readonly GridColumn[]>(() =>
 const visibleColumns = computed<GridColumn[]>(() =>
   node.scope === "library" && node.mediaType === MediaType.TRACK
     ? visibleTrackColumns.value
-    : columns.value.filter((column) => column.fixed || column.defaultVisible),
+    : applyWidths(
+        columns.value.filter((column) => column.fixed || column.defaultVisible),
+      ),
 );
+
+// ---- row menu: filter the browser by the row ---------------------------------
+
+// the strip only narrows library track listings
+const canFilterByRow = computed(
+  () => node.scope === "library" && node.mediaType === MediaType.TRACK,
+);
+
+async function filterByGenreName(name: string) {
+  const matches = await api.getLibraryGenres({ search: name, limit: 20 });
+  const genre = matches.find(
+    (candidate) => candidate.name.toLowerCase() === name.toLowerCase(),
+  );
+  if (!genre) {
+    console.warn("[LibraryManager] no library genre named %s", name);
+    return;
+  }
+  setGenres([{ id: Number(genre.item_id), name: genre.name }]);
+}
+
+function filterMenuItems(targets: GridItem[]): ContextMenuItem[] {
+  if (!canFilterByRow.value || targets.length === 0) return [];
+  const track = targets[0] as Track;
+  const items: ContextMenuItem[] = [];
+  const artists = track.artists ?? [];
+  if (artists.length === 1) {
+    items.push({
+      label: "library_manager.filter_by_artist",
+      icon: Users,
+      action: () => setArtist(artists[0]),
+    });
+  } else if (artists.length > 1) {
+    items.push({
+      label: "library_manager.filter_by_artist",
+      icon: Users,
+      subItems: artists.map((artist) => ({
+        label: artist.name,
+        action: () => setArtist(artist),
+      })),
+    });
+  }
+  const album = track.album;
+  if (album) {
+    items.push({
+      label: "library_manager.filter_by_album",
+      icon: Disc3,
+      action: () => setAlbum(album),
+    });
+  }
+  const genres = track.metadata?.genres ?? [];
+  if (genres.length === 1) {
+    items.push({
+      label: "library_manager.filter_by_genre",
+      icon: Tag,
+      action: () => void filterByGenreName(genres[0]),
+    });
+  } else if (genres.length > 1) {
+    items.push({
+      label: "library_manager.filter_by_genre",
+      icon: Tag,
+      subItems: genres.map((genre) => ({
+        label: genre,
+        action: () => void filterByGenreName(genre),
+      })),
+    });
+  }
+  return items;
+}
 
 // a listing only accepts the sort keys its columns carry
 const filter = computed<LibraryFilter>(() => ({
