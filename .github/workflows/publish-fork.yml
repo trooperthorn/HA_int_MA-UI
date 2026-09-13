@@ -174,15 +174,24 @@ jobs:
           private-key: ${{ secrets.RELEASE_AUTOMATION_PRIVATE_KEY }}
           owner: trooperthorn
           repositories: ha_app_music_assistant
-          permission-actions: write
+          # Contents write, not Actions write: the release App was created with
+          # Contents and Pull requests only, so asking for Actions returns 422
+          # "permissions requested are not granted to this installation" and no
+          # per-repository install can grant it. POST /repos/.../dispatches is
+          # reachable with Contents write, which avoids widening the App across
+          # the seventeen repositories it is installed on.
+          permission-contents: write
 
       - name: Start the app repository's upstream sync
         if: steps.automation.outputs.ready == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           TAG: ${{ steps.version.outputs.tag }}
+          APP_REPO: trooperthorn/ha_app_music_assistant
         shell: bash
         run: |
           set -euo pipefail
-          gh workflow run sync-upstream.yml --repo trooperthorn/ha_app_music_assistant --ref main
-          echo "Dispatched trooperthorn/ha_app_music_assistant sync-upstream.yml for $TAG" >> "$GITHUB_STEP_SUMMARY"
+          gh api --method POST "repos/$APP_REPO/dispatches" \
+            -f event_type=fork-frontend-published \
+            -F "client_payload[tag]=$TAG"
+          echo "Asked trooperthorn/ha_app_music_assistant to sync for $TAG" >> "$GITHUB_STEP_SUMMARY"
