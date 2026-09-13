@@ -60,23 +60,15 @@ const navItems = computed(() =>
     })),
 );
 
-const discoverItems = computed(() =>
-  navItems.value.filter((item) => item.group === "explore"),
-);
 const libraryItems = computed(() =>
   navItems.value.filter((item) => item.group === "library"),
-);
-const pluginItems = computed(() =>
-  navItems.value.filter((item) => item.group === "plugins"),
 );
 const systemItems = computed(() =>
   navItems.value.filter((item) => item.group === "system"),
 );
 
 const DEFAULT_SECTION_LABELS: Record<MenuGroup, string> = {
-  explore: "explore",
   library: "library",
-  plugins: "plugins",
   system: "system",
 };
 
@@ -160,29 +152,13 @@ onUnmounted(() => {
     </SidebarHeader>
     <SidebarContent>
       <NavMain
-        :items="discoverItems"
-        :label="sections.explore.label"
-        :default-label="sections.explore.defaultLabel"
-        :label-hidden="sections.explore.labelHidden"
-        section-id="explore"
-        :edit-mode="editMode"
-        class="mt-1"
-      />
-      <NavMain
         :items="libraryItems"
         :label="sections.library.label"
         :default-label="sections.library.defaultLabel"
         :label-hidden="sections.library.labelHidden"
         section-id="library"
         :edit-mode="editMode"
-      />
-      <NavMain
-        :items="pluginItems"
-        :label="sections.plugins.label"
-        :default-label="sections.plugins.defaultLabel"
-        :label-hidden="sections.plugins.labelHidden"
-        section-id="plugins"
-        :edit-mode="editMode"
+        class="mt-1"
       />
       <NavMain
         :items="systemItems"
@@ -290,18 +266,6 @@ onUnmounted(() => {
   margin-right: 0.5rem !important;
 }
 
-:deep([data-sidebar="menu-button"] > svg.artist-icon) {
-  width: 1.2rem !important;
-  height: 1.2rem !important;
-  margin-right: 0.3rem !important;
-}
-
-:deep([data-sidebar="menu-button"] > svg.genre-icon) {
-  width: auto !important;
-  height: auto !important;
-  margin-right: 0.3rem !important;
-}
-
 @media (min-height: 700px) {
   :deep([data-sidebar="menu-button"]) {
     min-height: 2.25rem !important;
@@ -312,11 +276,6 @@ onUnmounted(() => {
   :deep([data-sidebar="menu-button"] > svg) {
     width: 2rem !important;
     height: 2rem !important;
-  }
-
-  :deep([data-sidebar="menu-button"] > svg.artist-icon) {
-    width: 1.4rem !important;
-    height: 1.4rem !important;
   }
 }
 </style>

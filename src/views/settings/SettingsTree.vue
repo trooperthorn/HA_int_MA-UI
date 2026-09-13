@@ -37,18 +37,16 @@
         <ChevronRight v-else :size="12" />
       </button>
       <span v-else class="settings-tree__chevron"></span>
-      <ProviderIcon
-        v-if="row.node.providerDomain"
-        :domain="row.node.providerDomain"
-        :size="14"
-        class="settings-tree__icon"
-      />
-      <Icon
-        v-else-if="row.node.icon"
-        :icon="row.node.icon"
-        size="14"
-        class="settings-tree__icon"
-      />
+      <!-- fixed-size box: Icon's container otherwise stretches to fill the
+           row and pushes the label to the far right -->
+      <span class="settings-tree__icon">
+        <ProviderIcon
+          v-if="row.node.providerDomain"
+          :domain="row.node.providerDomain"
+          :size="14"
+        />
+        <Icon v-else-if="row.node.icon" :icon="row.node.icon" size="14" />
+      </span>
       <span class="settings-tree__label">{{ row.node.label }}</span>
     </div>
   </nav>
@@ -438,6 +436,11 @@ watch(
 }
 
 .settings-tree__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
   flex: none;
   color: rgba(var(--v-theme-fg), 0.6);
 }
@@ -447,6 +450,9 @@ watch(
 }
 
 .settings-tree__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
 }

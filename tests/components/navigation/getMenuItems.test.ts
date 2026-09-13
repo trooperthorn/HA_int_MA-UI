@@ -85,7 +85,7 @@ describe("getMenuItems (sidebar.menu preference)", () => {
     );
   });
 
-  it("groups the plugin-backed entries under the plugins section", () => {
+  it("lists one flat section in the fixed order, settings apart", () => {
     storeMock.enabledPlugins = new Set([
       "party",
       "music_quiz",
@@ -93,16 +93,42 @@ describe("getMenuItems (sidebar.menu preference)", () => {
       "milkdrop_visualizer",
     ]);
 
-    const pluginIds = getMenuItems()
-      .filter((item) => item.group === "plugins")
-      .map((item) => item.id);
-
-    expect(pluginIds).toEqual([
+    const items = getMenuItems();
+    expect(items.map((item) => item.id).slice(0, 6)).toEqual([
+      "librarymanager",
       "party",
-      "music_quiz",
-      "ai_radio",
-      "milkdrop_visualizer",
+      "radios",
+      "discover",
+      "search",
+      "browse",
     ]);
+    expect(
+      items.filter((item) => item.group === "system").map((item) => item.id),
+    ).toEqual(["settings"]);
+    expect(
+      items.every((item) => item.group !== "system" || item.id === "settings"),
+    ).toBe(true);
+  });
+
+  it("no longer offers the per-media-type library pages", () => {
+    for (const path of [
+      "/artists",
+      "/albums",
+      "/tracks",
+      "/playlists",
+      "/genres",
+    ]) {
+      expect(getPaths()).not.toContain(path);
+    }
+    // a saved order or hidden list from before the change is ignored for them
+    setPreferences({
+      [MENU_PREFERENCE_KEY]: {
+        hidden: ["artists"],
+        order: ["albums", "genres"],
+      },
+    });
+    expect(resolveMenuConfig().hidden.size).toBe(0);
+    expect(resolveMenuConfig().order).toEqual(DEFAULT_MENU_ITEMS);
   });
 
   it("ignores the retired menu_items whitelist preferences", () => {
@@ -113,19 +139,19 @@ describe("getMenuItems (sidebar.menu preference)", () => {
     });
 
     expect(getPaths()).toContain("/browse");
-    expect(getPaths()).toContain("/artists");
+    expect(getPaths()).toContain("/library");
     expect(getPaths()).toContain("/settings");
   });
 
   it("hides opted-out items but keeps them listed for edit mode", () => {
     setPreferences({
-      [MENU_PREFERENCE_KEY]: { hidden: ["genres", "radios"] },
+      [MENU_PREFERENCE_KEY]: { hidden: ["podcasts", "radios"] },
     });
 
-    expect(getPaths()).not.toContain("/genres");
+    expect(getPaths()).not.toContain("/podcasts");
     expect(getPaths()).not.toContain("/radios");
-    const genres = getMenuItems().find((item) => item.id === "genres");
-    expect(genres?.hidden).toBe(true);
+    const podcasts = getMenuItems().find((item) => item.id === "podcasts");
+    expect(podcasts?.hidden).toBe(true);
   });
 
   it("applies the saved order", () => {
@@ -156,14 +182,14 @@ describe("getMenuItems (sidebar.menu preference)", () => {
     });
 
     const order = resolveMenuConfig().order;
-    // music_quiz follows its default predecessor (party), wherever that is
-    expect(order.indexOf("music_quiz")).toBe(order.indexOf("party") + 1);
+    // music_quiz follows its default predecessor (podcasts), wherever that is
+    expect(order.indexOf("music_quiz")).toBe(order.indexOf("podcasts") + 1);
   });
 
   it("drops stale ids from hidden and order", () => {
     setPreferences({
       [MENU_PREFERENCE_KEY]: {
-        hidden: ["bogus", "genres"],
+        hidden: ["bogus", "radios"],
         order: ["bogus", ...DEFAULT_MENU_ITEMS],
       },
     });
@@ -181,19 +207,19 @@ describe("getMenuItems (sidebar.menu preference)", () => {
   });
 
   it("hides items", async () => {
-    await setMenuItemHidden("genres", true);
+    await setMenuItemHidden("radios", true);
 
     const written = lastWrittenConfig();
-    expect(written.hidden).toEqual(["genres"]);
+    expect(written.hidden).toEqual(["radios"]);
     expect(written.order).toEqual(DEFAULT_MENU_ITEMS);
   });
 
   it("unhides items", async () => {
     setPreferences({
-      [MENU_PREFERENCE_KEY]: { hidden: ["genres"] },
+      [MENU_PREFERENCE_KEY]: { hidden: ["radios"] },
     });
 
-    await setMenuItemHidden("genres", false);
+    await setMenuItemHidden("radios", false);
 
     expect(lastWrittenConfig().hidden).toEqual([]);
   });
@@ -201,15 +227,15 @@ describe("getMenuItems (sidebar.menu preference)", () => {
   it("reorders a subset within its existing slots", async () => {
     setPreferences({ [MENU_PREFERENCE_KEY]: {} });
 
-    // swap artists and albums; everything else keeps its position
-    await setMenuItemsOrder(["albums", "artists"]);
+    // swap discover and search; everything else keeps its position
+    await setMenuItemsOrder(["search", "discover"]);
 
     const written = lastWrittenConfig();
     const expected = [...DEFAULT_MENU_ITEMS];
-    const artistsIndex = expected.indexOf("artists");
-    const albumsIndex = expected.indexOf("albums");
-    expected[artistsIndex] = "albums";
-    expected[albumsIndex] = "artists";
+    const discoverIndex = expected.indexOf("discover");
+    const searchIndex = expected.indexOf("search");
+    expected[discoverIndex] = "search";
+    expected[searchIndex] = "discover";
     expect(written.order).toEqual(expected);
   });
 
