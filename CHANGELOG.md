@@ -14,7 +14,7 @@
 * **Settings tree** beside every settings page, with Library view and Keyboard pages under User Interface.
 * **Keyboard commands** for playback, selection, navigation chords, pane toggles and a `?` help overlay.
 * **Player picker**: first play with no player opens the picker and falls back to this browser after 8 s; hide / unhide players per user; players that can play together listed as a block; per-player **Audio delay** (`sync_adjust`) for AirPlay and Squeezelite in the card menu.
-* **Home Assistant app** delivery through [trooperthorn/ha_app_music_assistant](https://github.com/trooperthorn/ha_app_music_assistant); `publish-fork.yml` releases the frontend wheel this app installs.
+* **Home Assistant app** delivery through [trooperthorn/ha_app_music_assistant](https://github.com/trooperthorn/ha_app_music_assistant); `publish-fork.yml` releases the frontend wheel this app installs and starts that repository's upstream sync, so a merge here becomes an app update without a hand on it.
 
 ## [2.9.16](https://github.com/music-assistant/frontend/compare/v2.9.16...v2.9.16) (2024-11-21)
 

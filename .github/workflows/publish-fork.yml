@@ -144,3 +144,45 @@ jobs:
             cat dist/SHA256SUMS
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # The Home Assistant app repository pins this wheel. Its daily "Sync
+      # upstream" workflow would pick the release up the next morning; kicking
+      # it now turns a merge here into an app update within the hour. Needs the
+      # release GitHub App (ha-soc-release-automation) installed on both repos.
+      - name: Check the release-automation credentials
+        if: steps.version.outputs.publish == 'true'
+        id: automation
+        env:
+          APP_CLIENT_ID: ${{ vars.RELEASE_AUTOMATION_CLIENT_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.RELEASE_AUTOMATION_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$APP_CLIENT_ID" ] || [ -z "$APP_PRIVATE_KEY" ]; then
+            echo "::warning::RELEASE_AUTOMATION_CLIENT_ID / RELEASE_AUTOMATION_PRIVATE_KEY not set; the app repository will pick this wheel up on its daily sync instead."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create a short-lived token for the app repository
+        if: steps.automation.outputs.ready == 'true'
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.RELEASE_AUTOMATION_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_AUTOMATION_PRIVATE_KEY }}
+          owner: trooperthorn
+          repositories: ha_app_music_assistant
+          permission-actions: write
+
+      - name: Start the app repository's upstream sync
+        if: steps.automation.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run sync-upstream.yml --repo trooperthorn/ha_app_music_assistant --ref main
+          echo "Dispatched trooperthorn/ha_app_music_assistant sync-upstream.yml for $TAG" >> "$GITHUB_STEP_SUMMARY"
