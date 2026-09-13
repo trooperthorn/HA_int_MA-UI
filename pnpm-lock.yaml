@@ -33,9 +33,6 @@ importers:
       '@sendspin/sendspin-js':
         specifier: 5.0.0
         version: 5.0.0
-      '@tabler/icons-vue':
-        specifier: ^3.46.0
-        version: 3.46.0(vue@3.5.41(typescript@6.0.3))
       '@tailwindcss/vite':
         specifier: ^4.3.3
         version: 4.3.3(vite@8.3.0(@types/node@26.2.0)(esbuild@0.28.2)(jiti@2.7.0)(sass@1.104.0)(terser@5.48.0)(yaml@2.9.0))
@@ -187,9 +184,6 @@ importers:
       lint-staged:
         specifier: ^17.4.1
         version: 17.4.1
-      material-design-icons-iconfont:
-        specifier: 6.7.0
-        version: 6.7.0
       oxlint:
         specifier: ^1.80.0
         version: 1.80.0
@@ -1878,14 +1872,6 @@ packages:
 
   '@swc/helpers@0.5.23':
     resolution: {integrity: sha512-5lSsMOTXURePglDfvuAQUqkGek9Hg2kksOYay2m0+XR++b2NWYL/4sWyuvVBIs8oKnJaxkdi9whaL/sqN13afw==}
-
-  '@tabler/icons-vue@3.46.0':
-    resolution: {integrity: sha512-RkYlrGx8NY5ePXk0fTJJaDYQpjbi0ys33Cvswnvn83X04IVOCEaEqS2S3GANcp1dgEu9Fs7c6kd2sdJbwOZQtw==}
-    peerDependencies:
-      vue: '>=3.0.1'
-
-  '@tabler/icons@3.46.0':
-    resolution: {integrity: sha512-f2RYFl3fzPwj5WO82x6en0dmkjefxEfOm16D1ByM6cj/McNiwOkL4VaPUoP9VVIrXAD9WnTSVFr70px703b//A==}
 
   '@tailwindcss/node@4.3.3':
     resolution: {integrity: sha512-/T8IKEsf9VTU6tLjgC7+sv2mOPtQxzE2jMw7u4Tt40Tx+QSZxpzh95/H6cMKoja9XuW7iMdLJYBB0o9G1CaAgg==}
@@ -3610,9 +3596,6 @@ packages:
     resolution: {integrity: sha512-HnslJfsZkRPBDJRHvVtAaWlZHEpSu7u8LgQuJCELjRKuWR+hpq4A7sLq3p8HaI9ypVoXDXxV34CsQJEe1+J5Aw==}
     engines: {node: '>= 20'}
     hasBin: true
-
-  material-design-icons-iconfont@6.7.0:
-    resolution: {integrity: sha512-lSj71DgVv20kO0kGbs42icDzbRot61gEDBLQACzkUuznRQBUYmbxzEkGU6dNBb5fRWHMaScYlAXX96HQ4/cJWA==}
 
   math-intrinsics@1.1.0:
     resolution: {integrity: sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g==}
@@ -6175,13 +6158,6 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
-  '@tabler/icons-vue@3.46.0(vue@3.5.41(typescript@6.0.3))':
-    dependencies:
-      '@tabler/icons': 3.46.0
-      vue: 3.5.41(typescript@6.0.3)
-
-  '@tabler/icons@3.46.0': {}
-
   '@tailwindcss/node@4.3.3':
     dependencies:
       '@jridgewell/remapping': 2.3.5
@@ -8084,8 +8060,6 @@ snapshots:
       semver: 7.8.5
 
   marked@18.0.11: {}
-
-  material-design-icons-iconfont@6.7.0: {}
 
   math-intrinsics@1.1.0: {}
 

@@ -16,7 +16,7 @@
       :size="size"
       :smart="smartShuffleActive"
     />
-    <IconArrowsRight v-else :size="size" />
+    <MoveRight v-else :size="size" />
   </Icon>
 </template>
 
@@ -31,7 +31,7 @@ import api from "@/plugins/api";
 import { isQueueInfiniteStream } from "@/plugins/api/helpers";
 import { Player, PlayerQueue } from "@/plugins/api/interfaces";
 import { $t } from "@/plugins/i18n";
-import { IconArrowsRight } from "@tabler/icons-vue";
+import { MoveRight } from "@lucide/vue";
 import { computed, toRef } from "vue";
 
 // properties

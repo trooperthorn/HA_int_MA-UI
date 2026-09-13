@@ -5,9 +5,12 @@
  */
 
 // Styles
+// The "md" iconset and its font are gone: material-design-icons-iconfont was
+// last published in 2022 by a single maintainer, and the whole font was being
+// loaded to serve one glyph. "mdi" (@mdi/font, ~114 glyphs in use) stays as
+// the default set; new icons should use @lucide/vue, which the rest of the
+// app already uses.
 import "@mdi/font/css/materialdesignicons.css";
-import "material-design-icons-iconfont/dist/material-design-icons.css";
-import { md } from "vuetify/iconsets/md";
 import { aliases as defaultAliases, mdi } from "vuetify/iconsets/mdi";
 import "./vuetify.css";
 
@@ -25,7 +28,6 @@ export default createVuetify(
       defaultSet: "mdi",
       aliases,
       sets: {
-        md,
         mdi,
       },
     },

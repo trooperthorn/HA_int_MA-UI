@@ -115,6 +115,7 @@ const {
     sendspinState: {
       pairingToken: null as string | null,
       lastOptions: null as {
+        codecs?: string[];
         reconnect?: { onReconnected?: () => void };
       } | null,
     },
@@ -315,6 +316,52 @@ describe("SendspinPlayer MediaSession", () => {
       wrapper.unmount();
     },
   );
+
+  // opus decoding falls back to the bundled opus-encdec WASM build when
+  // WebCodecs is missing. That package was last published in 2021 and decodes
+  // untrusted audio, so opus must only be requested when the browser can
+  // decode it natively.
+  const withAudioDecoder = (present: boolean) => {
+    const key = "AudioDecoder" as keyof typeof globalThis;
+    const had = key in globalThis;
+    const previous = (globalThis as Record<string, unknown>).AudioDecoder;
+    if (present) {
+      (globalThis as Record<string, unknown>).AudioDecoder = class {};
+    } else {
+      delete (globalThis as Record<string, unknown>).AudioDecoder;
+    }
+    return () => {
+      if (had) (globalThis as Record<string, unknown>).AudioDecoder = previous;
+      else delete (globalThis as Record<string, unknown>).AudioDecoder;
+    };
+  };
+  it("asks for opus when the browser decodes it natively", async () => {
+    const restore = withAudioDecoder(true);
+    mockPrepareSendspinSession.mockResolvedValue(undefined);
+    const wrapper = mount(SendspinPlayer, {
+      props: { playerId: "web-player" },
+    });
+    await flushPromises();
+    expect(sendspinState.lastOptions?.codecs).toEqual(["opus", "flac"]);
+    wrapper.unmount();
+    restore();
+  });
+  it("never asks for opus without a native decoder", async () => {
+    // the insecure-context case: a Home Assistant app reached over plain http
+    // on a LAN address, where WebCodecs is unavailable. Safari advertises opus
+    // regardless, so the request itself has to exclude it. pcm is in the list
+    // because Safari has no flac support.
+    const restore = withAudioDecoder(false);
+    mockPrepareSendspinSession.mockResolvedValue(undefined);
+    const wrapper = mount(SendspinPlayer, {
+      props: { playerId: "web-player" },
+    });
+    await flushPromises();
+    expect(sendspinState.lastOptions?.codecs).toEqual(["flac", "pcm"]);
+    expect(sendspinState.lastOptions?.codecs).not.toContain("opus");
+    wrapper.unmount();
+    restore();
+  });
 
   it("keeps Sendspin audio hidden behind custom controls", () => {
     const wrapper = mount(SendspinPlayer, {

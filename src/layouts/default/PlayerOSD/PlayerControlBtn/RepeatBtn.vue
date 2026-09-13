@@ -14,9 +14,9 @@
     variant="button"
     @click="cycleRepeatMode"
   >
-    <IconRepeatOff v-if="repeatMode === RepeatMode.OFF" :size="size" />
-    <IconRepeat v-else-if="repeatMode === RepeatMode.ALL" :size="size" />
-    <IconRepeatOnce v-else :size="size" />
+    <RepeatOff v-if="repeatMode === RepeatMode.OFF" :size="size" />
+    <Repeat v-else-if="repeatMode === RepeatMode.ALL" :size="size" />
+    <Repeat1 v-else :size="size" />
   </Icon>
 </template>
 
@@ -31,7 +31,7 @@ import { Player, PlayerQueue, RepeatMode } from "@/plugins/api/interfaces";
 import { isQueueInfiniteStream } from "@/plugins/api/helpers";
 import { $t } from "@/plugins/i18n";
 import { computed, toRef } from "vue";
-import { IconRepeat, IconRepeatOff, IconRepeatOnce } from "@tabler/icons-vue";
+import { Repeat, Repeat1, RepeatOff } from "@lucide/vue";
 
 // properties
 export interface Props {

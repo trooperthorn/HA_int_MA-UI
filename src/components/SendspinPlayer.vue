@@ -295,9 +295,26 @@ onMounted(() => {
       .then(() => {
         if (unmounted) return;
 
-        // Prefer opus for bandwidth efficiency, flac as fallback
-        // (opus requires secure context which may not be available)
-        const codecs: Codec[] = ["opus", "flac"];
+        // Prefer opus for bandwidth efficiency, flac as fallback -- but only
+        // ask for opus when the browser can decode it natively.
+        //
+        // Opus decoding falls back to the bundled `opus-encdec` WASM build
+        // when WebCodecs is unavailable, and that package was last published
+        // in 2021, is pre-1.0, has a single maintainer and no newer release
+        // to move to. It decodes untrusted audio, so the less reachable it
+        // is the better. WebCodecs needs a secure context, which a Home
+        // Assistant app reached over plain http on a LAN address is not.
+        //
+        // sendspin-js already drops opus from the advertised set on Chrome
+        // and Edge when AudioDecoder is missing, but Safari is special-cased
+        // to ["pcm", "opus"] unconditionally -- so on Safari over http opus
+        // is negotiated and the WASM decoder is what runs. Asking for
+        // flac/pcm instead closes that path in every browser. Safari has no
+        // flac support, hence pcm in the fallback list.
+        const hasNativeOpus = typeof AudioDecoder !== "undefined";
+        const codecs: Codec[] = hasNativeOpus
+          ? ["opus", "flac"]
+          : ["flac", "pcm"];
 
         console.debug(
           `Sendspin: Using codecs [${codecs.join(", ")}] for ${isDirectConnection() ? "direct" : "remote"} connection`,

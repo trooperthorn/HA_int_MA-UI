@@ -167,7 +167,7 @@
           <v-item
             v-if="showDiscNumber && 'disc_number' in item && item.disc_number"
           >
-            <v-icon style="margin-left: 5px" icon="md:album" />
+            <Disc3 class="disc-number-icon" :size="16" />
             {{ item.disc_number }}
           </v-item>
         </v-item-group>
@@ -330,7 +330,7 @@ import {
 import { getBreakpointValue } from "@/plugins/breakpoint";
 import { $t } from "@/plugins/i18n";
 import { useMediaQuery } from "@vueuse/core";
-import { Play } from "@lucide/vue";
+import { Disc3, Play } from "@lucide/vue";
 import { computed } from "vue";
 import { VTooltip } from "vuetify/components";
 import MediaItemThumb from "./MediaItemThumb.vue";
@@ -478,6 +478,13 @@ const onPlayClick = function (evt: PointerEvent) {
 </script>
 
 <style scoped>
+/* replaces a v-icon that carried margin-left inline; vertical-align keeps the
+   glyph on the text baseline beside the disc number */
+.disc-number-icon {
+  margin-left: 5px;
+  vertical-align: text-bottom;
+}
+
 .list-item-main.listitem-selecting {
   padding: 7px 0 !important;
 }

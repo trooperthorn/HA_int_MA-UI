@@ -24,8 +24,8 @@
           :title="favoriteButtonLabel"
           @click="api.toggleFavorite(item)"
         >
-          <IconHeartFilled v-if="item.favorite" :size="20" />
-          <IconHeart v-else :stroke-width="2" :size="20" />
+          <Heart v-if="item.favorite" :size="20" fill="currentColor" />
+          <Heart v-else :stroke-width="2" :size="20" />
         </button>
       </template>
     </Toolbar>
@@ -138,8 +138,7 @@ import {
 import { isPhoneSizedScreen } from "@/plugins/breakpoint";
 import { $t } from "@/plugins/i18n";
 import { store } from "@/plugins/store";
-import { ArrowLeft, Radio, Rows3, Shuffle } from "@lucide/vue";
-import { IconHeart, IconHeartFilled } from "@tabler/icons-vue";
+import { ArrowLeft, Heart, Radio, Rows3, Shuffle } from "@lucide/vue";
 import {
   computed,
   ref,

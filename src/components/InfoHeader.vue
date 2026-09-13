@@ -376,8 +376,8 @@
                 :title="favoriteButtonLabel"
                 @click="api.toggleFavorite(item)"
               >
-                <IconHeartFilled v-if="item.favorite" :size="24" />
-                <IconHeart v-else :stroke-width="2" :size="24" />
+                <Heart v-if="item.favorite" :size="24" fill="currentColor" />
+                <Heart v-else :stroke-width="2" :size="24" />
               </button>
               <!-- details can be reached out of library context, so always show
               the membership badge (bookshelf when in library, else source) -->
@@ -543,8 +543,7 @@ import { authManager } from "@/plugins/auth";
 import { eventbus } from "@/plugins/eventbus";
 import { $t } from "@/plugins/i18n";
 import { store } from "@/plugins/store";
-import { ArrowLeft, Merge, Trash2 } from "@lucide/vue";
-import { IconHeart, IconHeartFilled } from "@tabler/icons-vue";
+import { ArrowLeft, Heart, Merge, Trash2 } from "@lucide/vue";
 import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useDisplay } from "vuetify";
