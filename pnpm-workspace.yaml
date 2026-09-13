@@ -9,3 +9,26 @@ minimumReleaseAgeExclude:
 
 overrides:
   "minimatch@9": "9.0.9"
+  # Open advisories, all in build-time transitives; none of these ship in the
+  # bundle. Each selector is scoped to the affected range so unaffected copies
+  # keep their resolved version, and each replacement is bounded below the next
+  # major so an override never carries a dependency past the range its parent
+  # declares. Ranges rather than exact pins, so an upstream bump still resolves
+  # instead of conflicting.
+  #
+  # SSRF and host confusion, via vite-plugin-pwa -> workbox-build -> ajv.
+  # Bounded to 3.x: ajv 8 declares fast-uri ^3.0.1, and an unbounded ">=3.1.6"
+  # silently resolves 4.x past that.
+  "fast-uri@<3.1.6": ">=3.1.6 <4"
+  # unbounded memory growth; prototype write via custom stats, via @babel/core
+  "browserslist@<4.28.7": ">=4.28.7 <5"
+  # process termination on invalid input, via browserslist
+  "baseline-browser-mapping@<2.11.0": ">=2.11.0 <3"
+  # infinite loop when size is zero, via vite -> postcss
+  "nanoid@<3.3.18": ">=3.3.18 <4"
+  #
+  # Not overridden: esbuild >=0.27.3 <0.28.1 (dev server arbitrary file read on
+  # Windows). esbuild is a *peer* of vite, so an override rewrites the peer
+  # range rather than resolving a package, and the lockfile ends up asking for a
+  # version nothing provides. It is the one low-severity advisory of the set;
+  # the clean fix is bumping vite itself, which Dependabot will offer.

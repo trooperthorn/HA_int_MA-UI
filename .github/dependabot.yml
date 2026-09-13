@@ -6,7 +6,11 @@ updates:
     schedule:
       interval: weekly
     ignore:
+      # The 3 -> 4 major is a migration across the whole UI and is deferred
+      # deliberately; patch and minor releases still need to come through, so
+      # a security fix on the 3.x line is not suppressed along with it.
       - dependency-name: "vuetify"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
