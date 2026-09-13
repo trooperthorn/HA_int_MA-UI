@@ -109,6 +109,67 @@ describe("track columns", () => {
     ).toEqual(["1", "3", "2"]);
   });
 
+  it("keeps album order within an album when sorting by album", () => {
+    const album = (name: string) => ({
+      item_id: name,
+      provider: "library",
+      name,
+      version: "",
+      uri: `library://album/${name}`,
+      external_ids: [],
+      is_playable: true,
+      media_type: "album" as never,
+      available: true,
+    });
+    const rows = [
+      track({
+        item_id: "b3",
+        album: album("B"),
+        disc_number: 1,
+        track_number: 3,
+      }),
+      track({
+        item_id: "a2",
+        album: album("A"),
+        disc_number: 2,
+        track_number: 1,
+      }),
+      track({
+        item_id: "b1",
+        album: album("B"),
+        disc_number: 1,
+        track_number: 1,
+      }),
+      track({
+        item_id: "a1",
+        album: album("A"),
+        disc_number: 1,
+        track_number: 9,
+      }),
+      track({
+        item_id: "b2",
+        album: album("B"),
+        disc_number: 1,
+        track_number: 2,
+      }),
+    ];
+    expect(
+      sortItemsLocally(
+        rows,
+        { columnId: "album", desc: false },
+        TRACK_COLUMNS,
+      ).map((row) => row.item_id),
+    ).toEqual(["a1", "a2", "b1", "b2", "b3"]);
+    // descending flips the albums, not the tracks inside them
+    expect(
+      sortItemsLocally(
+        rows,
+        { columnId: "album", desc: true },
+        TRACK_COLUMNS,
+      ).map((row) => row.item_id),
+    ).toEqual(["b1", "b2", "b3", "a1", "a2"]);
+  });
+
   it("renders cell text from a library track", () => {
     const item = track({
       name: "Crusaders Of Death",

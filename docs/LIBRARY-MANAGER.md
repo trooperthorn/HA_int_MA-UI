@@ -197,3 +197,29 @@ navigation registry, `en.json`, `Settings.vue` (tree layout),
 sync clusters, audio delay; helpers in `src/helpers/{hidden_players,
 player_sync_clusters,sync_adjust}.ts`). `ItemsListing.vue` is not
 modified. The phase plan that built it is `LIBRARY-MANAGER-PLAN.md`.
+
+## Sync issues
+
+The music sync tasks log every file they could not import cleanly. The
+source tree reads those logs (`tasks/list`, kept current through
+`TASKS_UPDATED`) and shows a **Sync issues** node while there is anything to
+fix, with one folder per kind of failure:
+
+| Folder | Log line |
+| --- | --- |
+| Missing tag: *tag* | `<file> is missing ID3 tag [<tag>], using … as fallback` |
+| CUE sheet track skipped | `CUE sheet <file>.cue track N … ; skipping` (merged per sheet) |
+| CUE sheet without its audio file | task failure `Failed to process <file>.cue: Audio file not found for CUE sheet` |
+| Invalid MusicBrainz id | `Ignoring invalid MusicBrainz identifier '…' in <file>` |
+| Failed to import | any other `Failed to process <file>: …` failure |
+
+Selecting a folder lists the files in the grid with an **Issue** column
+(the log message) and the **Path** column shown. Audio files the library
+holds are looked up on their provider by path, so they are real tracks with
+the usual actions; CUE sheets, `album.nfo` files and files that never
+imported get a placeholder row (not playable) that still shows where they
+are. A sync that changes the log lights the grid's refresh button.
+
+Parsing lives in `src/library-manager/syncIssues.ts`; lines the parser does
+not recognise (an invalid ReplayGain value, which names no file) are left
+out.

@@ -74,6 +74,7 @@ import {
   Play,
   Speaker,
   Tag,
+  TriangleAlert,
   Users,
 } from "@lucide/vue";
 import {
@@ -92,6 +93,7 @@ import {
   useUserPreferences,
 } from "@/composables/userPreferences";
 import { onLibrarySyncCompleted } from "@/composables/useLibrarySync";
+import { useBackgroundTasks } from "@/composables/background-tasks/useBackgroundTasks";
 import { isSelectablePlayer } from "@/helpers/players";
 import { togglePlayerQueue } from "@/helpers/player_queue";
 import { api, ConnectionState } from "@/plugins/api";
@@ -104,6 +106,11 @@ import {
 } from "@/plugins/api/interfaces";
 import { store } from "@/plugins/store";
 import type { NodeFilter } from "../composables/useLibraryFilter";
+import {
+  collectSyncIssues,
+  groupSyncIssues,
+  syncIssueLabel,
+} from "../syncIssues";
 
 export interface TreeNode {
   id: string;
@@ -125,6 +132,7 @@ const emit = defineEmits<{ select: [filter: NodeFilter] }>();
 
 const { t } = useI18n();
 const { getPreference } = useUserPreferences();
+const { tasks } = useBackgroundTasks();
 
 const EXPANDED_PREFERENCE_KEY = "libraryManager.tree";
 const storedExpanded = getPreference<string[]>(EXPANDED_PREFERENCE_KEY, [
@@ -418,6 +426,46 @@ const selectablePlayerCount = computed(() =>
   selectablePlayerIds.value ? selectablePlayerIds.value.split(",").length : 0,
 );
 
+// ---- sync issues -------------------------------------------------------------
+
+// one folder per kind of failure the sync tasks logged; the whole node is
+// gone while there is nothing to fix
+const syncIssueNodes = computed<TreeNode[]>(() => {
+  const issues = collectSyncIssues(tasks.value);
+  if (issues.length === 0) return [];
+  const children = groupSyncIssues(issues).map<TreeNode>((group) => {
+    const id = `sync_issues.${group.type}`;
+    return {
+      id,
+      label: syncIssueLabel(group, t),
+      icon: FileWarning,
+      count: group.count,
+      expandable: false,
+      filter: {
+        scope: "issues",
+        node: id,
+        mediaType: MediaType.TRACK,
+        issueType: group.type,
+      },
+    };
+  });
+  return [
+    {
+      id: "sync_issues",
+      label: t("library_manager.tree.sync_issues"),
+      icon: TriangleAlert,
+      count: issues.length,
+      expandable: true,
+      children,
+      filter: {
+        scope: "issues",
+        node: "sync_issues",
+        mediaType: MediaType.TRACK,
+      },
+    },
+  ];
+});
+
 const roots = computed<TreeNode[]>(() => [
   {
     id: "now_playing",
@@ -442,10 +490,11 @@ const roots = computed<TreeNode[]>(() => [
   {
     id: "sources",
     label: t("library_manager.tree.sources"),
-    icon: Folder,
+    icon: LibraryBig,
     expandable: true,
     loadChildren: loadProviderRoots,
   },
+  ...syncIssueNodes.value,
   {
     id: "players",
     label: t("players"),

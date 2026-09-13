@@ -8,6 +8,15 @@ import {
 } from "@/plugins/api/interfaces";
 import { formatDuration, getArtistsString } from "@/helpers/utils";
 import { getListItemProviderIconDomain } from "@/plugins/api/helpers";
+import type { FilterScope } from "./composables/useLibraryFilter";
+
+// what a sync issues row carries about the failure that listed it
+export interface SyncIssueInfo {
+  type: string;
+  message: string;
+  path: string;
+  occurrences: number;
+}
 
 // Library listings carry two stats fields the item interfaces leave out
 // because they only exist for database items: seconds since epoch of the
@@ -15,6 +24,7 @@ import { getListItemProviderIconDomain } from "@/plugins/api/helpers";
 export type GridItem = MediaItemType & {
   last_played?: number;
   date_added?: string | null;
+  sync_issue?: SyncIssueInfo;
 };
 
 export type LibraryTrack = Track & {
@@ -42,7 +52,7 @@ export type TrackColumnId =
   | "popularity"
   | "menu";
 
-export type ItemColumnId = TrackColumnId | "owner" | "type";
+export type ItemColumnId = TrackColumnId | "owner" | "type" | "issue";
 
 export interface GridColumn<Id extends string = ItemColumnId> {
   id: Id;
@@ -60,6 +70,8 @@ export interface GridColumn<Id extends string = ItemColumnId> {
   text?: (item: GridItem) => string;
   // what a local sort compares when the cell shows an icon rather than text
   sortText?: (item: GridItem) => string;
+  // orders rows whose sort text ties (album order within an album)
+  sortThen?: (left: GridItem, right: GridItem) => number;
 }
 
 export type TrackColumn = GridColumn<TrackColumnId>;
@@ -68,6 +80,17 @@ const asTrack = (item: GridItem) => item as LibraryTrack;
 
 const albumOf = (item: GridItem) =>
   "album" in item ? ((item as Track).album ?? undefined) : undefined;
+
+// album order: disc, then track number
+const byDiscAndTrack = (left: GridItem, right: GridItem) =>
+  (asTrack(left).disc_number || 0) - (asTrack(right).disc_number || 0) ||
+  (asTrack(left).track_number || 0) - (asTrack(right).track_number || 0);
+
+const byAlbumThenDiscAndTrack = (left: GridItem, right: GridItem) =>
+  LOCAL_SORT_COLLATOR.compare(
+    albumOf(left)?.name ?? "",
+    albumOf(right)?.name ?? "",
+  ) || byDiscAndTrack(left, right);
 
 const filesystemMapping = (item: GridItem) =>
   "provider_mappings" in item
@@ -203,6 +226,7 @@ export const TRACK_COLUMNS: readonly TrackColumn[] = [
     align: "left",
     defaultVisible: true,
     text: (item) => albumOf(item)?.name ?? "",
+    sortThen: byDiscAndTrack,
   },
   {
     id: "album_artist",
@@ -214,6 +238,7 @@ export const TRACK_COLUMNS: readonly TrackColumn[] = [
       const album = albumOf(item);
       return album && "artists" in album ? getArtistsString(album.artists) : "";
     },
+    sortThen: byAlbumThenDiscAndTrack,
   },
   {
     id: "year",
@@ -391,11 +416,36 @@ export const BROWSE_COLUMNS: readonly GridColumn[] = [
   MENU,
 ];
 
+// the sync issues listing: the failure first, then the track columns with
+// the file path shown
+const ISSUE: GridColumn = {
+  id: "issue",
+  labelKey: "library_manager.columns.issue",
+  width: 320,
+  align: "left",
+  defaultVisible: true,
+  text: (item) => {
+    const issue = item.sync_issue;
+    if (!issue) return "";
+    return issue.occurrences > 1
+      ? `${issue.message} (×${issue.occurrences})`
+      : issue.message;
+  },
+};
+
+export const ISSUE_COLUMNS: readonly GridColumn[] = [
+  ISSUE,
+  ...TRACK_COLUMNS.map((column) =>
+    column.id === "path" ? { ...column, defaultVisible: true } : column,
+  ),
+];
+
 export function columnsForMediaType(
   mediaType: MediaType,
-  scope: "library" | "browse",
+  scope: FilterScope,
 ): readonly GridColumn[] {
   if (scope === "browse") return BROWSE_COLUMNS;
+  if (scope === "issues") return ISSUE_COLUMNS;
   switch (mediaType) {
     case MediaType.ARTIST:
       return ARTIST_COLUMNS;
@@ -456,12 +506,15 @@ export function sortItemsLocally(
   const text = column?.sortText ?? column?.text;
   if (!text) return items;
   const direction = sort.desc ? -1 : 1;
-  // the direction flips the key order only; ties keep the listing's order
+  const then = column?.sortThen;
+  // the direction flips the key order only; ties fall to the column's own
+  // secondary order (album order under an album), then the listing's
   return items
     .map((item, index) => ({ item, index, key: text(item) }))
     .sort(
       (a, b) =>
         direction * LOCAL_SORT_COLLATOR.compare(a.key, b.key) ||
+        (then ? then(a.item, b.item) : 0) ||
         a.index - b.index,
     )
     .map((entry) => entry.item);

@@ -102,6 +102,16 @@ vi.mock("@/composables/useLibrarySync", () => ({
   onLibrarySyncCompleted: () => () => {},
 }));
 
+const syncTasks = vi.hoisted(() => ({ tasks: [] as unknown[] }));
+vi.mock("@/composables/background-tasks/useBackgroundTasks", async () => {
+  const { computed } = await import("vue");
+  return {
+    useBackgroundTasks: () => ({
+      tasks: computed(() => syncTasks.tasks),
+    }),
+  };
+});
+
 vi.mock("@/helpers/player_queue", () => ({
   togglePlayerQueue: mocks.togglePlayerQueue,
 }));
@@ -376,6 +386,70 @@ describe("SourceTree", () => {
       browsePath: "radiobrowser--1://",
       provider: ["radiobrowser--1"],
     });
+  });
+
+  it("lists the sync issues by kind of failure and hides them when there are none", async () => {
+    expect(rowLabels(mountTree())).not.toContain(
+      "library_manager.tree.sync_issues",
+    );
+
+    syncTasks.tasks = [
+      {
+        id: "music_sync_filesystem_local--1_track",
+        status: "partial_success",
+        metadata: {
+          task_domain: "music_sync",
+          provider_instance: "filesystem_local--1",
+          provider_domain: "filesystem_local",
+          provider_name: "Filesystem",
+        },
+        logs: [
+          "2026-09-12 20:52:37 WARNING [music_assistant.Filesystem] Lorde/Melodrama/01 - Green Light.flac is missing ID3 tag [albumartist], using Various Artists as fallback",
+          "2026-09-12 20:52:38 WARNING [music_assistant.Filesystem] Lorde/Pure Heroine/01 - Tennis Court.flac is missing ID3 tag [albumartist], using Various Artists as fallback",
+        ],
+        failure_messages: [
+          "Failed to process Aaron Lewis/Town Line/Town Line.cue: Audio file not found for CUE sheet: Aaron Lewis/Town Line/Town Line.cue",
+        ],
+      },
+    ];
+    const wrapper = mountTree();
+    await flushPromises();
+
+    const rows = wrapper.findAll(".source-tree__row");
+    const text = rows.map((row) => {
+      const label = row.find(".source-tree__label").text();
+      const count = row.find(".source-tree__count");
+      return count.exists() ? `${label} ${count.text()}` : label;
+    });
+    expect(text).toContain("library_manager.tree.sync_issues 3");
+
+    // the node opens to one folder per kind of failure
+    const issuesRow = rows.find(
+      (row) =>
+        row.find(".source-tree__label").text() ===
+        "library_manager.tree.sync_issues",
+    )!;
+    await issuesRow.find(".source-tree__chevron").trigger("click");
+    await flushPromises();
+    const labels = rowLabels(wrapper);
+    expect(labels).toContain("library_manager.sync_issues.missing_tag");
+    expect(labels).toContain("library_manager.sync_issues.cue_audio_missing");
+
+    const missing = wrapper
+      .findAll(".source-tree__row")
+      .find(
+        (row) =>
+          row.find(".source-tree__label").text() ===
+          "library_manager.sync_issues.missing_tag",
+      )!;
+    await missing.trigger("click");
+    expect(wrapper.emitted("select")?.at(-1)?.[0]).toEqual({
+      scope: "issues",
+      node: "sync_issues.missing_tag:albumartist",
+      mediaType: MediaType.TRACK,
+      issueType: "missing_tag:albumartist",
+    });
+    syncTasks.tasks = [];
   });
 
   it("runs actions for now playing and players", async () => {

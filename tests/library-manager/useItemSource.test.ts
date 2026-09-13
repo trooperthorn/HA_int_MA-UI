@@ -4,7 +4,11 @@ import {
   useItemSource,
 } from "@/library-manager/composables/useItemSource";
 import type { LibraryFilter } from "@/library-manager/composables/useLibraryFilter";
-import { MediaType, type Track } from "@/plugins/api/interfaces";
+import {
+  MediaType,
+  type BackgroundTask,
+  type Track,
+} from "@/plugins/api/interfaces";
 import type { MusicAssistantApi } from "@/plugins/api";
 import { flushPromises } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -18,10 +22,12 @@ const {
   mockGetLibraryArtistsCount,
   mockBrowse,
   mockGetPlaylistTracks,
+  mockGetTrack,
   mockSubscribe,
   syncListeners,
 } = vi.hoisted(() => ({
   mockGetPlaylistTracks: vi.fn<MusicAssistantApi["getPlaylistTracks"]>(),
+  mockGetTrack: vi.fn<MusicAssistantApi["getTrack"]>(),
   mockGetLibraryTracks: vi.fn<MusicAssistantApi["getLibraryTracks"]>(),
   mockGetLibraryTracksCount:
     vi.fn<MusicAssistantApi["getLibraryTracksCount"]>(),
@@ -41,6 +47,7 @@ vi.mock("@/plugins/api", () => {
     getLibraryArtistsCount: mockGetLibraryArtistsCount,
     browse: mockBrowse,
     getPlaylistTracks: mockGetPlaylistTracks,
+    getTrack: mockGetTrack,
     subscribe: mockSubscribe,
   };
   return { api, default: api };
@@ -410,6 +417,71 @@ describe("useItemSource", () => {
     expect(source.rows.value.map((row) => row.item_id)).toEqual(["t1"]);
     expect(source.allLoaded.value).toBe(true);
     expect(mockGetLibraryTracks).not.toHaveBeenCalled();
+  });
+
+  it("lists the sync issues from the tasks and flags a changed log", async () => {
+    mockGetTrack.mockResolvedValue(
+      track({ item_id: "42", name: "Green Light" }),
+    );
+    const tasks = ref<BackgroundTask[]>([
+      {
+        id: "music_sync_filesystem_local--1_track",
+        metadata: {
+          task_domain: "music_sync",
+          provider_instance: "filesystem_local--1",
+          provider_domain: "filesystem_local",
+          provider_name: "Filesystem",
+        },
+        logs: [
+          "2026-09-12 20:52:37 WARNING [music_assistant.Filesystem] Lorde/Melodrama/01 - Green Light.flac is missing ID3 tag [albumartist], using Various Artists as fallback",
+        ],
+        failure_messages: [
+          "Failed to process Aaron Lewis/Town Line/Town Line.cue: Audio file not found for CUE sheet: Aaron Lewis/Town Line/Town Line.cue",
+        ],
+      } as unknown as BackgroundTask,
+    ]);
+    filter.value = {
+      ...filter.value,
+      scope: "issues",
+      node: "sync_issues.missing_tag:albumartist",
+      issueType: "missing_tag:albumartist",
+    };
+    const source = scope.run(() => useItemSource(filter, { tasks }))!;
+    await flushPromises();
+
+    expect(mockGetLibraryTracks).not.toHaveBeenCalled();
+    expect(source.rows.value.map((row) => row.item_id)).toEqual(["42"]);
+    expect(source.rows.value[0].sync_issue?.type).toBe(
+      "missing_tag:albumartist",
+    );
+    expect(source.total.value).toBe(1);
+    expect(source.allLoaded.value).toBe(true);
+    expect(source.updateAvailable.value).toBe(false);
+
+    // the whole node lists every kind
+    filter.value = {
+      ...filter.value,
+      node: "sync_issues",
+      issueType: undefined,
+    };
+    await flushPromises();
+    expect(source.rows.value.map((row) => row.name)).toEqual([
+      "Green Light",
+      "Town Line.cue",
+    ]);
+
+    // a sync that logs a new issue makes the listing stale
+    tasks.value = [
+      {
+        ...tasks.value[0],
+        logs: [
+          ...tasks.value[0].logs,
+          "2026-09-12 20:52:38 WARNING [music_assistant.Filesystem] Lorde/Pure Heroine/01 - Tennis Court.flac is missing ID3 tag [albumartist], using Various Artists as fallback",
+        ],
+      },
+    ];
+    await flushPromises();
+    expect(source.updateAvailable.value).toBe(true);
   });
 
   it("keeps pulling raw pages until a files-to-edit page is full", async () => {
