@@ -2661,7 +2661,15 @@
         "filter_by_artist": "Filter by artist",
         "filter_by_album": "Filter by album",
         "filter_by_genre": "Filter by genre",
-        "reset_column_widths": "Reset column widths"
+        "reset_column_widths": "Reset column widths",
+        "mobile": {
+            "create": "Create",
+            "sort": "Sort",
+            "sort_recents": "Recents",
+            "sort_alphabetical": "Alphabetical",
+            "grid": "Grid view",
+            "list": "List view"
+        }
     },
     "preference_save_failed": "Your preference could not be saved and was set back."
 }

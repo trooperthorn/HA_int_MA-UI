@@ -223,3 +223,16 @@ are. A sync that changes the log lights the grid's refresh button.
 Parsing lives in `src/library-manager/syncIssues.ts`; lines the parser does
 not recognise (an invalid ReplayGain value, which names no file) are left
 out.
+
+## On a phone
+
+`/library` on a phone-sized screen (the Home Assistant app included) does
+not open the desktop manager. `LibraryEntry.vue` picks
+`mobile/MobileLibraryView.vue` instead: one list over playlists, podcasts,
+audiobooks, albums and artists (100 of each, newest first), a chip per kind
+to narrow it, a **Recents** / **Alphabetical** sort (recents = last played
+or date added), list or grid layout, tap to open, hold or right-click for
+the item menu. The search icon opens the command center; the plus creates a
+playlist. Sort and layout are remembered in the `libraryManager.mobile`
+preference.
+
