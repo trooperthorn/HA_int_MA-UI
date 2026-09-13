@@ -3,6 +3,7 @@
 import {
   showContextMenuForMediaItem,
   showPlayMenuForMediaItem,
+  type ContextMenuOptions,
 } from "@/layouts/default/ItemContextMenu.vue";
 import { api } from "@/plugins/api";
 import { itemIsAvailable } from "@/plugins/api/helpers";
@@ -171,10 +172,13 @@ export const handleMenuBtnClick = function (
   parentItem?: MediaItemType,
   includePlayMenuItems = true,
   sortBy?: string,
+  options?: ContextMenuOptions,
 ) {
   const mediaItems: MediaItemTypeOrItemMapping[] = Array.isArray(item)
     ? item
     : [item];
+  // the options only travel when a caller set them, so callers without any
+  // still make the same call as before
   showContextMenuForMediaItem(
     mediaItems,
     parentItem,
@@ -183,6 +187,7 @@ export const handleMenuBtnClick = function (
     includePlayMenuItems,
     includePlayMenuItems,
     sortBy,
+    ...(options ? [options] : []),
   );
 };
 

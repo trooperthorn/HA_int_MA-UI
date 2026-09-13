@@ -22,6 +22,15 @@
           :aria-sort="ariaSort(column.id)"
           @click="toggleSort(column.id)"
         >
+          <!-- drag the right edge to resize; double-click puts the default back -->
+          <span
+            v-if="column.id !== 'menu'"
+            class="track-grid__resizer"
+            :data-resize="column.id"
+            @pointerdown.stop.prevent="startResize($event, column)"
+            @click.stop
+            @dblclick.stop="emit('resizeColumn', column.id, undefined)"
+          ></span>
           <template v-if="column.id === 'favorite'">
             <Heart :size="14" />
           </template>
@@ -52,6 +61,10 @@
                 >
                   {{ $t(option.labelKey) }}
                 </DropdownMenuCheckboxItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem @select="emit('resetColumnWidths')">
+                  {{ $t("library_manager.reset_column_widths") }}
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </template>
@@ -188,10 +201,12 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import type { ContextMenuItem } from "@/helpers/context_menu_item";
 import {
   handleMediaItemClick,
   handleMenuBtnClick,
@@ -234,8 +249,15 @@ const props = withDefaults(
     // columns without a server sort key sort in the browser (the owner
     // pages the whole listing in first)
     localSortable?: boolean;
+    // entries the owner adds at the top of a row's menu
+    menuItems?: (targets: GridItem[]) => ContextMenuItem[];
   }>(),
-  { loadAhead: 50, parentItem: undefined, localSortable: false },
+  {
+    loadAhead: 50,
+    parentItem: undefined,
+    localSortable: false,
+    menuItems: undefined,
+  },
 );
 
 const emit = defineEmits<{
@@ -246,6 +268,9 @@ const emit = defineEmits<{
   focusSearch: [];
   jumpToLetter: [letters: string];
   openFolder: [folder: BrowseFolder];
+  // a dragged header edge; undefined puts the default width back
+  resizeColumn: [id: string, width: number | undefined];
+  resetColumnWidths: [];
 }>();
 
 const gridRef = ref<HTMLElement | null>(null);
@@ -257,14 +282,59 @@ const toggleableColumns = computed(() =>
   TRACK_COLUMNS.filter((column) => !column.fixed),
 );
 
+// widths while a header edge is being dragged; the owner's columns carry
+// the width once the drag is committed
+const dragWidths = shallowRef<Record<string, number>>({});
+const MIN_COLUMN_WIDTH = 40;
+
+const widthOf = (column: GridColumn) =>
+  dragWidths.value[column.id] ?? column.width;
+
 const gridTemplate = computed(() => ({
   gridTemplateColumns: props.visibleColumns
     .map((column) =>
-      column.grow ? `minmax(${column.width}px, 1fr)` : `${column.width}px`,
+      column.grow
+        ? `minmax(${widthOf(column)}px, 1fr)`
+        : `${widthOf(column)}px`,
     )
     .join(" "),
-  minWidth: `${props.visibleColumns.reduce((sum, column) => sum + column.width, 0)}px`,
+  minWidth: `${props.visibleColumns.reduce((sum, column) => sum + widthOf(column), 0)}px`,
 }));
+
+function startResize(event: PointerEvent, column: GridColumn) {
+  const handle = event.currentTarget as HTMLElement | null;
+  if (!handle) return;
+  const startX = event.clientX;
+  const startWidth = widthOf(column);
+  handle.setPointerCapture?.(event.pointerId);
+  const move = (moveEvent: PointerEvent) => {
+    const width = Math.max(
+      MIN_COLUMN_WIDTH,
+      Math.round(startWidth + moveEvent.clientX - startX),
+    );
+    dragWidths.value = { ...dragWidths.value, [column.id]: width };
+  };
+  const up = () => {
+    handle.removeEventListener("pointermove", move);
+    handle.removeEventListener("pointerup", up);
+    handle.removeEventListener("pointercancel", up);
+    const width = dragWidths.value[column.id];
+    const { [column.id]: _dropped, ...rest } = dragWidths.value;
+    dragWidths.value = rest;
+    if (width !== undefined && width !== column.width) {
+      emit("resizeColumn", column.id, width);
+    }
+  };
+  handle.addEventListener("pointermove", move);
+  handle.addEventListener("pointerup", up);
+  handle.addEventListener("pointercancel", up);
+}
+
+// what the owner wants ahead of the standard entries
+const menuOptions = (targets: GridItem[]) => {
+  const extraItems = props.menuItems?.(targets) ?? [];
+  return extraItems.length > 0 ? { extraItems } : undefined;
+};
 
 const sort = computed<GridSort | undefined>(() =>
   sortByToGridSort(props.sortBy, props.visibleColumns),
@@ -477,13 +547,15 @@ function onRowMenu(event: MouseEvent, index: number) {
   const track = props.rows[index];
   if (!track) return;
   if (!selectedUris.value.has(track.uri)) selectOnly(index);
+  const targets = menuTargets(index);
   handleMenuBtnClick(
-    menuTargets(index),
+    targets,
     event.clientX,
     event.clientY,
     props.parentItem,
     true,
     props.sortBy,
+    menuOptions(targets),
   );
 }
 
@@ -493,13 +565,15 @@ function onMenuButton(event: MouseEvent, index: number) {
   const track = props.rows[index];
   if (!track) return;
   if (!selectedUris.value.has(track.uri)) selectOnly(index);
+  const targets = menuTargets(index);
   handleMenuBtnClick(
-    menuTargets(index),
+    targets,
     rect ? rect.left : event.clientX,
     rect ? rect.bottom : event.clientY,
     props.parentItem,
     true,
     props.sortBy,
+    menuOptions(targets),
   );
 }
 
@@ -582,13 +656,15 @@ function onKeydown(event: KeyboardEvent) {
           `[aria-rowindex="${focused + 1}"]`,
         );
         const rect = rowEl?.getBoundingClientRect();
+        const targets = menuTargets(focused);
         handleMenuBtnClick(
-          menuTargets(focused),
+          targets,
           rect ? rect.left + 48 : 0,
           rect ? rect.bottom : 0,
           props.parentItem,
           true,
           props.sortBy,
+          menuOptions(targets),
         );
         return;
       }
@@ -762,6 +838,32 @@ defineExpose({
 
 .track-grid__cell--sortable {
   cursor: pointer;
+}
+
+.track-grid__cell--header {
+  position: relative;
+}
+
+.track-grid__resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 1;
+}
+
+.track-grid__resizer:hover,
+.track-grid__resizer:active {
+  background: linear-gradient(
+    to right,
+    transparent 2px,
+    rgba(var(--v-theme-primary), 0.7) 2px,
+    rgba(var(--v-theme-primary), 0.7) 5px,
+    transparent 5px
+  );
 }
 
 .track-grid__cell--sortable:hover {
