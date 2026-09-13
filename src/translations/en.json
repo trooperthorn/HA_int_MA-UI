@@ -2563,7 +2563,7 @@
     "command_center_keep_typing": "Keep typing to search...",
     "screens": "Screens",
     "library_manager": {
-        "title": "Library manager",
+        "title": "Music Library",
         "search_placeholder": "Search library - title, artist, album",
         "favorites_only": "Favorites only",
         "columns": {

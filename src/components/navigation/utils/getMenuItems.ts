@@ -1,17 +1,12 @@
-import ArtistIcon from "@/components/icons/ArtistIcon.vue";
-import GenreIcon from "@/components/icons/GenreIcon.vue";
 import { setUserPreference } from "@/composables/userPreferences";
 import { store } from "@/plugins/store";
 import {
   BookAudio,
   Compass,
-  Disc3,
   Droplet,
   Folder,
   LayoutList,
-  ListMusic,
   MicVocal,
-  Music2,
   PartyPopper,
   Podcast,
   Radio,
@@ -21,7 +16,10 @@ import {
 } from "@lucide/vue";
 import { Component } from "vue";
 
-export type MenuGroup = "explore" | "library" | "plugins" | "system";
+// one flat navigation section plus settings; the per-media-type pages
+// (artists, albums, tracks, playlists, genres) live inside the library
+// manager and are no longer menu items
+export type MenuGroup = "library" | "system";
 
 export type MenuItemAction = "command-center";
 
@@ -83,31 +81,6 @@ interface MenuItemDefinition {
 // Registry order is the default menu order.
 const MENU_ITEM_REGISTRY: MenuItemDefinition[] = [
   {
-    id: "discover",
-    label: "discover",
-    icon: Compass,
-    path: "/discover",
-    isLibraryNode: false,
-    group: "explore",
-  },
-  {
-    id: "search",
-    label: "search",
-    icon: Search,
-    path: "",
-    isLibraryNode: false,
-    group: "explore",
-    action: "command-center",
-  },
-  {
-    id: "browse",
-    label: "browse",
-    icon: Folder,
-    path: "/browse",
-    isLibraryNode: true,
-    group: "explore",
-  },
-  {
     id: "librarymanager",
     label: "library_manager.title",
     icon: LayoutList,
@@ -116,34 +89,44 @@ const MENU_ITEM_REGISTRY: MenuItemDefinition[] = [
     group: "library",
   },
   {
-    id: "artists",
-    label: "artists",
-    icon: ArtistIcon,
-    path: "/artists",
+    id: "party",
+    label: "party_mode",
+    icon: PartyPopper,
+    path: "/party",
+    isLibraryNode: false,
+    group: "library",
+    available: () => store.enabledPlugins.has("party"),
+  },
+  {
+    id: "radios",
+    label: "radios",
+    icon: Radio,
+    path: "/radios",
     isLibraryNode: true,
     group: "library",
   },
   {
-    id: "albums",
-    label: "albums",
-    icon: Disc3,
-    path: "/albums",
-    isLibraryNode: true,
+    id: "discover",
+    label: "discover",
+    icon: Compass,
+    path: "/discover",
+    isLibraryNode: false,
     group: "library",
   },
   {
-    id: "tracks",
-    label: "tracks",
-    icon: Music2,
-    path: "/tracks",
-    isLibraryNode: true,
+    id: "search",
+    label: "search",
+    icon: Search,
+    path: "",
+    isLibraryNode: false,
     group: "library",
+    action: "command-center",
   },
   {
-    id: "playlists",
-    label: "playlists",
-    icon: ListMusic,
-    path: "/playlists",
+    id: "browse",
+    label: "browse",
+    icon: Folder,
+    path: "/browse",
     isLibraryNode: true,
     group: "library",
   },
@@ -166,37 +149,12 @@ const MENU_ITEM_REGISTRY: MenuItemDefinition[] = [
     disabled: () => store.libraryPodcastsCount === 0,
   },
   {
-    id: "radios",
-    label: "radios",
-    icon: Radio,
-    path: "/radios",
-    isLibraryNode: true,
-    group: "library",
-  },
-  {
-    id: "genres",
-    label: "genres",
-    icon: GenreIcon,
-    path: "/genres",
-    isLibraryNode: true,
-    group: "library",
-  },
-  {
-    id: "party",
-    label: "party_mode",
-    icon: PartyPopper,
-    path: "/party",
-    isLibraryNode: false,
-    group: "plugins",
-    available: () => store.enabledPlugins.has("party"),
-  },
-  {
     id: "music_quiz",
     label: "providers.music_quiz.title",
     icon: MicVocal,
     path: "/music-quiz",
     isLibraryNode: false,
-    group: "plugins",
+    group: "library",
     available: () => store.enabledPlugins.has("music_quiz"),
   },
   {
@@ -205,7 +163,7 @@ const MENU_ITEM_REGISTRY: MenuItemDefinition[] = [
     icon: Sparkles,
     path: "/ai-radio",
     isLibraryNode: false,
-    group: "plugins",
+    group: "library",
     available: () => store.enabledPlugins.has("ai_radio"),
   },
   {
@@ -214,7 +172,7 @@ const MENU_ITEM_REGISTRY: MenuItemDefinition[] = [
     icon: Droplet,
     path: "/visualizer",
     isLibraryNode: false,
-    group: "plugins",
+    group: "library",
     available: () => store.enabledPlugins.has("milkdrop_visualizer"),
   },
   {

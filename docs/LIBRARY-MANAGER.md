@@ -1,7 +1,7 @@
 # Library manager
 
 The library manager is a desktop view for large local collections. It
-lives at `/library` ("Library manager" in the navigation) and replaces the
+lives at `/library` ("Music Library" in the navigation) and replaces the
 tile grids and one-facet filters with the layout of a desktop music
 manager: a source tree on the left, a genre / artist / album browser
 above a dense sortable track list in the middle, and the Now Playing

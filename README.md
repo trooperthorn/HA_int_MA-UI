@@ -18,7 +18,7 @@ Assistant server, so nothing has to be built by hand:
    so only one can run. The data directory is separate; export playlists or
    settings first if you want to carry them over.
 3. **Install "Music Assistant (Library Manager)"** from the store, start it
-   and open its web UI. The manager is at `/library` ("Library manager" in
+   and open its web UI. The manager is at `/library` ("Music Library" in
    the navigation).
 4. **Point the Music Assistant integration** in Home Assistant at the new
    app (same address and port as before).
