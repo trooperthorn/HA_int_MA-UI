@@ -318,9 +318,14 @@ describe("TrackGrid", () => {
   });
 
   it("asks the source to jump when no loaded row starts with the letters", async () => {
+    vi.useFakeTimers();
     const wrapper = mountGrid();
     const grid = wrapper.find("[role=grid]");
     await grid.trigger("keydown", { key: "z" });
+    // the source is asked once the letters settle
+    expect(wrapper.emitted("jumpToLetter")).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(200);
+    vi.useRealTimers();
     expect(wrapper.emitted("jumpToLetter")?.[0]).toEqual(["z"]);
     expect(wrapper.emitted("update:selection")).toBeUndefined();
   });

@@ -63,7 +63,7 @@
         variant="outline"
         size="sm"
         class="h-8"
-        @click="source.reload()"
+        @click="refreshKeepingPlace()"
       >
         <RefreshCw :size="14" class="mr-2" />
         {{ $t("tooltip.refresh_new_content") }}
@@ -250,7 +250,14 @@ import {
   X,
 } from "@lucide/vue";
 import { SplitterGroup, SplitterPanel, SplitterResizeHandle } from "reka-ui";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import { useI18n } from "vue-i18n";
 import { useRouter } from "vue-router";
 import { Button } from "@/components/ui/button";
@@ -494,6 +501,22 @@ const displayRows = computed<GridItem[]>(() => {
   return sortItemsLocally(source.rows.value, local, columns.value);
 });
 
+// a refresh reloads the same listing; the grid returns to where it was
+// once the first page is back
+function refreshKeepingPlace() {
+  const top = grid.value?.scrollTop() ?? 0;
+  source.reload();
+  if (top <= 0) return;
+  const stop = watch(
+    () => source.rows.value.length,
+    (length) => {
+      if (length === 0) return;
+      stop();
+      void nextTick(() => grid.value?.scrollTo(top));
+    },
+  );
+}
+
 async function jumpToLetter(letters: string) {
   const index = await source.jumpToLetter(letters);
   if (index !== undefined) grid.value?.scrollToIndex(index);
@@ -583,7 +606,7 @@ useKeymap({
     goGenres: () => selectNode(LIBRARY_NODES.genres),
     goPlaylists: () => selectNode(LIBRARY_NODES.playlists),
     sortByColumn: (column) => grid.value?.sortByIndex(column),
-    refresh: () => source.reload(),
+    refresh: () => refreshKeepingPlace(),
     toggleStrip: () => void setShowStrip(!showStrip.value),
     toggleQueuePane: () => void setShowQueue(!showQueue.value),
     showHelp: () => {

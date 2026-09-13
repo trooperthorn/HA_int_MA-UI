@@ -1,4 +1,8 @@
 import { computed } from "vue";
+
+// a splitter drag reports every frame; the preference write waits for the
+// drag to settle
+const SAVE_DELAY_MS = 300;
 import {
   setUserPreference,
   useUserPreferences,
@@ -51,12 +55,19 @@ export function usePaneLayout() {
     setItem(name: string, value: string): void {
       if (storage.getItem(name) === value) return;
       pending[name] = value;
-      void setUserPreference(PANE_LAYOUT_PREFERENCE_KEY, {
-        ...preference.value,
-        groups: { ...preference.value.groups, [name]: value },
-      });
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(flushSizes, SAVE_DELAY_MS);
     },
   };
+
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  function flushSizes() {
+    saveTimer = undefined;
+    void setUserPreference(PANE_LAYOUT_PREFERENCE_KEY, {
+      ...preference.value,
+      groups: { ...preference.value.groups, ...pending },
+    });
+  }
 
   const flag = (key: PaneFlag) =>
     computed(() => preference.value[key] !== false);

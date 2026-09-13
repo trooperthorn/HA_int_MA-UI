@@ -67,7 +67,7 @@
       >
         <div
           v-for="row in virtualRows"
-          :key="row.index"
+          :key="row.item?.queue_item_id ?? `slot-${row.index}`"
           :ref="measureRow"
           :data-index="row.index"
           class="queue-pane__row"

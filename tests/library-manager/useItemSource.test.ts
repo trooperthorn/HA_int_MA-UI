@@ -1,9 +1,10 @@
 import {
   TRACK_PAGE_SIZE,
+  filterKey,
   useItemSource,
 } from "@/library-manager/composables/useItemSource";
 import type { LibraryFilter } from "@/library-manager/composables/useLibraryFilter";
-import { MediaType } from "@/plugins/api/interfaces";
+import { MediaType, type Track } from "@/plugins/api/interfaces";
 import type { MusicAssistantApi } from "@/plugins/api";
 import { flushPromises } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -226,6 +227,65 @@ describe("useItemSource", () => {
     const offsets = mockGetLibraryTracks.mock.calls.map((call) => call[3]);
     expect(offsets.length).toBeLessThan(7);
     expect(await source.jumpToLetter("q")).toBeUndefined();
+  });
+
+  it("keeps paging after a short last page landed out of order", async () => {
+    // page 1 is short; a jump ahead loads it before page 0
+    const total = TRACK_PAGE_SIZE + 30;
+    mockGetLibraryTracks.mockImplementation(async (...args) => {
+      const offset = args[3] ?? 0;
+      return page(
+        offset,
+        Math.max(0, Math.min(TRACK_PAGE_SIZE, total - offset)),
+      );
+    });
+    mockGetLibraryTracksCount.mockResolvedValue(total);
+    filter.value = { ...filter.value, favoritesOnly: true };
+    const source = scope.run(() => useItemSource(filter))!;
+    // let the count land but hold page 0 back by asking for page 1 first
+    source.ensureLoaded(TRACK_PAGE_SIZE + 10);
+    await flushPromises();
+
+    expect(source.total.value).toBe(total);
+    expect(source.rows.value).toHaveLength(total);
+    expect(source.allLoaded.value).toBe(true);
+    expect(mockGetLibraryTracks).toHaveBeenCalledTimes(2);
+    expect(source.rows.value[5]?.name).toBe("Track 5");
+  });
+
+  it("does not let a superseded page response cancel the fresh one", async () => {
+    let releaseFirst: (items: Track[]) => void = () => {};
+    mockGetLibraryTracks
+      .mockImplementationOnce(
+        () => new Promise<Track[]>((resolve) => (releaseFirst = resolve)),
+      )
+      .mockResolvedValue(page(0, 3));
+    const source = scope.run(() => useItemSource(filter))!;
+    await flushPromises();
+    source.reload();
+    releaseFirst(page(0, 3));
+    await flushPromises();
+    source.ensureLoaded(0);
+    await flushPromises();
+    expect(mockGetLibraryTracks).toHaveBeenCalledTimes(2);
+    expect(source.rows.value).toHaveLength(3);
+  });
+
+  it("keys a filter by content, not by key order or absent fields", () => {
+    const base: LibraryFilter = filter.value;
+    expect(filterKey({ ...base, genreIds: undefined })).toBe(filterKey(base));
+    expect(
+      filterKey({
+        ...base,
+        artist: { item_id: "1", provider: "library", name: "A" },
+      }),
+    ).toBe(
+      filterKey({
+        ...base,
+        artist: { name: "A", provider: "library", item_id: "1" },
+      }),
+    );
+    expect(filterKey({ ...base, genreIds: [1, 2] })).not.toBe(filterKey(base));
   });
 
   it("ignores a filter object that only changed identity", async () => {

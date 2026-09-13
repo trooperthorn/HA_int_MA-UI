@@ -1,4 +1,11 @@
-import { computed, onScopeDispose, ref, watch, type Ref } from "vue";
+import {
+  computed,
+  onScopeDispose,
+  ref,
+  shallowRef,
+  watch,
+  type Ref,
+} from "vue";
 import { api } from "@/plugins/api";
 import {
   EventType,
@@ -9,7 +16,7 @@ import {
 import { store } from "@/plugins/store";
 import { onLibrarySyncCompleted } from "@/composables/useLibrarySync";
 import type { GridItem } from "../columns";
-import type { LibraryFilter } from "./useLibraryFilter";
+import type { ItemRef, LibraryFilter } from "./useLibraryFilter";
 
 export const TRACK_PAGE_SIZE = 200;
 // page size when the whole listing is wanted at once
@@ -105,8 +112,42 @@ async function fetchLibraryPage(
  * never overwrite a newer one. The files-to-edit view filters library pages
  * client-side, pulling extra pages until it has filled its own.
  */
+const FILTER_KEYS = [
+  "scope",
+  "mediaType",
+  "sortBy",
+  "search",
+  "favoritesOnly",
+  "provider",
+  "genreIds",
+  "artist",
+  "album",
+  "playlist",
+  "albumArtistsOnly",
+  "filesToEdit",
+  "browsePath",
+  "sortOverride",
+] as const;
+
+/** Stable identity of a filter: the same listing gives the same key. */
+export function filterKey(filter: ItemFilter): string {
+  const record = filter as unknown as Record<string, unknown>;
+  return FILTER_KEYS.map((key) => {
+    const value = record[key];
+    if (value === undefined || value === null || value === "") return "";
+    if (Array.isArray(value)) return value.join(",");
+    if (typeof value === "object") {
+      const ref = value as Partial<ItemRef>;
+      return `${ref.provider ?? ""}:${ref.item_id ?? ""}`;
+    }
+    return String(value);
+  }).join("\u001f");
+}
+
 export function useItemSource(filter: Ref<ItemFilter>) {
-  const rows = ref<GridItem[]>([]);
+  // shallow: twenty thousand tracks with nested artists, albums and
+  // mappings would otherwise be proxied one by one on first touch
+  const rows = shallowRef<GridItem[]>([]);
   const total = ref<number | undefined>(undefined);
   const loading = ref(false);
   const allLoaded = ref(false);
@@ -118,6 +159,8 @@ export function useItemSource(filter: Ref<ItemFilter>) {
   const inFlight = new Map<number, Promise<void>>();
   // files-to-edit: where the next raw library page starts
   let rawOffset = 0;
+  // the page that came back short, once one has
+  let lastPage: number | undefined;
 
   const hasFilter = computed(
     () =>
@@ -273,13 +316,18 @@ export function useItemSource(filter: Ref<ItemFilter>) {
     const next = rows.value.slice();
     next.length = Math.max(next.length, start + items.length);
     for (let i = 0; i < items.length; i++) next[start + i] = items[i];
-    rows.value = next;
     if (items.length < TRACK_PAGE_SIZE) {
+      // a short page is the end of the listing; it is only "all loaded"
+      // when every page before it is in as well (a letter jump bisects, so
+      // the last page can land first)
+      const end = start + items.length;
+      next.length = end;
+      if (total.value === undefined || total.value > end) total.value = end;
+      lastPage = page;
+    }
+    rows.value = next;
+    if (lastPage !== undefined && loadedPages.size === lastPage + 1) {
       allLoaded.value = true;
-      rows.value = rows.value.slice(0, start + items.length);
-      if (total.value === undefined || total.value > rows.value.length) {
-        total.value = rows.value.length;
-      }
     }
   }
 
@@ -306,7 +354,13 @@ export function useItemSource(filter: Ref<ItemFilter>) {
 
   function loadPage(offset: number): Promise<void> {
     const page = Math.floor(offset / TRACK_PAGE_SIZE);
-    if (loadedPages.has(page) || allLoaded.value) return Promise.resolve();
+    if (
+      loadedPages.has(page) ||
+      allLoaded.value ||
+      (lastPage !== undefined && page > lastPage)
+    ) {
+      return Promise.resolve();
+    }
     const pending = inFlight.get(page);
     if (pending) return pending;
 
@@ -343,7 +397,8 @@ export function useItemSource(filter: Ref<ItemFilter>) {
         commitPage(page, items, forGeneration);
       })
       .finally(() => {
-        inFlight.delete(page);
+        // a reload may have registered a fresh request for the same page
+        if (inFlight.get(page) === run) inFlight.delete(page);
         if (forGeneration === generation) loading.value = inFlight.size > 0;
       });
     inFlight.set(page, run);
@@ -475,6 +530,7 @@ export function useItemSource(filter: Ref<ItemFilter>) {
     loadedPages.clear();
     inFlight.clear();
     rawOffset = 0;
+    lastPage = undefined;
     rows.value = [];
     allLoaded.value = false;
     loadingAll.value = false;
@@ -485,8 +541,9 @@ export function useItemSource(filter: Ref<ItemFilter>) {
   }
 
   // callers hand over a fresh object on every change; only a change in
-  // content is a new listing
-  watch(() => JSON.stringify(filter.value), reload, { immediate: true });
+  // content is a new listing (compared field by field, so key order and
+  // absent-versus-undefined never count as a change)
+  watch(() => filterKey(filter.value), reload, { immediate: true });
 
   const unsubscribeAdded = api.subscribe(
     EventType.MEDIA_ITEM_ADDED,

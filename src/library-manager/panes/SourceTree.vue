@@ -405,8 +405,17 @@ const loadedChildren = ref(new Map<string, TreeNode[]>());
 // expandable nodes whose load turned up nothing to expand
 const leafIds = ref(new Set<string>());
 
-const selectablePlayerCount = computed(
-  () => Object.values(api.players).filter(isSelectablePlayer).length,
+// players update every second (elapsed time); the tree only cares whether
+// the set of usable ones changed
+const selectablePlayerIds = computed(() =>
+  Object.values(api.players)
+    .filter(isSelectablePlayer)
+    .map((player) => player.player_id)
+    .sort()
+    .join(","),
+);
+const selectablePlayerCount = computed(() =>
+  selectablePlayerIds.value ? selectablePlayerIds.value.split(",").length : 0,
 );
 
 const roots = computed<TreeNode[]>(() => [
