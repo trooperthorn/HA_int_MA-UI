@@ -2,7 +2,8 @@ import { computed, reactive } from "vue";
 import { MediaType } from "@/plugins/api/interfaces";
 import type { BrowserFacet } from "../browserFacets";
 
-export type FilterScope = "library" | "browse";
+// issues: the files the sync tasks could not import cleanly
+export type FilterScope = "library" | "browse" | "issues";
 
 // a library item the browser strip narrowed the listing to
 export interface ItemRef {
@@ -32,6 +33,8 @@ export interface NodeFilter {
   filesToEdit?: boolean;
   // forces a sort the node implies (Recently added), ignoring the grid's
   sortOverride?: string;
+  // issues scope: one kind of failure ("missing_tag:albumartist"); all when unset
+  issueType?: string;
   // a listing node (Artists, Albums, ...) puts its facet in the browser's
   // first column; the grid keeps listing tracks
   leadFacet?: BrowserFacet;

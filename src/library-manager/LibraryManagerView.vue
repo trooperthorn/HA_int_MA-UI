@@ -105,7 +105,11 @@
         :max-size="40"
         class="library-manager__tree"
       >
-        <SourceTree ref="tree" :active-node="node.node" @select="selectNode" />
+        <SourceTree
+          ref="tree"
+          :active-node="node.node"
+          @select="selectFromTree"
+        />
       </SplitterPanel>
       <SplitterResizeHandle
         v-if="showTree"
@@ -269,6 +273,7 @@ import {
   setUserPreference,
   useUserPreferences,
 } from "@/composables/userPreferences";
+import { useBackgroundTasks } from "@/composables/background-tasks/useBackgroundTasks";
 import { eventbus } from "@/plugins/eventbus";
 import { togglePlayerQueue } from "@/helpers/player_queue";
 import { api } from "@/plugins/api";
@@ -295,6 +300,7 @@ import {
   LIBRARY_NODES,
   useLibraryFilter,
   type LibraryFilter,
+  type NodeFilter,
 } from "./composables/useLibraryFilter";
 import { PANE_DEFAULTS, usePaneLayout } from "./composables/usePaneLayout";
 import { ensurePlayer } from "./playerGate";
@@ -423,8 +429,23 @@ onBeforeUnmount(() => {
 const searchInput = ref("");
 const searchRef = ref<{ $el?: HTMLElement } | null>(null);
 const selection = ref<GridItem[]>([]);
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
 const grid = ref<InstanceType<typeof TrackGrid> | null>(null);
 const tree = ref<InstanceType<typeof SourceTree> | null>(null);
+
+// a new listing starts clean: moving to another node (the library, a
+// source, a folder) drops the search, the favorites switch and the browser
+// strip's picks. The sort stays, it is the user's preference.
+function selectFromTree(next: NodeFilter) {
+  if (next.node !== node.node) {
+    clearBrowser();
+    clearTimeout(searchTimer);
+    searchInput.value = "";
+    toolbar.search = "";
+    toolbar.favoritesOnly = false;
+  }
+  selectNode(next);
+}
 
 // the grid's sort is remembered per user; the toolbar object is what the
 // filter reads, so the preference feeds it and the grid writes it back
@@ -446,7 +467,6 @@ watch(
 
 // search is applied a beat after typing stops so a fast typist does not
 // issue a request per keystroke
-let searchTimer: ReturnType<typeof setTimeout> | undefined;
 watch(searchInput, (value) => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
@@ -472,7 +492,9 @@ const filter = computed<LibraryFilter>(() => ({
     rawFilter.value.sortBy,
 }));
 
-const source = useItemSource(filter);
+// the sync tasks' logs feed the Sync issues listing
+const { tasks } = useBackgroundTasks();
+const source = useItemSource(filter, { tasks });
 
 // the grid shows the sort the user picked, local or server-side; the request
 // carries only the server-side one
@@ -523,7 +545,7 @@ async function jumpToLetter(letters: string) {
 }
 
 function openFolder(folder: BrowseFolder) {
-  selectNode({
+  selectFromTree({
     scope: "browse",
     node: `browse:${folder.path}`,
     mediaType: MediaType.FOLDER,
@@ -600,11 +622,11 @@ useKeymap({
       }
     },
     goNowPlaying: togglePlayerQueue,
-    goLibrary: () => selectNode(LIBRARY_NODES.library),
-    goArtists: () => selectNode(LIBRARY_NODES.artists),
-    goAlbums: () => selectNode(LIBRARY_NODES.albums),
-    goGenres: () => selectNode(LIBRARY_NODES.genres),
-    goPlaylists: () => selectNode(LIBRARY_NODES.playlists),
+    goLibrary: () => selectFromTree(LIBRARY_NODES.library),
+    goArtists: () => selectFromTree(LIBRARY_NODES.artists),
+    goAlbums: () => selectFromTree(LIBRARY_NODES.albums),
+    goGenres: () => selectFromTree(LIBRARY_NODES.genres),
+    goPlaylists: () => selectFromTree(LIBRARY_NODES.playlists),
     sortByColumn: (column) => grid.value?.sortByIndex(column),
     refresh: () => refreshKeepingPlace(),
     toggleStrip: () => void setShowStrip(!showStrip.value),

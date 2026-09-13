@@ -2587,7 +2587,8 @@
             "menu": "Actions",
             "name": "Name",
             "owner": "Owner",
-            "type": "Type"
+            "type": "Type",
+            "issue": "Issue"
         },
         "toggle_tree": "Show or hide the source tree",
         "toggle_strip": "Show or hide the genre, artist and album browser",
@@ -2599,7 +2600,8 @@
             "album_artists": "Album artists",
             "recently_added": "Recently added",
             "files_to_edit": "Files to edit",
-            "album_artist": "Album artist"
+            "album_artist": "Album artist",
+            "sync_issues": "Sync issues"
         },
         "shortcuts": {
             "play_pause": "Play \/ pause",
@@ -2648,7 +2650,14 @@
             "go_to_artist": "Go to artist",
             "more": "More actions"
         },
-        "playing_here": "No player was picked, so this browser plays it."
+        "playing_here": "No player was picked, so this browser plays it.",
+        "sync_issues": {
+            "missing_tag": "Missing tag: {tag}",
+            "cue_track_skipped": "CUE sheet track skipped",
+            "cue_audio_missing": "CUE sheet without its audio file",
+            "invalid_musicbrainz_id": "Invalid MusicBrainz id",
+            "failed_to_process": "Failed to import"
+        }
     },
     "preference_save_failed": "Your preference could not be saved and was set back."
 }

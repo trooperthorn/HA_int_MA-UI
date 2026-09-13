@@ -10,12 +10,18 @@ import { api } from "@/plugins/api";
 import {
   EventType,
   MediaType,
+  type BackgroundTask,
   type EventMessage,
   type Track,
 } from "@/plugins/api/interfaces";
 import { store } from "@/plugins/store";
 import { onLibrarySyncCompleted } from "@/composables/useLibrarySync";
 import type { GridItem } from "../columns";
+import {
+  collectSyncIssues,
+  loadSyncIssueRows,
+  syncIssuesKey,
+} from "../syncIssues";
 import type { ItemRef, LibraryFilter } from "./useLibraryFilter";
 
 export const TRACK_PAGE_SIZE = 200;
@@ -127,6 +133,7 @@ const FILTER_KEYS = [
   "filesToEdit",
   "browsePath",
   "sortOverride",
+  "issueType",
 ] as const;
 
 /** Stable identity of a filter: the same listing gives the same key. */
@@ -144,7 +151,15 @@ export function filterKey(filter: ItemFilter): string {
   }).join("\u001f");
 }
 
-export function useItemSource(filter: Ref<ItemFilter>) {
+export interface ItemSourceOptions {
+  // the background tasks, for the sync issues listing
+  tasks?: Ref<BackgroundTask[]>;
+}
+
+export function useItemSource(
+  filter: Ref<ItemFilter>,
+  options: ItemSourceOptions = {},
+) {
   // shallow: twenty thousand tracks with nested artists, albums and
   // mappings would otherwise be proxied one by one on first touch
   const rows = shallowRef<GridItem[]>([]);
@@ -176,6 +191,15 @@ export function useItemSource(filter: Ref<ItemFilter>) {
 
   // listings the server returns whole rather than paged
   function oneShotRequest(current: ItemFilter): Promise<GridItem[]> | null {
+    if (current.scope === "issues") {
+      const issues = collectSyncIssues(options.tasks?.value ?? []).filter(
+        (issue) =>
+          (!current.issueType || issue.type === current.issueType) &&
+          (!current.provider?.length ||
+            current.provider.includes(issue.providerInstance)),
+      );
+      return loadSyncIssueRows(issues);
+    }
     if (current.scope === "browse") {
       // the ".." entry browses back up; the tree is the way up here
       return api
@@ -282,7 +306,7 @@ export function useItemSource(filter: Ref<ItemFilter>) {
   async function refreshTotal(forGeneration: number) {
     const current = filter.value;
     if (
-      current.scope === "browse" ||
+      current.scope !== "library" ||
       current.artist ||
       current.album ||
       current.playlist
@@ -555,6 +579,19 @@ export function useItemSource(filter: Ref<ItemFilter>) {
   const unsubscribeSync = onLibrarySyncCompleted(MediaType.TRACK, () => {
     updateAvailable.value = true;
   });
+  // a sync that logged new issues (or cleared old ones) makes the issues
+  // listing stale the same way
+  if (options.tasks) {
+    const tasks = options.tasks;
+    watch(
+      () => syncIssuesKey(tasks.value),
+      (key, previous) => {
+        if (previous !== undefined && filter.value.scope === "issues") {
+          updateAvailable.value = true;
+        }
+      },
+    );
+  }
   onScopeDispose(() => {
     unsubscribeAdded();
     unsubscribeSync();
