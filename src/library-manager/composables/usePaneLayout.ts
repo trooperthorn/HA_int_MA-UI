@@ -29,6 +29,8 @@ export const PANE_DEFAULTS = {
   rightMinSize: 14,
   queueSize: 55,
   queueMinSize: 15,
+  // the selected item's details under the source tree
+  selectedDetailsSize: 32,
 } as const;
 
 type PaneFlag = "showTree" | "showStrip" | "showQueue" | "showSelected";
