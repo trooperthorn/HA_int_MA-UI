@@ -61,3 +61,62 @@ Dependency install scripts are gated by pnpm's `allowBuilds` allowlist in
 Advisories in build-time-only transitives are pinned forward with scoped
 entries under `overrides` in the same file, using ranges so an upstream bump
 still resolves.
+
+## Known dependency gaps
+
+Two dependencies are carried deliberately rather than fixed. Both are
+inherited from upstream, and in both cases removing them would cost more than
+the exposure is worth. They are recorded here so the decision is visible and
+can be revisited rather than rediscovered.
+
+### butterchurn — outside advisory coverage
+
+`butterchurn` is installed from a GitHub release tarball on
+`music-assistant/butterchurn`, not from npm:
+
+```
+"butterchurn": "https://github.com/music-assistant/butterchurn/releases/download/v3.0.0-beta.5.ma.2/..."
+```
+
+**The gap:** no advisory database covers a tarball dependency. Dependabot
+cannot raise an alert against it and `pnpm audit` does not see it, so it is a
+blind spot by construction — not because anything is known to be wrong with
+it, but because nothing is watching. It is also a pre-release of a fork of a
+project whose own npm releases stopped in 2019. Its sibling
+`butterchurn-presets` *is* an npm package, so advisories do reach it, but it
+was last published in June 2018 and is unmaintained in practice.
+
+**What limits it:**
+
+- `pnpm-lock.yaml` pins the tarball by `sha512`, so the bytes cannot change
+  under us even if the release asset is replaced.
+- Install scripts are refused unless allowlisted in `allowBuilds`, and neither
+  package is on that list.
+- Both are loaded with `await import(...)`, so they are lazy chunks rather
+  than part of the main bundle.
+- The visualizer that uses them is gated on the `milkdrop_visualizer` server
+  plugin. Where that plugin is not enabled, nothing on this path ever loads.
+
+**Why it is accepted:** removing the feature would delete 21 files and diverge
+permanently from upstream on every one of them, against a project preference
+to stay cheaply mergeable. That is a poor trade for a blind spot with nothing
+currently behind it.
+
+**What would change the decision:** enabling `milkdrop_visualizer`, which puts
+a WebGL and WASM path that parses preset expressions into live use; or the
+upstream release asset disappearing, which would break installs. Mirroring the
+tarball to this fork's own releases is the cheaper answer to the second, and
+does not require removing anything.
+
+### opus-encdec — abandoned, and kept unreachable
+
+`opus-encdec` (2021, pre-1.0, single maintainer, no newer release) arrives
+through `@sendspin/sendspin-js` as a fallback Opus decoder. It decodes
+untrusted audio and is compiled WASM, so it is the kind of dependency worth
+keeping away from.
+
+It is not removable — it is a transitive of a package the web player needs —
+but it is unreachable: `SendspinPlayer.vue` requests the `opus` codec only
+when `AudioDecoder` exists, and asks for `flac`/`pcm` otherwise, so no browser
+negotiates a stream that would load it. See the comment there for why the
+browser-side default was not enough on its own.
