@@ -27,8 +27,11 @@ overrides:
   # infinite loop when size is zero, via vite -> postcss
   "nanoid@<3.3.18": ">=3.3.18 <4"
   #
-  # Not overridden: esbuild >=0.27.3 <0.28.1 (dev server arbitrary file read on
-  # Windows). esbuild is a *peer* of vite, so an override rewrites the peer
-  # range rather than resolving a package, and the lockfile ends up asking for a
-  # version nothing provides. It is the one low-severity advisory of the set;
-  # the clean fix is bumping vite itself, which Dependabot will offer.
+  # esbuild (dev server arbitrary file read on Windows, >=0.27.3 <0.28.1) is
+  # deliberately not here. It is a *peer* of vite, so an override rewrites the
+  # peer range rather than resolving a package and the lockfile ends up asking
+  # for a version nothing provides. Bumping vite does not move it either --
+  # vite 8.3.0 still declares the peer as "^0.27.0 || ^0.28.0" and pnpm keeps
+  # the resolution it already has. The fix is a direct devDependency on
+  # esbuild ^0.28.1 in package.json, which sits inside that peer range and
+  # settles the version explicitly.
