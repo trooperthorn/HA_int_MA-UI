@@ -241,6 +241,28 @@ describe("web player preferred mode", () => {
     },
   );
 
+  it("keeps applying the mode after one application fails", async () => {
+    // Every route change, reconnect and settings change chains onto one shared
+    // promise. A rejection left on it used to reject every later link too, so a
+    // single failure stopped mode sync for the rest of the session -- which is
+    // what a blocked-storage throw during registration produced.
+    setRegularPreferences(true, BrowserMediaControlsMode.ACTIVE_PLAYER);
+    expect(await applyPreferredMode()).toBe(
+      WebPlayerMode.SENDSPIN_WITH_CONTROLS,
+    );
+
+    const setMode = vi.mocked(webPlayer.setMode);
+    setMode.mockRejectedValueOnce(new Error("site data blocked"));
+    authState.guest = "music_quiz";
+    await applyPreferredMode();
+
+    // the next application still runs, and still takes effect
+    authState.guest = null;
+    setRegularPreferences(false, "true");
+    await vi.waitUntil(() => webPlayer.mode === WebPlayerMode.CONTROLS_ONLY);
+    expect(webPlayer.mode).toBe(WebPlayerMode.CONTROLS_ONLY);
+  });
+
   it("drops the web player as soon as the setting is switched off", async () => {
     setRegularPreferences(true, BrowserMediaControlsMode.ACTIVE_PLAYER);
     expect(await applyPreferredMode()).toBe(
