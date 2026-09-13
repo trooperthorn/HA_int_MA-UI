@@ -106,6 +106,32 @@ play now, play next, add to queue, favorite, add to playlist, edit, go
 to album, go to artist and the full menu. With several rows selected the
 bar keeps the actions that take lists.
 
+## Players
+
+The first play with no player selected opens the player picker. Picking
+a player continues the action; after 8 s with no pick this browser's own
+player is selected and playback starts here.
+
+The picker's display options (the ⋮ button in its header) gained two
+entries:
+
+- **Keep players that can play together next to each other** (on by
+  default): players that report they can stream in sync with one
+  another are listed as a block, so a party-mode set is easy to find.
+  The block sorts by its first member's name; players that can group
+  with nobody sort by name on their own.
+- **Show hidden players (n)**: reveals players hidden through their card
+  menu so they can be unhidden again. The reveal lasts until the picker
+  closes.
+
+A player card's menu has **Hide player** / **Unhide player** (saved as a
+user preference, so it follows the account to every device and never
+hides players added later) and, for AirPlay and Squeezelite players,
+**Audio delay**: the server's per-player `sync_adjust` setting from -500
+to +500 ms with a slider and ±10/±50 ms steps. Use it to remove the echo
+between players on different protocols; the player reloads after each
+change.
+
 ## Keyboard
 
 The full table is at Settings › User Interface › Keyboard and behind `?`
@@ -166,5 +192,8 @@ Everything new lives in `src/library-manager/` (view, panes, composables,
 `src/views/settings/{SettingsTree,LibraryViewSettings,KeyboardSettings}.vue`
 and `settingsSections.ts`. Upstream files touched: the router, the
 navigation registry, `en.json`, `Settings.vue` (tree layout),
-`useFullscreenQueue.ts` (a `visible` option). `ItemsListing.vue` is not
+`useFullscreenQueue.ts` (a `visible` option), `PlayerSelect.vue`,
+`useOrderedPlayers.ts` and `player_menu_items.ts` (hidden players,
+sync clusters, audio delay; helpers in `src/helpers/{hidden_players,
+player_sync_clusters,sync_adjust}.ts`). `ItemsListing.vue` is not
 modified. The phase plan that built it is `LIBRARY-MANAGER-PLAN.md`.

@@ -19,7 +19,10 @@ import { useAudioOverlay } from "@/composables/useAudioOverlay";
 import { visualizerProviderAvailable } from "@/plugins/visualizer-relay";
 import { visualizerEnabledForPlayer } from "@/composables/visualizer/useVisualizer";
 import VisualizerMenuControl from "@/layouts/default/PlayerOSD/VisualizerMenuControl.vue";
-import { Droplet, Megaphone, Sparkles } from "@lucide/vue";
+import SyncAdjustMenuControl from "@/layouts/default/PlayerOSD/SyncAdjustMenuControl.vue";
+import { isHiddenPlayer, setPlayerHidden } from "@/helpers/hidden_players";
+import { supportsSyncAdjust } from "@/helpers/sync_adjust";
+import { Droplet, Eye, EyeOff, Megaphone, Sparkles, Timer } from "@lucide/vue";
 import { h, markRaw } from "vue";
 import { useHosts } from "@/composables/ai-radio/useHosts";
 import { useShows } from "@/composables/ai-radio/useShows";
@@ -387,6 +390,31 @@ export const getPlayerMenuItems = (
       ),
       subComponent: markRaw(VisualizerMenuControl),
       componentProps: { playerId: player.player_id },
+    });
+  }
+
+  // audio delay (player menu only, protocols that expose sync_adjust; admin only
+  // because it writes player config)
+  if (isPlayer && authManager.isAdmin() && supportsSyncAdjust(player)) {
+    menuItems.push({
+      label: "player_select.sync_adjust",
+      labelArgs: [],
+      icon: markRaw(Timer),
+      subComponent: markRaw(SyncAdjustMenuControl),
+      componentProps: { playerId: player.player_id },
+    });
+  }
+
+  // hide from / restore to this user's player list (player menu only)
+  if (isPlayer && store.currentUser) {
+    const hidden = isHiddenPlayer(player.player_id);
+    menuItems.push({
+      label: hidden
+        ? "player_select.unhide_player"
+        : "player_select.hide_player",
+      labelArgs: [],
+      icon: markRaw(hidden ? Eye : EyeOff),
+      action: () => void setPlayerHidden(player.player_id, !hidden),
     });
   }
 
