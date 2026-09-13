@@ -1,4 +1,7 @@
 import { setUserPreference } from "@/composables/userPreferences";
+import { canOpenAIRadio } from "@/helpers/ai_radio_access";
+import { Scope } from "@/plugins/api/interfaces";
+import { authManager } from "@/plugins/auth";
 import { store } from "@/plugins/store";
 import {
   BookAudio,
@@ -154,8 +157,14 @@ const MENU_ITEM_REGISTRY: MenuItemDefinition[] = [
     icon: MicVocal,
     path: "/music-quiz",
     isLibraryNode: false,
+    // this fork's flattened sidebar renders only "library" and "system";
+    // upstream's "plugins" group is not in MenuGroup here. The role gating
+    // below is upstream's and is kept.
     group: "library",
-    available: () => store.enabledPlugins.has("music_quiz"),
+    // the menu opens the host panel, which takes users.invite
+    available: () =>
+      store.enabledPlugins.has("music_quiz") &&
+      authManager.hasScope(Scope.USERS_INVITE),
   },
   {
     id: "ai_radio",
@@ -163,8 +172,9 @@ const MENU_ITEM_REGISTRY: MenuItemDefinition[] = [
     icon: Sparkles,
     path: "/ai-radio",
     isLibraryNode: false,
+    // see the note on music_quiz above: fork group, upstream gating
     group: "library",
-    available: () => store.enabledPlugins.has("ai_radio"),
+    available: () => store.enabledPlugins.has("ai_radio") && canOpenAIRadio(),
   },
   {
     id: "milkdrop_visualizer",

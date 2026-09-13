@@ -8,6 +8,7 @@ import {
   PlayerQueue,
   PlayerType,
   RepeatMode,
+  Scope,
   PLAYER_CONTROL_NONE,
 } from "@/plugins/api/interfaces";
 import { isSelectablePlayer } from "@/helpers/players";
@@ -33,6 +34,7 @@ import { store } from "@/plugins/store";
 import { getPlayerSetupLabel } from "@/helpers/player_config";
 import { togglePlayerPower } from "@/helpers/player_group_playback";
 import { errorMessage } from "@/helpers/ai_radio";
+import { canUseQueueDj } from "@/helpers/ai_radio_access";
 import { toast } from "vue-sonner";
 
 export const getPlayerSetupMenuItem = (
@@ -252,7 +254,12 @@ export const getPlayerMenuItems = (
   }
 
   // save queue as playlist (queue menu only)
-  if (isQueue && playerQueue?.items && playerQueue.items > 0) {
+  if (
+    isQueue &&
+    playerQueue?.items &&
+    playerQueue.items > 0 &&
+    authManager.hasScope(Scope.LIBRARY_WRITE)
+  ) {
     menuItems.push({
       label: "save_queue_as_playlist",
       labelArgs: [],
@@ -303,7 +310,7 @@ export const getPlayerMenuItems = (
     loadQueueDjStatus,
   } = useHosts();
   const { sessions, shows, loadStatus } = useShows();
-  if (isQueue && playerQueue && aiRadioAvailable.value) {
+  if (isQueue && playerQueue && aiRadioAvailable.value && canUseQueueDj()) {
     const queueId = playerQueue.queue_id;
     const runningSession = sessions.value.find(
       (session) => session.status === "running" && session.queue_id === queueId,
@@ -393,9 +400,15 @@ export const getPlayerMenuItems = (
     });
   }
 
-  // audio delay (player menu only, protocols that expose sync_adjust; admin only
-  // because it writes player config)
-  if (isPlayer && authManager.isAdmin() && supportsSyncAdjust(player)) {
+  // audio delay (player menu only, protocols that expose sync_adjust). Gated
+  // on the same scope as the settings entry below: it writes player config.
+  // Upstream replaced authManager.isAdmin() with scope checks and removed the
+  // method, so this had to move with it.
+  if (
+    isPlayer &&
+    authManager.hasScope(Scope.CONFIG_PLAYERS_WRITE) &&
+    supportsSyncAdjust(player)
+  ) {
     menuItems.push({
       label: "player_select.sync_adjust",
       labelArgs: [],
@@ -405,7 +418,8 @@ export const getPlayerMenuItems = (
     });
   }
 
-  // hide from / restore to this user's player list (player menu only)
+  // hide from / restore to this user's player list (player menu only). Not
+  // scope-gated: it is this user's own preference, not a config write.
   if (isPlayer && store.currentUser) {
     const hidden = isHiddenPlayer(player.player_id);
     menuItems.push({
@@ -418,8 +432,8 @@ export const getPlayerMenuItems = (
     });
   }
 
-  // open the settings (both menus, admin only)
-  if (authManager.isAdmin()) {
+  // open the settings (both menus, for a role that changes player settings)
+  if (authManager.hasScope(Scope.CONFIG_PLAYERS_WRITE)) {
     const openSettings = (path: string) => () => {
       store.showFullscreenPlayer = false;
       store.showPlayersMenu = false;

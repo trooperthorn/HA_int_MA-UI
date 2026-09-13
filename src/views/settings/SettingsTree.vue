@@ -64,9 +64,11 @@ import {
   ProviderType,
   type CoreConfig,
   type ProviderConfig,
+  Scope,
 } from "@/plugins/api/interfaces";
 import { authManager } from "@/plugins/auth";
-import { useSettingsSections } from "./settingsSections";
+import { requireServerVersion } from "@/plugins/api/helpers";
+import { availableSettingsSections } from "@/helpers/settings_sections";
 
 export interface SettingsTreeNode {
   id: string;
@@ -80,7 +82,15 @@ export interface SettingsTreeNode {
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
-const sections = useSettingsSections();
+// upstream's helpers/settings_sections.ts carries the same section list this
+// fork used to keep its own copy of, with a scope per section instead of an
+// admin flag; the fork copy is gone
+const sections = computed(() =>
+  availableSettingsSections(
+    (scope) => authManager.hasScope(scope),
+    requireServerVersion,
+  ),
+);
 
 const treeRef = ref<HTMLElement | null>(null);
 const focusedId = ref<string | null>(null);
@@ -100,7 +110,7 @@ async function loadChildren() {
   } catch (err) {
     console.error("[SettingsTree] provider configs failed", err);
   }
-  if (!authManager.isAdmin()) return;
+  if (!authManager.hasScope(Scope.CONFIG_CORE_WRITE)) return;
   try {
     const configs = await api.getCoreConfigs();
     coreConfigs.value = configs

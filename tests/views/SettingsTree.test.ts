@@ -29,12 +29,22 @@ vi.mock("@/plugins/api", async () => {
 
 vi.mock("@/plugins/auth", () => ({
   authManager: {
-    isAdmin: () => mocks.isAdmin,
-    hasScope: () => true,
+    // upstream replaced isAdmin() with per-section scopes; a "member" here is
+    // someone who holds none of the scopes the admin-only sections require
+    hasScope: (scope: string) => mocks.isAdmin || !ADMIN_SCOPES.has(scope),
   },
 }));
 
 vi.mock("@/plugins/api/helpers", () => ({ requireServerVersion: () => true }));
+
+// the scopes that separate an admin from a member for the sections asserted below
+const ADMIN_SCOPES = new Set([
+  "config.core.write",
+  "config.players.write",
+  "config.providers.write",
+  "system.manage",
+  "users.read",
+]);
 
 vi.mock("vue-router", async () => {
   const { reactive } = await import("vue");

@@ -18,7 +18,7 @@ vi.mock("@/plugins/api", () => {
 });
 
 vi.mock("@/plugins/auth", () => ({
-  authManager: { isAdmin: () => true },
+  authManager: { hasScope: () => true },
 }));
 
 vi.mock("@/composables/userPreferences", async () => {

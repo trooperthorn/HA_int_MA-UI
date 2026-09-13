@@ -5,6 +5,17 @@
 # may hold an old Node (e.g. 20.x) that pnpm 11 refuses to run on (needs >=22.13).
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
+# Nothing to lint on a merge: what is staged there is upstream's work, not
+# something authored in this commit, and running the formatters over it would
+# rewrite their files under our name. On Windows it also overruns the command
+# line -- an upstream merge stages a few hundred paths, and the weekly
+# merge-upstream job means that is now a routine commit to have to make.
+# CI lints the whole tree on the resulting pull request either way.
+if git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+  echo "pre-commit: merge in progress, leaving lint-staged to CI"
+  exit 0
+fi
+
 # Lint and format the staged files only, then restage what was fixed.
 # CI (.github/workflows/test.yml) covers the rest on every push and pull
 # request: the repo-wide lint, the test suite, and the typecheck that

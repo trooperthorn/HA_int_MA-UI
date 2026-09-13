@@ -1,8 +1,5 @@
-import { computed } from "vue";
-import type { RouteLocationRaw } from "vue-router";
-import { requireServerVersion } from "@/plugins/api/helpers";
 import { Scope } from "@/plugins/api/interfaces";
-import { authManager } from "@/plugins/auth";
+import type { RouteLocationRaw } from "vue-router";
 
 export interface SettingsSection {
   name: string;
@@ -11,14 +8,13 @@ export interface SettingsSection {
   icon: string;
   color: string;
   route: RouteLocationRaw;
-  adminOnly: boolean;
+  // only a role granting this scope sees the section
   requiresScope?: Scope;
   minServerVersion?: string;
 }
 
-// every top-level settings area, in the order the overview and the tree show
-// them; gating (admin, scope, server version) is applied by useSettingsSections
-export const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
+// the sections of the settings overview, in display order
+export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     name: "music_providers",
     label: "settings.music_sources",
@@ -27,7 +23,6 @@ export const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     color: "blue",
     route: { name: "providersettings", query: { types: "music" } },
     // a member holding the scope manages the music sources it owns here
-    adminOnly: false,
     requiresScope: Scope.CONFIG_PROVIDERS_OWN,
   },
   {
@@ -37,7 +32,9 @@ export const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     icon: "mdi-speaker-multiple",
     color: "green",
     route: { name: "providersettings", query: { types: "player" } },
-    adminOnly: true,
+    // the provider types share the route a member opens for its own music
+    // sources, managing any other type takes managing every provider
+    requiresScope: Scope.CONFIG_PROVIDERS_WRITE,
   },
   {
     name: "metadata_providers",
@@ -46,7 +43,7 @@ export const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     icon: "mdi-file-code",
     color: "indigo",
     route: { name: "providersettings", query: { types: "metadata" } },
-    adminOnly: true,
+    requiresScope: Scope.CONFIG_PROVIDERS_WRITE,
   },
   {
     name: "plugin_providers",
@@ -55,7 +52,7 @@ export const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     icon: "mdi-puzzle",
     color: "deep-purple",
     route: { name: "providersettings", query: { types: "plugin" } },
-    adminOnly: true,
+    requiresScope: Scope.CONFIG_PROVIDERS_WRITE,
   },
   {
     name: "players",
@@ -64,7 +61,7 @@ export const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     icon: "mdi-tune",
     color: "teal",
     route: { name: "playersettings" },
-    adminOnly: true,
+    requiresScope: Scope.CONFIG_PLAYERS_WRITE,
   },
   {
     name: "audio_analysis_providers",
@@ -73,7 +70,7 @@ export const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     icon: "mdi-waveform",
     color: "blue",
     route: { name: "providersettings", query: { types: "audio_analysis" } },
-    adminOnly: true,
+    requiresScope: Scope.CONFIG_PROVIDERS_WRITE,
     minServerVersion: "2.9.0",
   },
   {
@@ -83,7 +80,6 @@ export const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     icon: "mdi-account-cog",
     color: "indigo",
     route: { name: "profile" },
-    adminOnly: false,
   },
   {
     name: "frontend",
@@ -92,7 +88,6 @@ export const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     icon: "mdi-palette",
     color: "orange",
     route: { name: "frontendsettings" },
-    adminOnly: false,
   },
   {
     name: "users",
@@ -101,7 +96,7 @@ export const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     icon: "mdi-account-multiple",
     color: "teal",
     route: { name: "usersettings" },
-    adminOnly: true,
+    requiresScope: Scope.USERS_READ,
   },
   {
     name: "remote_access",
@@ -110,7 +105,7 @@ export const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     icon: "mdi-cloud-lock",
     color: "deep-purple",
     route: { name: "remoteaccesssettings" },
-    adminOnly: true,
+    requiresScope: Scope.SYSTEM_MANAGE,
   },
   {
     name: "system",
@@ -119,7 +114,7 @@ export const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     icon: "mdi-server",
     color: "purple",
     route: { name: "systemsettings" },
-    adminOnly: true,
+    requiresScope: Scope.CONFIG_CORE_WRITE,
   },
   {
     name: "about",
@@ -128,21 +123,23 @@ export const ALL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     icon: "mdi-information-outline",
     color: "grey-darken-1",
     route: { name: "aboutsettings" },
-    adminOnly: false,
   },
 ];
 
-export function isSectionAvailable(section: SettingsSection): boolean {
-  const isAdmin = authManager.isAdmin();
-  return (
-    (!section.adminOnly || isAdmin) &&
-    (!section.requiresScope || authManager.hasScope(section.requiresScope)) &&
-    (!section.minServerVersion ||
-      requireServerVersion(section.minServerVersion))
+/**
+ * The settings sections the current user may open on the connected server.
+ *
+ * @param hasScope - Whether the role of the current user grants the given scope.
+ * @param serverVersionAtLeast - Whether the connected server runs at least the given version.
+ */
+export function availableSettingsSections(
+  hasScope: (scope: Scope) => boolean,
+  serverVersionAtLeast: (version: string) => boolean,
+): SettingsSection[] {
+  return SETTINGS_SECTIONS.filter(
+    (section) =>
+      (!section.requiresScope || hasScope(section.requiresScope)) &&
+      (!section.minServerVersion ||
+        serverVersionAtLeast(section.minServerVersion)),
   );
-}
-
-// the sections this user may open
-export function useSettingsSections() {
-  return computed(() => ALL_SETTINGS_SECTIONS.filter(isSectionAvailable));
 }
