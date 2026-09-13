@@ -14,6 +14,10 @@ import { EventType } from "./api/interfaces";
 import { companionMode } from "./companion";
 import router from "./router";
 import { resetSendspinConnection } from "./sendspin-connection";
+import {
+  readSendspinPlayerId,
+  writeSendspinPlayerId,
+} from "@/helpers/sendspin_player_id";
 
 export enum WebPlayerMode {
   DISABLED = "disabled",
@@ -219,14 +223,22 @@ function resolvePreferredMode(
 
 // Serializes mode updates so concurrent triggers (init/route/watchers) apply in order.
 function queueModeApplication(): Promise<void> {
-  pendingModeApplication = pendingModeApplication.then(async () => {
-    const browserControlsMode = getBrowserMediaControlsMode();
-    webPlayer.browserControlsMode = browserControlsMode;
-    const mode = resolvePreferredMode(browserControlsMode);
-    if (mode !== webPlayer.mode || mode !== webPlayer.tabMode) {
-      await webPlayer.setMode(mode);
-    }
-  });
+  pendingModeApplication = pendingModeApplication
+    .then(async () => {
+      const browserControlsMode = getBrowserMediaControlsMode();
+      webPlayer.browserControlsMode = browserControlsMode;
+      const mode = resolvePreferredMode(browserControlsMode);
+      if (mode !== webPlayer.mode || mode !== webPlayer.tabMode) {
+        await webPlayer.setMode(mode);
+      }
+    })
+    // Everything that re-applies the mode -- route changes, reconnects, a
+    // settings change -- chains onto this one promise. A rejection left on it
+    // rejects every later link too, so one failure used to stop mode sync for
+    // the rest of the session. Swallow it here so the next attempt still runs.
+    .catch((err) => {
+      console.error("[web_player] applying the mode failed", err);
+    });
   return pendingModeApplication;
 }
 
@@ -357,17 +369,23 @@ export const webPlayer = reactive({
       // The sendspin client id is its Noise public key, so the SDK owns it. Mirror
       // it into localStorage for the tabs and the proxy handshake that read it.
       const player_id = loadSendspinClientIdentity().clientId;
-      window.localStorage.setItem("sendspin_webplayer_id", player_id);
+      // The mirror is a convenience for other tabs and the proxy handshake, so
+      // losing it must not cost us the registration: assign the id first, then
+      // try to write. A WebView with site data blocked -- which is what an HA
+      // Companion app reaching Music Assistant through a cross-origin iframe
+      // panel gets -- throws here, and before this the throw happened before
+      // the assignment, leaving player_id unset. Nothing below runs without it,
+      // so no player was ever announced to the server and the web player simply
+      // never appeared.
       this.player_id = player_id;
+      writeSendspinPlayerId(player_id);
       this.lastUpdate = Date.now();
 
       bc.postMessage(BC_MSG.CONTROL_TAKEN);
     } else if (mode == WebPlayerMode.CONTROLS_ONLY) {
       // This is guaranteed to not be a first tab (since that would have a playback tabMode)
       // Therefore, this player_id should be already set - read based on target mode
-      const saved_player_id = window.localStorage.getItem(
-        "sendspin_webplayer_id",
-      );
+      const saved_player_id = readSendspinPlayerId();
       this.player_id = saved_player_id;
       this.audioSource = WebPlayerMode.CONTROLS_ONLY;
     } else {

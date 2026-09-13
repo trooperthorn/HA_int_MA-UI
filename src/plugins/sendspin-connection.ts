@@ -6,6 +6,7 @@
  * 2. Falls back to authenticated proxy WebSocket through the webserver
  */
 
+import { readSendspinPlayerId } from "@/helpers/sendspin_player_id";
 import api from "@/plugins/api";
 import { authManager } from "@/plugins/auth";
 import { store } from "@/plugins/store";
@@ -67,8 +68,7 @@ function createProxyWebSocket(): Promise<WebSocket | null> {
         resolve(ws);
       } else {
         // Send auth message with token
-        const clientId =
-          window.localStorage.getItem("sendspin_webplayer_id") || "";
+        const clientId = readSendspinPlayerId() || "";
         console.debug("[Sendspin] Sending auth to proxy");
         ws.send(JSON.stringify({ type: "auth", token, client_id: clientId }));
       }
