@@ -232,7 +232,7 @@ export const routes: RouteRecordRaw[] = [
         name: "librarymanager",
         component: () =>
           import(
-            /* webpackChunkName: "librarymanager" */ "@/library-manager/LibraryManagerView.vue"
+            /* webpackChunkName: "librarymanager" */ "@/library-manager/LibraryEntry.vue"
           ),
       },
       {

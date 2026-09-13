@@ -2657,6 +2657,14 @@
             "cue_audio_missing": "CUE sheet without its audio file",
             "invalid_musicbrainz_id": "Invalid MusicBrainz id",
             "failed_to_process": "Failed to import"
+        },
+        "mobile": {
+            "create": "Create",
+            "sort": "Sort",
+            "sort_recents": "Recents",
+            "sort_alphabetical": "Alphabetical",
+            "grid": "Grid view",
+            "list": "List view"
         }
     },
     "preference_save_failed": "Your preference could not be saved and was set back."

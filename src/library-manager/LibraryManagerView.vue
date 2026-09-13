@@ -263,7 +263,6 @@ import {
   watch,
 } from "vue";
 import { useI18n } from "vue-i18n";
-import { useRouter } from "vue-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSidebar } from "@/components/ui/sidebar";
@@ -316,7 +315,6 @@ defineOptions({ name: "LibraryManager" });
 const SORT_PREFERENCE_KEY = "libraryManager.sortBy";
 const DEFAULT_SORT = "name";
 
-const router = useRouter();
 const { t } = useI18n();
 const { getPreference } = useUserPreferences();
 const {
@@ -405,15 +403,6 @@ const chips = computed<FilterChip[]>(() => {
   }
   return list;
 });
-
-// the manager is a desktop workflow; phones get the existing track list
-watch(
-  () => store.mobileLayout,
-  (mobile) => {
-    if (mobile) router.replace({ name: "tracks" });
-  },
-  { immediate: true },
-);
 
 // the source tree takes the sidebar's place while the manager is open
 const sidebar = useSidebar();
