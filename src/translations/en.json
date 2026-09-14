@@ -2841,7 +2841,14 @@
                 "buffer": "Web player buffer",
                 "buffer_auto": "Automatic (0.5 s local, 2.5 s remote)",
                 "codec": "Web player codec",
-                "codec_auto": "Automatic"
+                "codec_auto": "Automatic",
+                "bitrate": "Opus bitrate",
+                "bitrate_default": "Encoder default",
+                "adaptive": "Adaptive mode",
+                "adaptive_auto": "Automatic (remote links)",
+                "adaptive_on": "On",
+                "adaptive_off": "Off",
+                "rung": "Adaptive mode: step {rung} down (0 is your own settings)"
             }
         }
     },

@@ -205,6 +205,8 @@ describe("MobileLibraryView", () => {
       "library_manager.mobile.web_player.off",
       "library_manager.mobile.web_player.buffer",
       "library_manager.mobile.web_player.codec",
+      "library_manager.mobile.web_player.bitrate",
+      "library_manager.mobile.web_player.adaptive",
     ]);
     expect(items[1].disabled).toBe(true);
 
