@@ -145,6 +145,7 @@
 import {
   ArrowDownUp,
   AudioLines,
+  ClipboardList,
   Gauge,
   LayoutGrid,
   LibraryBig,
@@ -156,6 +157,7 @@ import {
 } from "@lucide/vue";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { toast } from "vue-sonner";
 import MediaItemThumb from "@/components/MediaItemThumb.vue";
 import ProviderIcon from "@/components/ProviderIcon.vue";
 import type { ContextMenuItem } from "@/helpers/context_menu_item";
@@ -180,6 +182,11 @@ import {
 } from "@/plugins/api/interfaces";
 import { eventbus } from "@/plugins/eventbus";
 import { store } from "@/plugins/store";
+import {
+  clearWebPlayerLog,
+  formatWebPlayerLog,
+  webPlayerLog,
+} from "@/plugins/web_player_log";
 import {
   ADAPTIVE_CHOICES,
   BITRATE_CHOICES,
@@ -391,6 +398,30 @@ function openMainMenu(event: MouseEvent) {
         action: () => setWebPlayerAdaptive(pref),
       })),
     },
+    // what the player did: copy or share it after a test, then clear
+    {
+      label: "library_manager.mobile.web_player.log",
+      icon: ClipboardList,
+      subItems: [
+        {
+          label: "library_manager.mobile.web_player.log_copy",
+          labelArgs: { count: webPlayerLog.entries.length },
+          action: () => void copyWebPlayerLog(),
+        },
+        ...(typeof navigator !== "undefined" && "share" in navigator
+          ? [
+              {
+                label: "library_manager.mobile.web_player.log_share",
+                action: () => void shareWebPlayerLog(),
+              },
+            ]
+          : []),
+        {
+          label: "library_manager.mobile.web_player.log_clear",
+          action: () => clearWebPlayerLog(),
+        },
+      ],
+    },
   ];
   if (webPlayerStatus.adaptive) {
     items.splice(2, 0, {
@@ -404,6 +435,28 @@ function openMainMenu(event: MouseEvent) {
     posX: event.clientX,
     posY: event.clientY,
   });
+}
+
+async function copyWebPlayerLog() {
+  const text = formatWebPlayerLog();
+  try {
+    await navigator.clipboard.writeText(text);
+    toast.success(t("library_manager.mobile.web_player.log_copied"));
+  } catch {
+    // no clipboard (insecure context, or the app denies it): offer the
+    // share sheet instead, which the Companion app does allow
+    if ("share" in navigator) await shareWebPlayerLog();
+    else toast.error(t("library_manager.mobile.web_player.log_copy_failed"));
+  }
+}
+
+async function shareWebPlayerLog() {
+  const text = formatWebPlayerLog();
+  try {
+    await navigator.share({ title: "Music Assistant web player log", text });
+  } catch {
+    // the user closed the sheet; nothing to say
+  }
 }
 
 function cycleSort() {

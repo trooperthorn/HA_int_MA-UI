@@ -277,6 +277,16 @@ phone changes networks; it only ever moves down on that signal, the quiet
 timer still decides when to move up. The menu shows the rung it is on.
 Sort and layout are remembered in the `libraryManager.mobile` preference.
 
+**Web player log** in the same menu keeps the last 400 events in memory:
+every console line the Sendspin SDK and the player print, player state
+changes, page visibility, connection type changes and a health sample
+(sync error, resyncs, output latency, playback rate, position, rung) every
+30 s while audio plays. _Copy_ puts it on the clipboard with a header that
+names the settings and the link; _Share_ opens the phone's share sheet
+(the Companion app's WebView may refuse the clipboard, so Copy falls back
+to Share); _Clear_ empties it. It exists because the Companion app never
+shows the page's console, so a stall on a phone had nothing to read.
+
 On a phone the player also asks the browser for its `playback` audio
 output buffer rather than the smallest one, and FLAC is decoded by the
 browser's own WebCodecs decoder like Opus; both come from the fork's
