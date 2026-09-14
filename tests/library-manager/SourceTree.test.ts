@@ -206,7 +206,16 @@ const probe =
     const offset = args[offsetIndex] as number;
     const provider = args[providerIndex] as string;
     const size = SOURCE_SIZES[provider]?.[key] ?? 0;
-    return offset < size ? [{ item_id: String(offset) }] : [];
+    if (offset >= size) return [];
+    // the genre count pages the tracks in whole and reads their tags
+    const limit = args[2] as number;
+    if (key === "tracks" && limit > 1) {
+      return [
+        { item_id: "1", metadata: { genres: ["Rock", "Pop"] } },
+        { item_id: "2", metadata: { genres: ["Rock"] } },
+      ];
+    }
+    return [{ item_id: String(offset) }];
   };
 
 describe("SourceTree", () => {
@@ -324,11 +333,13 @@ describe("SourceTree", () => {
     });
 
     // a listing under the source carries the source
-    await rows()
-      .find(
-        (row) => row.text().startsWith("genres") && row.text() === "genres",
-      )!
-      .trigger("click");
+    // the source's genres node, the one after its listings, with its count
+    const genres = rows().filter(
+      (row) => row.find(".source-tree__label").text() === "genres",
+    );
+    expect(genres).toHaveLength(2);
+    expect(genres[1].find(".source-tree__count").text()).toBe("2");
+    await genres[1].trigger("click");
     expect(wrapper.emitted("select")?.at(-1)?.[0]).toMatchObject({
       scope: "library",
       node: "source:spotify--1.genres",
@@ -364,6 +375,8 @@ describe("SourceTree", () => {
     expect(rowTexts(wrapper)).toContain("Filesystem 380");
     expect(rowTexts(wrapper)).toContain("artists 25");
     expect(rowTexts(wrapper)).toContain("albums 31");
+    // the distinct genres tagged on the source's tracks
+    expect(rowTexts(wrapper)).toContain("genres 2");
 
     const folders = rows().find(
       (row) => row.text() === "library_manager.tree.folders",

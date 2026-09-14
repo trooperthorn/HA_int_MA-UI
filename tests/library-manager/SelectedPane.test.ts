@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   toggleFavorite: vi.fn(),
   handlePlayBtnClick: vi.fn(async () => {}),
   handleMenuBtnClick: vi.fn(),
+  removeProviderMapping: vi.fn(async () => {}),
   emit: vi.fn(),
   push: vi.fn(),
 }));
@@ -17,6 +18,9 @@ vi.mock("@/plugins/api", () => {
   const api = {
     playMedia: mocks.playMedia,
     toggleFavorite: mocks.toggleFavorite,
+    removeProviderMapping: mocks.removeProviderMapping,
+    getProvider: (id: string) =>
+      id === "filesystem_local--1" ? { name: "Filesystem" } : undefined,
   };
   return { api, default: api };
 });
@@ -214,6 +218,75 @@ describe("SelectedPane", () => {
       false,
     );
     expect(blank.find(".selected-pane__body").exists()).toBe(false);
+  });
+
+  it("opens a menu on a source icon: info, file location, remove, playlist", async () => {
+    const item = track({
+      item_id: "t1",
+      name: "Uprising",
+      artists: [artist],
+      provider_mappings: [
+        {
+          item_id: "Muse/Resistance/03 Uprising.flac",
+          provider_domain: "filesystem_local",
+          provider_instance: "filesystem_local--1",
+          available: true,
+          in_library: true,
+          audio_format: {} as never,
+          details: null,
+          url: null,
+        },
+      ],
+    });
+    const wrapper = mount(SelectedPane, {
+      props: { items: [item], variant: "details" },
+      global: { mocks: { $t: (key: string) => key } },
+    });
+    await wrapper
+      .find('[data-source="filesystem_local--1"]')
+      .trigger("contextmenu", { clientX: 3, clientY: 4 });
+
+    const call = mocks.emit.mock.calls.find(
+      (entry) => entry[0] === "contextmenu",
+    )!;
+    const menu = (call[1] as { items: Array<Record<string, unknown>> }).items;
+    expect(menu.map((entry) => entry.label)).toEqual([
+      "library_manager.selected.media_info",
+      "library_manager.selected.file_location",
+      "library_manager.selected.remove_source",
+      "add_playlist",
+    ]);
+
+    (menu[0].action as () => void)();
+    expect(mocks.push).toHaveBeenCalledWith({
+      name: MediaType.TRACK,
+      params: { itemId: "t1", provider: "library" },
+    });
+
+    // the folder the file lives in, browsed through the tree
+    (menu[1].action as () => void)();
+    expect(wrapper.emitted("openFolder")?.[0]).toEqual([
+      "filesystem_local--1://Muse/Resistance",
+      "filesystem_local--1",
+    ]);
+
+    // removing asks first, then drops just this mapping
+    (menu[2].action as () => void)();
+    const confirm = mocks.emit.mock.calls.find(
+      (entry) => entry[0] === "deleteConfirmationDialog",
+    )!;
+    await (confirm[1] as { onConfirm: () => Promise<void> }).onConfirm();
+    expect(mocks.removeProviderMapping).toHaveBeenCalledWith(
+      MediaType.TRACK,
+      "t1",
+      item.provider_mappings[0],
+    );
+
+    (menu[3].action as () => void)();
+    expect(mocks.emit).toHaveBeenCalledWith("playlistdialog", {
+      items: [item],
+      parentItem: undefined,
+    });
   });
 
   it("keeps only the actions that take several items", async () => {

@@ -2771,7 +2771,11 @@
             "add_to_queue": "Add to queue",
             "go_to_album": "Go to album",
             "go_to_artist": "Go to artist",
-            "more": "More actions"
+            "more": "More actions",
+            "media_info": "Media info",
+            "file_location": "File location",
+            "remove_source": "Remove from {provider}",
+            "remove_source_confirm": "Drop this item's {provider} entry? When it is the item's only source, the item leaves the library as well."
         },
         "playing_here": "No player was picked, so this browser plays it.",
         "sync_issues": {

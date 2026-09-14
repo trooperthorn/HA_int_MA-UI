@@ -12,7 +12,8 @@ export type CountableKey =
   | "artists"
   | "album_artists"
   | "albums"
-  | "playlists";
+  | "playlists"
+  | "genres";
 
 export const COUNTABLE_MEDIA_TYPE: Readonly<Record<CountableKey, MediaType>> = {
   tracks: MediaType.TRACK,
@@ -20,7 +21,32 @@ export const COUNTABLE_MEDIA_TYPE: Readonly<Record<CountableKey, MediaType>> = {
   album_artists: MediaType.ARTIST,
   albums: MediaType.ALBUM,
   playlists: MediaType.PLAYLIST,
+  genres: MediaType.GENRE,
 };
+
+// genres are library-only items and the genre listing ignores the provider
+// filter, so a source's genres are the distinct ones tagged on its tracks;
+// a page this size keeps a twenty-thousand-track source to ten requests
+const GENRE_PAGE_SIZE = 2000;
+
+async function countSourceGenres(provider: string): Promise<number> {
+  const names = new Set<string>();
+  for (let offset = 0; ; offset += GENRE_PAGE_SIZE) {
+    const tracks = await api.getLibraryTracks(
+      undefined,
+      undefined,
+      GENRE_PAGE_SIZE,
+      offset,
+      undefined,
+      provider,
+    );
+    for (const track of tracks) {
+      for (const genre of track.metadata?.genres ?? []) names.add(genre);
+    }
+    if (tracks.length < GENRE_PAGE_SIZE) break;
+  }
+  return names.size;
+}
 
 async function reaches(
   key: CountableKey,
@@ -85,6 +111,7 @@ export async function countSourceItems(
   provider: string,
   upper?: number,
 ): Promise<number> {
+  if (key === "genres") return countSourceGenres(provider);
   if (!(await reaches(key, provider, 0))) return 0;
   let hi: number;
   if (upper !== undefined && upper >= 0) {

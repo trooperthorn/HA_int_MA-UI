@@ -138,7 +138,11 @@
             :min-size="PANE_DEFAULTS.queueMinSize"
             class="library-manager__pane"
           >
-            <SelectedPane :items="selection" variant="details" />
+            <SelectedPane
+              :items="selection"
+              variant="details"
+              @open-folder="openFolderPath"
+            />
           </SplitterPanel>
         </SplitterGroup>
       </SplitterPanel>
@@ -645,12 +649,16 @@ async function jumpToLetter(letters: string) {
 }
 
 function openFolder(folder: BrowseFolder) {
+  openFolderPath(folder.path, folder.provider);
+}
+
+function openFolderPath(path: string, provider: string) {
   selectFromTree({
     scope: "browse",
-    node: `browse:${folder.path}`,
+    node: `browse:${path}`,
     mediaType: MediaType.FOLDER,
-    browsePath: folder.path,
-    provider: [folder.provider],
+    browsePath: path,
+    provider: [provider],
   });
 }
 

@@ -191,6 +191,7 @@ const SOURCE_COUNT_KEYS: readonly CountableKey[] = [
   "artists",
   "album_artists",
   "albums",
+  "genres",
 ];
 
 async function ensureSourceCount(instanceId: string, key: CountableKey) {
@@ -351,8 +352,7 @@ const isCountable = (key: string): key is CountableKey =>
   SOURCE_COUNT_KEYS.includes(key as CountableKey);
 
 // the count shown for a listing: the library's, or the source's when the
-// listing is narrowed to one (genres ignore the source filter on the server,
-// so they carry no count there)
+// listing is narrowed to one
 function countFor(
   countKey: string | undefined,
   instanceId: string | undefined,

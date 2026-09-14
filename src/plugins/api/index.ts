@@ -33,6 +33,7 @@ import {
   type Playlist,
   type PlaylistAccess,
   type ProviderInstance,
+  type ProviderMapping,
   type QueueItem,
   type Radio,
   type ServerInfoMessage,
@@ -1500,6 +1501,22 @@ export class MusicAssistantApi {
     return this.sendCommand("music/library/add_item", {
       item,
       overwrite_existing,
+    });
+  }
+
+  /**
+   * Drop one provider mapping from a library item. The server removes the
+   * item itself when this was its last mapping.
+   */
+  public async removeProviderMapping(
+    media_type: MediaType,
+    db_id: string | number,
+    mapping: ProviderMapping,
+  ): Promise<void> {
+    return this.sendCommand("music/remove_provider_mapping", {
+      media_type,
+      db_id,
+      mapping,
     });
   }
 

@@ -45,14 +45,22 @@
         >
           {{ formatLine }}
         </div>
+        <!-- each source icon opens its own menu: info, where the file is,
+             drop this source, add to a playlist -->
         <div class="selected-pane__sources">
-          <ProviderIcon
+          <button
             v-for="mapping in mappings"
-            :key="mapping.provider_instance"
-            :domain="mapping.provider_domain"
-            :size="14"
+            :key="`${mapping.provider_instance}:${mapping.item_id}`"
+            type="button"
+            class="selected-pane__source"
+            :data-source="mapping.provider_instance"
             :title="mapping.provider_instance"
-          />
+            :aria-label="mapping.provider_instance"
+            @click="openSourceMenu($event, mapping)"
+            @contextmenu.prevent="openSourceMenu($event, mapping)"
+          >
+            <ProviderIcon :domain="mapping.provider_domain" :size="14" />
+          </button>
         </div>
         <div v-if="pathLine" class="selected-pane__path" :title="pathLine">
           {{ pathLine }}
@@ -88,13 +96,16 @@
 <script setup lang="ts">
 import {
   Disc3,
+  FolderOpen,
   Heart,
+  Info,
   ListEnd,
   ListMusic,
   ListPlus,
   MoreHorizontal,
   Pencil,
   Play,
+  Trash2,
   Users,
 } from "@lucide/vue";
 import { computed, type Component } from "vue";
@@ -109,6 +120,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import type { ContextMenuItem } from "@/helpers/context_menu_item";
 import {
   handleMenuBtnClick,
   handlePlayBtnClick,
@@ -140,6 +152,11 @@ const props = withDefaults(
   }>(),
   { parentItem: undefined, variant: "full" },
 );
+
+const emit = defineEmits<{
+  // show the folder a file lives in, in the library manager's tree
+  openFolder: [path: string, provider: string];
+}>();
 
 const { t } = useI18n();
 const router = useRouter();
@@ -211,6 +228,82 @@ const pathLine = computed(
       mapping.provider_domain.startsWith("filesystem_"),
     )?.item_id ?? "",
 );
+
+// filesystem providers key their items by the file's path under the share;
+// the folder it lives in browses as `<instance>://<directory>`
+function folderPathOf(mapping: ProviderMapping): string | undefined {
+  if (!mapping.provider_domain.startsWith("filesystem_")) return undefined;
+  const slash = mapping.item_id.lastIndexOf("/");
+  return `${mapping.provider_instance}://${
+    slash >= 0 ? mapping.item_id.slice(0, slash) : ""
+  }`;
+}
+
+function openSourceMenu(event: MouseEvent, mapping: ProviderMapping) {
+  const current = item.value;
+  if (!current) return;
+  const providerName =
+    api.getProvider(mapping.provider_instance)?.name ??
+    mapping.provider_instance;
+  const folder = folderPathOf(mapping);
+  const menuItems: ContextMenuItem[] = [
+    {
+      label: "library_manager.selected.media_info",
+      icon: Info,
+      action: () =>
+        void router.push({
+          name: current.media_type,
+          params: { itemId: current.item_id, provider: current.provider },
+        }),
+    },
+    {
+      label: "library_manager.selected.file_location",
+      icon: FolderOpen,
+      disabled: !folder && !mapping.url,
+      action: () => {
+        if (folder) emit("openFolder", folder, mapping.provider_instance);
+        else if (mapping.url) window.open(mapping.url, "_blank", "noopener");
+      },
+    },
+    {
+      label: "library_manager.selected.remove_source",
+      labelArgs: { provider: providerName },
+      icon: Trash2,
+      action: () =>
+        eventbus.emit("deleteConfirmationDialog", {
+          title: t("library_manager.selected.remove_source", {
+            provider: providerName,
+          }),
+          message: t("library_manager.selected.remove_source_confirm", {
+            provider: providerName,
+          }),
+          confirmLabel: t("remove"),
+          onConfirm: () =>
+            api.removeProviderMapping(
+              current.media_type,
+              current.item_id,
+              mapping,
+            ),
+        }),
+    },
+  ];
+  if (current.media_type === MediaType.TRACK) {
+    menuItems.push({
+      label: "add_playlist",
+      icon: ListMusic,
+      action: () =>
+        eventbus.emit("playlistdialog", {
+          items: [current as MediaItemType],
+          parentItem: props.parentItem,
+        }),
+    });
+  }
+  eventbus.emit("contextmenu", {
+    items: menuItems,
+    posX: event.clientX,
+    posY: event.clientY,
+  });
+}
 
 const isEditable = (current: GridItem): current is Track | Playlist | Radio =>
   current.media_type === MediaType.TRACK ||
@@ -453,6 +546,20 @@ const actions = computed<PaneAction[]>(() => {
   gap: 6px;
   min-height: 14px;
   margin-top: 2px;
+}
+
+.selected-pane__source {
+  display: inline-flex;
+  padding: 2px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.selected-pane__source:hover {
+  background: rgba(var(--v-theme-fg), 0.1);
 }
 
 .selected-pane__path {
