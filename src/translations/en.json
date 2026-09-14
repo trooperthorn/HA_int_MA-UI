@@ -2831,7 +2831,18 @@
             "sort_recents": "Recents",
             "sort_alphabetical": "Alphabetical",
             "grid": "Grid view",
-            "list": "List view"
+            "list": "List view",
+            "menu": "Menu",
+            "web_player": {
+                "status": "Web player: {codec} {rate}, {buffer} buffer, {link}",
+                "off": "The web player is not running in this browser",
+                "direct": "local network",
+                "remote": "remote link",
+                "buffer": "Web player buffer",
+                "buffer_auto": "Automatic (0.5 s local, 2.5 s remote)",
+                "codec": "Web player codec",
+                "codec_auto": "Automatic"
+            }
         }
     },
     "screens": "Screens",

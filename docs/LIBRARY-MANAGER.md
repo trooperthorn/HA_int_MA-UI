@@ -246,7 +246,14 @@ not open the desktop manager. `LibraryEntry.vue` picks
 audiobooks, albums and artists (100 of each, newest first), a chip per kind
 to narrow it, a **Recents** / **Alphabetical** sort (recents = last played
 or date added), list or grid layout, tap to open, hold or right-click for
-the item menu. The search icon opens the command center; the plus creates a
-playlist. Sort and layout are remembered in the `libraryManager.mobile`
-preference.
+the item menu. The search icon opens the command center; the menu icon
+offers **Create** (a playlist) and this browser's web player settings:
+what it negotiated (codec, sample rate, buffer, local or remote link), a
+**Web player buffer** choice (Automatic is 0.5 s on the local network and
+2.5 s over a remote link such as the Home Assistant app away from home;
+0.5 s to 10 s otherwise) and a **Web player codec** choice (Automatic, Opus,
+FLAC, PCM; the choice goes first and the automatic set stays as fallback).
+Both are kept per device in the browser's storage, so a phone on cellular
+and a desktop on the LAN keep their own. Sort and layout are remembered in
+the `libraryManager.mobile` preference.
 

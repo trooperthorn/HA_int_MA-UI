@@ -17,7 +17,7 @@ import {
   resetMediaSession,
 } from "@/helpers/mediaSession";
 import { getDeviceName, resolvePlayerQueue } from "@/plugins/api/helpers";
-import { SendspinPlayer, Codec } from "@sendspin/sendspin-js";
+import { SendspinPlayer } from "@sendspin/sendspin-js";
 
 import almostSilentMp3 from "@/assets/almost_silent.mp3";
 import api from "@/plugins/api";
@@ -35,6 +35,12 @@ import {
   prepareSendspinSession,
   isDirectConnection,
 } from "@/plugins/sendspin-connection";
+import {
+  resolveBuffer,
+  resolveCodecs,
+  webPlayerStatus,
+  webPlayerTuning,
+} from "@/plugins/web_player_tuning";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 
@@ -283,22 +289,17 @@ const registerPairing = () => {
     .catch((error) => console.warn("Sendspin: auto-pairing failed", error));
 };
 
-// Setup on mount
-onMounted(() => {
-  console.debug("Sendspin: Component mounted, connecting...");
+// what the player negotiated, for the phone layout's menu
+function reportFormat() {
+  const format = player?.currentFormat ?? null;
+  webPlayerStatus.codec = format?.codec ?? null;
+  webPlayerStatus.sampleRate = format?.sample_rate ?? null;
+}
 
-  registerWebPlayerAudioUnlock(primeAudio);
-
-  // If the silent audio backs the session, play it now that silentAudioRef exists
-  if (
-    silentAudioBacksSession.value &&
-    !mediaSessionDisabled.value &&
-    webPlayer.interacted &&
-    silentAudioRef.value
-  ) {
-    silentAudioRef.value.play().catch(() => {});
-  }
-
+// Creates the Sendspin player for this browser and connects it. Called on
+// mount and again when the codec choice changes, since the codecs are
+// advertised when the player is created.
+function startPlayer() {
   // Create and initialize player
   if (audioRef.value) {
     const audioElement = isMobileOutput ? audioRef.value : undefined;
@@ -329,12 +330,18 @@ onMounted(() => {
         // flac/pcm instead closes that path in every browser. Safari has no
         // flac support, hence pcm in the fallback list.
         const hasNativeOpus = typeof AudioDecoder !== "undefined";
-        const codecs: Codec[] = hasNativeOpus
-          ? ["opus", "flac"]
-          : ["flac", "pcm"];
+        const direct = isDirectConnection();
+        const codecs = resolveCodecs(webPlayerTuning.codec, hasNativeOpus);
+        // the buffer follows the link: the ingress proxy a phone comes in
+        // through needs far more cushion than the LAN, and the user can
+        // pick a size outright from the phone layout's menu
+        const buffer = resolveBuffer(webPlayerTuning.bufferMs, direct);
+        webPlayerStatus.direct = direct;
+        webPlayerStatus.minBufferMs = buffer.minBufferMs;
+        webPlayerStatus.requiredLeadTimeMs = buffer.requiredLeadTimeMs;
 
         console.debug(
-          `Sendspin: Using codecs [${codecs.join(", ")}] for ${isDirectConnection() ? "direct" : "remote"} connection`,
+          `Sendspin: Using codecs [${codecs.join(", ")}] and a ${buffer.minBufferMs} ms buffer for ${direct ? "direct" : "remote"} connection`,
         );
 
         // Use a placeholder URL - the WebSocket interceptor will route through WebRTC
@@ -348,12 +355,13 @@ onMounted(() => {
           productName: "Web Player",
           codecs,
           syncDelay,
-          requiredLeadTimeMs: 250,
+          requiredLeadTimeMs: buffer.requiredLeadTimeMs,
           // Startup lead the server uses to schedule the first chunk, so it
           // directly delays first audio and must stay small. Once playback is
           // running the buffer grows well beyond this on its own.
-          minBufferMs: 500,
+          minBufferMs: buffer.minBufferMs,
           onStateChange: (state) => {
+            reportFormat();
             // Update reactive state when player state changes
             isPlaying.value = state.isPlaying;
             volume.value = state.volume;
@@ -390,12 +398,61 @@ onMounted(() => {
           },
         });
 
-        return player.connect().then(registerPairing);
+        return player.connect().then(() => {
+          webPlayerStatus.connected = true;
+          reportFormat();
+          registerPairing();
+        });
       })
       .catch((error) => {
         console.error("Sendspin: Failed to connect", error);
       });
   }
+}
+
+// a new buffer applies to the running player; a new codec needs a fresh
+// session
+watch(
+  () => webPlayerTuning.bufferMs,
+  (bufferMs) => {
+    if (!player) return;
+    const buffer = resolveBuffer(bufferMs, webPlayerStatus.direct);
+    player.setMinBufferMs(buffer.minBufferMs);
+    player.setRequiredLeadTimeMs(buffer.requiredLeadTimeMs);
+    webPlayerStatus.minBufferMs = buffer.minBufferMs;
+    webPlayerStatus.requiredLeadTimeMs = buffer.requiredLeadTimeMs;
+  },
+);
+
+watch(
+  () => webPlayerTuning.codec,
+  () => {
+    if (!player) return;
+    player.disconnect("restart");
+    player = null;
+    webPlayerStatus.connected = false;
+    webPlayerStatus.codec = null;
+    startPlayer();
+  },
+);
+
+// Setup on mount
+onMounted(() => {
+  console.debug("Sendspin: Component mounted, connecting...");
+
+  registerWebPlayerAudioUnlock(primeAudio);
+
+  // If the silent audio backs the session, play it now that silentAudioRef exists
+  if (
+    silentAudioBacksSession.value &&
+    !mediaSessionDisabled.value &&
+    webPlayer.interacted &&
+    silentAudioRef.value
+  ) {
+    silentAudioRef.value.play().catch(() => {});
+  }
+
+  startPlayer();
 
   // Audio element event listeners for mobile MediaSession resilience
   if (audioRef.value) {
@@ -433,6 +490,8 @@ onBeforeUnmount(() => {
       isPlaybackMode(webPlayer.mode) ? "restart" : "user_request",
     );
     player = null;
+    webPlayerStatus.connected = false;
+    webPlayerStatus.codec = null;
   }
   if (unsubMetadata) unsubMetadata();
   if (silentAudioInterval) clearInterval(silentAudioInterval);

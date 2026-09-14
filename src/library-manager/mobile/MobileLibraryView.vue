@@ -19,13 +19,14 @@
       >
         <Search :size="26" />
       </button>
+      <!-- create, and this browser's web player buffer and codec -->
       <button
         type="button"
         class="mobile-library__icon-button"
-        :aria-label="t('library_manager.mobile.create')"
-        @click="eventbus.emit('createPlaylist', {})"
+        :aria-label="t('library_manager.mobile.menu')"
+        @click="openMainMenu($event)"
       >
-        <Plus :size="28" />
+        <Menu :size="26" />
       </button>
     </header>
 
@@ -143,9 +144,12 @@
 <script setup lang="ts">
 import {
   ArrowDownUp,
+  AudioLines,
+  Gauge,
   LayoutGrid,
   LibraryBig,
   List,
+  Menu,
   Plus,
   Search,
   SlidersHorizontal,
@@ -176,6 +180,15 @@ import {
 } from "@/plugins/api/interfaces";
 import { eventbus } from "@/plugins/eventbus";
 import { store } from "@/plugins/store";
+import {
+  BUFFER_AUTO,
+  BUFFER_CHOICES_MS,
+  CODEC_CHOICES,
+  setWebPlayerBuffer,
+  setWebPlayerCodec,
+  webPlayerStatus,
+  webPlayerTuning,
+} from "@/plugins/web_player_tuning";
 
 defineOptions({ name: "MobileLibrary" });
 
@@ -296,6 +309,67 @@ function openSourceMenu(event: MouseEvent) {
   ];
   eventbus.emit("contextmenu", {
     items: menuItems,
+    posX: event.clientX,
+    posY: event.clientY,
+  });
+}
+
+// ---- the header menu: create, and the web player's buffer and codec ------
+
+function bufferLabel(ms: number): string {
+  if (ms === BUFFER_AUTO)
+    return t("library_manager.mobile.web_player.buffer_auto");
+  return ms >= 1000 ? `${ms / 1000} s` : `${ms} ms`;
+}
+
+function webPlayerStatusLabel(): string {
+  const status = webPlayerStatus;
+  if (!status.connected) return t("library_manager.mobile.web_player.off");
+  return t("library_manager.mobile.web_player.status", {
+    codec: (status.codec ?? "?").toUpperCase(),
+    rate: status.sampleRate ? `${status.sampleRate / 1000} kHz` : "",
+    buffer: bufferLabel(status.minBufferMs ?? 0),
+    link: t(
+      status.direct
+        ? "library_manager.mobile.web_player.direct"
+        : "library_manager.mobile.web_player.remote",
+    ),
+  });
+}
+
+function openMainMenu(event: MouseEvent) {
+  const items: ContextMenuItem[] = [
+    {
+      label: "library_manager.mobile.create",
+      icon: Plus,
+      action: () => eventbus.emit("createPlaylist", {}),
+    },
+    // what this browser's player runs with right now
+    { label: webPlayerStatusLabel(), disabled: true },
+    {
+      label: "library_manager.mobile.web_player.buffer",
+      icon: Gauge,
+      subItems: BUFFER_CHOICES_MS.map<ContextMenuItem>((ms) => ({
+        label: bufferLabel(ms),
+        selected: webPlayerTuning.bufferMs === ms,
+        action: () => setWebPlayerBuffer(ms),
+      })),
+    },
+    {
+      label: "library_manager.mobile.web_player.codec",
+      icon: AudioLines,
+      subItems: CODEC_CHOICES.map<ContextMenuItem>((codec) => ({
+        label:
+          codec === "auto"
+            ? "library_manager.mobile.web_player.codec_auto"
+            : codec.toUpperCase(),
+        selected: webPlayerTuning.codec === codec,
+        action: () => setWebPlayerCodec(codec),
+      })),
+    },
+  ];
+  eventbus.emit("contextmenu", {
+    items,
     posX: event.clientX,
     posY: event.clientY,
   });
