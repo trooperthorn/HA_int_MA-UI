@@ -93,9 +93,23 @@ filters" clears them all.
 
 The same list as the fullscreen player: played, now playing and up-next
 sections, the queue-mode banner, drag to reorder up-next rows, ⋮ per
-row. The head shows the position (`n / m`), a button that scrolls to the
-current track and one that clears the queue. With the list focused:
-arrows move, Enter plays the row, Delete removes it.
+row. Hovering a row's artwork offers _Play now_. The head shows the
+position (`n / m`), a button that scrolls to the current track and one
+that clears the queue; the _Up next_ divider has a button that appends
+the grid's selected rows and one that clears everything after the
+current track (rows the player has already buffered stay). With the
+list focused: arrows move, Enter plays the row, Delete removes it.
+
+### Playing from one source
+
+A listing narrowed to one source (a source's own tracks, or the Library
+node after its right-click choice) plays through that source: each row
+is sent with the source's own item in its uri, and the app's
+`play_source_steer` server edit puts that source ahead of the server's
+quality order when the stream is resolved. The source column and the
+selected pane list that source first. On a server without the edit the
+listing is unchanged but playback still comes from the best-quality copy
+of the track.
 
 ### Selected item
 

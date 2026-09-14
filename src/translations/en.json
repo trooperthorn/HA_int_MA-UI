@@ -2796,7 +2796,9 @@
         "toggle_selected": "Show or hide the selected item panel",
         "queue": {
             "locate": "Scroll to the current track",
-            "clear": "Clear the queue"
+            "clear": "Clear the queue",
+            "clear_up_next": "Clear up next",
+            "add_selection": "Add the selected rows to up next"
         },
         "selected": {
             "title": "Selected",

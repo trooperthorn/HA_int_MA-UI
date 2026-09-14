@@ -33,6 +33,20 @@
     <!-- thumbnail (with now-playing equalizer overlay) -->
     <div class="qitem__thumb">
       <MediaItemThumb size="48" :item="item" />
+      <!-- hovering the artwork of any row but the playing one offers to
+           jump to it; the art blurs behind the button so it reads as a
+           control and not as a badge -->
+      <button
+        v-if="state !== 'playing' && !ghost"
+        type="button"
+        class="qitem__play"
+        :aria-label="$t('play_now')"
+        @click.stop="emit('playNow', $event)"
+        @pointerdown.stop
+        @contextmenu.prevent.stop
+      >
+        <PlayIcon class="size-5" fill="currentColor" />
+      </button>
       <div v-if="showEqualizer" class="qitem__eq" aria-hidden="true">
         <MiniEqualizer
           v-if="waveformBins"
@@ -151,6 +165,7 @@ import {
   EllipsisVerticalIcon,
   GripVerticalIcon,
   InfoIcon,
+  PlayIcon,
   TriangleAlertIcon,
 } from "@lucide/vue";
 import { computed, ref } from "vue";
@@ -185,6 +200,7 @@ const emit = defineEmits<{
   (e: "click", event: Event): void;
   (e: "menu", event: Event): void;
   (e: "dragstart", event: PointerEvent): void;
+  (e: "playNow", event: Event): void;
 }>();
 
 const hovered = ref(false);
@@ -289,6 +305,28 @@ const isMobile = computed(() => store.mobileLayout);
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.45);
+}
+
+.qitem__play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  padding: 0;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.12s ease;
+}
+
+.qitem:hover .qitem__play,
+.qitem__play:focus-visible {
+  opacity: 1;
 }
 
 .qitem__body {

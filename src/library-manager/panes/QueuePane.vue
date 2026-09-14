@@ -85,6 +85,30 @@
               {{ upNextCount }}
             </span>
             <span class="queue-pane__divider-line"></span>
+            <template v-if="row.divider === 'up_next'">
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                class="queue-pane__button"
+                :disabled="!selection?.length"
+                :aria-label="$t('library_manager.queue.add_selection')"
+                :title="$t('library_manager.queue.add_selection')"
+                @click="addSelection"
+              >
+                <ListPlus :size="14" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                class="queue-pane__button"
+                :disabled="!upNextCount"
+                :aria-label="$t('library_manager.queue.clear_up_next')"
+                :title="$t('library_manager.queue.clear_up_next')"
+                @click="clearUpNext"
+              >
+                <ListX :size="14" />
+              </Button>
+            </template>
           </div>
           <QueueModeBanner v-if="row.divider === 'up_next'" />
           <QueueListItem
@@ -97,6 +121,7 @@
             :request-badge-color="requestBadgeColor"
             :boost-badge-color="boostBadgeColor"
             @click="onRowClick(row.index)"
+            @play-now="playIndex(row.index)"
             @menu="(e: Event) => openQueueItemMenu(e, row.index)"
             @dragstart="(e: PointerEvent) => startItemDrag(e, row.index)"
           />
@@ -129,7 +154,7 @@
 </template>
 
 <script setup lang="ts">
-import { ListX, LocateFixed } from "@lucide/vue";
+import { ListPlus, ListX, LocateFixed } from "@lucide/vue";
 import { computed, nextTick, ref, toRef, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import {
@@ -144,9 +169,16 @@ import { useFullscreenQueue } from "@/layouts/default/PlayerOSD/useFullscreenQue
 import { useUserPreferences } from "@/composables/userPreferences";
 import { currentQueueIndex } from "@/helpers/queue_position";
 import { api } from "@/plugins/api";
+import { QueueOption } from "@/plugins/api/interfaces";
 import { store } from "@/plugins/store";
+import type { GridItem } from "../columns";
+import { ensurePlayer } from "../playerGate";
 
-const props = defineProps<{ visible: boolean }>();
+const props = defineProps<{
+  visible: boolean;
+  // the grid's selected rows, for the button that appends them
+  selection?: GridItem[];
+}>();
 
 // the pane never shows lyrics; the queue list is the whole pane
 const {
@@ -199,6 +231,26 @@ function locate() {
 function clearQueue() {
   const queue = store.activePlayerQueue;
   if (queue) api.queueCommandClear(queue.queue_id);
+}
+
+// drops everything after the current track; the server keeps whatever it
+// has already handed to the stream buffer, so those rows stay
+async function clearUpNext() {
+  const queue = store.activePlayerQueue;
+  if (!queue) return;
+  const first = currentQueueIndex(queue) + 1;
+  const count = (queue.items ?? 0) - first;
+  if (count <= 0) return;
+  const items = await api.getPlayerQueueItems(queue.queue_id, count, first);
+  for (const item of items) {
+    api.queueCommandDelete(queue.queue_id, item.queue_item_id);
+  }
+}
+
+async function addSelection() {
+  const items = props.selection ?? [];
+  if (!items.length || !(await ensurePlayer())) return;
+  await api.playMedia(items, QueueOption.ADD);
 }
 
 // ---- keyboard: walk the rows, play one, drop one -----------------------------
