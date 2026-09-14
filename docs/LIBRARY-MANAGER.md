@@ -268,7 +268,17 @@ sync error over 250 ms held for ten seconds step down; ten quiet minutes
 step back up one rung; thirty seconds after each move are ignored while
 the stream settles. Codec and bitrate change on the server (the stream
 follows in place), the buffer on the running player; your own choices are
-the ceiling and the buffer never shrinks below them. The menu shows the
-rung it is on. Sort and layout are remembered in the `libraryManager.mobile`
-preference.
+the ceiling and the buffer never shrinks below them. Where the browser
+reports the kind of link (Chromium's `navigator.connection`: Android, the
+Home Assistant app), adaptive mode also starts on the rung that link
+suggests (data saver or 2G the last rung, 3G the middle one, a round trip
+of 300 ms or more the first step down) and steps down at once when the
+phone changes networks; it only ever moves down on that signal, the quiet
+timer still decides when to move up. The menu shows the rung it is on.
+Sort and layout are remembered in the `libraryManager.mobile` preference.
+
+On a phone the player also asks the browser for its `playback` audio
+output buffer rather than the smallest one, and FLAC is decoded by the
+browser's own WebCodecs decoder like Opus; both come from the fork's
+patch of the Sendspin SDK, see `SENDSPIN-JS-PATCH.md`.
 

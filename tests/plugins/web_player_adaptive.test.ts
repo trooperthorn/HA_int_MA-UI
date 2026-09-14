@@ -2,6 +2,7 @@ import {
   AdaptiveController,
   LADDER,
   resolveRung,
+  rungForConnection,
   SETTLE_MS,
   STEP_UP_AFTER_MS,
 } from "@/plugins/web_player_adaptive";
@@ -76,6 +77,34 @@ describe("AdaptiveController", () => {
     expect(
       controller.observe(sample(now + 2 * STEP_UP_AFTER_MS + 2_000, 2)),
     ).toBeNull();
+  });
+});
+
+describe("AdaptiveController.floor", () => {
+  it("moves down to the floor but never up", () => {
+    const controller = new AdaptiveController();
+    controller.reset(0);
+    expect(controller.floor(2, 0)).toBe(true);
+    expect(controller.rung).toBe(2);
+    expect(controller.floor(1, 1_000)).toBe(false);
+    expect(controller.rung).toBe(2);
+    expect(controller.floor(99, 2_000)).toBe(true);
+    expect(controller.rung).toBe(LADDER.length - 1);
+    // a move starts a settle window like any other
+    expect(controller.observe(sample(3_000, 0, 900))).toBeNull();
+    expect(controller.observe(sample(SETTLE_MS + 13_000, 0, 900))).toBeNull();
+  });
+});
+
+describe("rungForConnection", () => {
+  it("maps what the browser says about the link to a starting rung", () => {
+    expect(rungForConnection(null)).toBe(0);
+    expect(rungForConnection({ effectiveType: "4g", rtt: 50 })).toBe(0);
+    expect(rungForConnection({ effectiveType: "4g", rtt: 300 })).toBe(1);
+    expect(rungForConnection({ effectiveType: "3g" })).toBe(2);
+    expect(rungForConnection({ effectiveType: "2g" })).toBe(3);
+    expect(rungForConnection({ effectiveType: "slow-2g" })).toBe(3);
+    expect(rungForConnection({ effectiveType: "4g", saveData: true })).toBe(3);
   });
 });
 

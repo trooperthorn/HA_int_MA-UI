@@ -35,3 +35,6 @@ overrides:
   # the resolution it already has. The fix is a direct devDependency on
   # esbuild ^0.28.1 in package.json, which sits inside that peer range and
   # settles the version explicitly.
+
+patchedDependencies:
+  '@sendspin/sendspin-js@5.0.0': patches/@sendspin__sendspin-js@5.0.0.patch

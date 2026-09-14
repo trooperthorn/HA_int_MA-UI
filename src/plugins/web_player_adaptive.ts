@@ -53,6 +53,58 @@ export const SETTLE_MS = 30_000;
 
 export type Verdict = "down" | "up" | null;
 
+// what Chromium says about the link (navigator.connection); absent on
+// Firefox and Safari, where the stream stays the only probe
+export interface ConnectionHint {
+  // "slow-2g" | "2g" | "3g" | "4g"
+  effectiveType?: string;
+  // the user asked for less data
+  saveData?: boolean;
+  // estimated round trip in ms, in 25 ms steps
+  rtt?: number;
+}
+
+const CONNECTION_RTT_SLOW_MS = 300;
+
+/** The browser's connection hint, or null where it offers none. */
+export function readConnection(): ConnectionHint | null {
+  const connection = connectionTarget() as
+    | (EventTarget & ConnectionHint)
+    | null;
+  if (!connection) return null;
+  return {
+    effectiveType: connection.effectiveType,
+    saveData: connection.saveData,
+    rtt: connection.rtt,
+  };
+}
+
+/** navigator.connection as an event target (it fires "change"), or null. */
+export function connectionTarget(): EventTarget | null {
+  if (typeof navigator === "undefined") return null;
+  const connection = (navigator as { connection?: unknown }).connection;
+  return connection && typeof connection === "object"
+    ? (connection as EventTarget)
+    : null;
+}
+
+/**
+ * The lowest rung a link of this kind should start on, before a dropout
+ * has been heard: data saver and 2G take the last rung, 3G the middle one,
+ * a slow round trip the first step down, anything else the user's choices.
+ */
+export function rungForConnection(hint: ConnectionHint | null): number {
+  if (!hint) return 0;
+  const last = LADDER.length - 1;
+  if (hint.saveData) return last;
+  if (hint.effectiveType === "slow-2g" || hint.effectiveType === "2g") {
+    return last;
+  }
+  if (hint.effectiveType === "3g") return Math.min(2, last);
+  if ((hint.rtt ?? 0) >= CONNECTION_RTT_SLOW_MS) return Math.min(1, last);
+  return 0;
+}
+
 /**
  * Watches the stream's health and says when to move on the ladder. Feed it
  * a sample every couple of seconds; it answers "down", "up" or nothing.
@@ -122,6 +174,19 @@ export class AdaptiveController {
       return "up";
     }
     return null;
+  }
+
+  /**
+   * Move down to at least this rung, for a link known to be poor before
+   * the stream has said so. Never moves up; that stays with the quiet
+   * timer. Returns whether it moved.
+   */
+  floor(rung: number, now: number): boolean {
+    const wanted = Math.min(rung, this.ladderSize - 1);
+    if (wanted <= this.rung) return false;
+    this.rung = wanted;
+    this.moved(now);
+    return true;
   }
 
   private moved(now: number) {
