@@ -3,7 +3,9 @@
 The Music Assistant frontend/panel is developed in Vue, development instructions below.
 
 This fork adds a desktop **Library manager** (`/library`) for large local
-collections: see [docs/LIBRARY-MANAGER.md](docs/LIBRARY-MANAGER.md).
+collections: see [docs/LIBRARY-MANAGER.md](docs/LIBRARY-MANAGER.md). It also
+routes whole-home audio from the player that streams to the receiver and
+amplifier zones that play it: see [docs/MUSIC-ROUTING.md](docs/MUSIC-ROUTING.md).
 
 ## Run it on Home Assistant
 
@@ -128,10 +130,10 @@ This project is migrating from **Vuetify** to **[shadcn-vue](https://www.shadcn-
 - **Example pattern**:
   ```ts
   try {
-    await api.doSomething()
-    toast.success("Action completed successfully")
+    await api.doSomething();
+    toast.success("Action completed successfully");
   } catch (e) {
-    toast.error("Failed to complete action")
+    toast.error("Failed to complete action");
   }
   ```
 - **Do not use `console.error` as a substitute** for user-facing feedback on API errors (or for meaningful calls).
