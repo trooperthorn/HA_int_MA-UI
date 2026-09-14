@@ -62,14 +62,11 @@ import PlayerIcon from "@/components/PlayerIcon.vue";
 import { useActiveTrackWaveform } from "@/composables/useActiveTrackWaveform";
 import { useVisualizer } from "@/composables/visualizer/useVisualizer";
 import { MarqueeTextSync } from "@/helpers/marquee_text_sync";
-import {
-  type ImageColorPalette,
-  getMediaImageUrl,
-  paletteFromServer,
-} from "@/helpers/utils";
+import { type ImageColorPalette, paletteFromServer } from "@/helpers/utils";
 import PlayerTimeline from "@/layouts/default/PlayerOSD/PlayerTimeline.vue";
 import { $t } from "@/plugins/i18n";
 import { store } from "@/plugins/store";
+import { nowPlayingImageUrl } from "@/helpers/now_playing_image";
 import { useColorMode } from "@vueuse/core";
 import Color from "color";
 import { computed, onMounted } from "vue";
@@ -92,7 +89,8 @@ const marqueeSync = new MarqueeTextSync();
 const { waveformBins: waveformData } = useActiveTrackWaveform();
 
 const artworkUrl = computed(
-  () => getMediaImageUrl(store.activePlayer?.current_media?.image_url) || null,
+  () =>
+    nowPlayingImageUrl(store.activePlayer, store.curQueueItem, 1024) || null,
 );
 
 const {

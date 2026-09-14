@@ -245,7 +245,8 @@ import {
   isBuiltinPlayer,
 } from "@/helpers/players";
 import { isQueueEnded } from "@/helpers/queue_position";
-import { getMediaImageUrl, getPlayerName } from "@/helpers/utils";
+import { nowPlayingImageUrl } from "@/helpers/now_playing_image";
+import { getPlayerName } from "@/helpers/utils";
 import api from "@/plugins/api";
 import { resolvePlayerQueue } from "@/plugins/api/helpers";
 import {
@@ -305,13 +306,19 @@ const artworkUrl = computed(() => {
   if (
     artworkFailed.value ||
     props.player.powered === false ||
-    !props.player.current_media?.image_url ||
     (props.player.playback_state !== PlaybackState.PLAYING &&
       props.player.playback_state !== PlaybackState.PAUSED)
   ) {
     return undefined;
   }
-  return getMediaImageUrl(props.player.current_media.image_url);
+  const queue = playerQueue.value;
+  return (
+    nowPlayingImageUrl(
+      props.player,
+      queue?.active ? (queue.current_item ?? undefined) : undefined,
+      512,
+    ) || undefined
+  );
 });
 
 const mediaByline = computed(() =>
