@@ -188,22 +188,48 @@ describe("PlayerBarVolumeControl", () => {
     api.players = {};
   });
 
-  it("leaves the panel state to the popover trigger", async () => {
+  it("swaps the percentage for a slider on click and back on the next", async () => {
     const player = createPlayer();
     api.players = { [player.player_id]: player };
-    const wrapper = mountWithPopover(player);
+    const wrapper = mountControl(player);
     const trigger = wrapper.get("[data-player-volume-trigger]");
 
-    // reka-ui's PopoverTrigger supplies the disclosure state; a second,
-    // hand-written copy must not ride along and drift from it
-    expect(trigger.attributes("aria-haspopup")).toBe("dialog");
-    expect(trigger.attributes("aria-expanded")).toBe("false");
+    expect(wrapper.find("[data-player-volume-inline]").exists()).toBe(false);
+    expect(wrapper.get(".player-bar-action-label").text()).toBe("25%");
+    expect(trigger.attributes("aria-pressed")).toBe("false");
 
     await trigger.trigger("click");
-    expect(trigger.attributes("aria-expanded")).toBe("true");
+    // the slider carries its own mute button; the popover stays shut
+    expect(
+      wrapper
+        .get("[data-player-volume-inline] .player-volume")
+        .attributes("data-player-id"),
+    ).toBe("parent");
+    expect(wrapper.find(".player-bar-action-label").exists()).toBe(false);
+    expect(trigger.attributes("aria-pressed")).toBe("true");
+    expect(trigger.attributes("data-active")).toBe("true");
+    expect(wrapper.get(".popover").attributes("data-open")).toBe("false");
 
-    // the volume in the accessible name is ours; reka-ui has no notion of it
+    await trigger.trigger("click");
+    expect(wrapper.find("[data-player-volume-inline]").exists()).toBe(false);
+    expect(wrapper.get(".player-bar-action-label").text()).toBe("25%");
+    expect(trigger.attributes("data-active")).toBe("false");
+
+    // the volume in the accessible name is ours
     expect(trigger.attributes("aria-label")).toBe("audio_overlay_volume: 25%");
+  });
+
+  it("keeps the trigger attributes to the real popover", () => {
+    const player = createPlayer();
+    api.players = { [player.player_id]: player };
+    const trigger = mountWithPopover(player).get(
+      "[data-player-volume-trigger]",
+    );
+
+    // the button is no longer reka-ui's trigger, so nothing announces a
+    // popup the click does not open
+    expect(trigger.attributes("aria-haspopup")).toBeUndefined();
+    expect(trigger.attributes("aria-expanded")).toBeUndefined();
   });
 
   it("does not announce the panel state itself", () => {
@@ -228,13 +254,13 @@ describe("PlayerBarVolumeControl", () => {
     expect(wrapper.get(".popover").attributes("data-open")).toBe("false");
   });
 
-  it("toggles the active popover on click", async () => {
+  it("opens the grouped panel on a right click", async () => {
     const player = createPlayer();
     api.players = { [player.player_id]: player };
     const wrapper = mountControl(player);
     const trigger = wrapper.get("[data-player-volume-trigger]");
 
-    await trigger.trigger("click");
+    await trigger.trigger("contextmenu");
 
     expect(wrapper.get(".popover").attributes("data-open")).toBe("true");
     expect(trigger.attributes("data-active")).toBe("true");
@@ -251,8 +277,8 @@ describe("PlayerBarVolumeControl", () => {
     const trigger = wrapper.get("[data-player-volume-trigger]");
 
     await trigger.trigger("pointerenter", { pointerType: "touch" });
-    await trigger.trigger("click");
-    await trigger.trigger("click");
+    await trigger.trigger("contextmenu");
+    await trigger.trigger("contextmenu");
 
     expect(trigger.attributes("data-active")).toBe("false");
     expect(trigger.attributes("data-suppress-hover")).toBe("true");
@@ -270,8 +296,8 @@ describe("PlayerBarVolumeControl", () => {
     const trigger = wrapper.get("[data-player-volume-trigger]");
 
     await trigger.trigger("pointerenter", { pointerType: "mouse" });
-    await trigger.trigger("click");
-    await trigger.trigger("click");
+    await trigger.trigger("contextmenu");
+    await trigger.trigger("contextmenu");
 
     expect(trigger.attributes("data-active")).toBe("false");
     expect(trigger.attributes("data-suppress-hover")).toBe("false");
@@ -286,7 +312,7 @@ describe("PlayerBarVolumeControl", () => {
     const trigger = wrapper.get("[data-player-volume-trigger]");
 
     await trigger.trigger("pointerenter", { pointerType: "touch" });
-    await trigger.trigger("click");
+    await trigger.trigger("contextmenu");
     await wrapper.get(".player-volume-backdrop").trigger("click");
 
     expect(trigger.attributes("data-suppress-hover")).toBe("true");

@@ -276,6 +276,7 @@
                   :boost-badge-color="boostBadgeColor"
                   @menu="(e: Event) => openQueueItemMenu(e, row.index)"
                   @dragstart="(e: PointerEvent) => startItemDrag(e, row.index)"
+                  @play-now="playQueueIndex(row.index)"
                 />
                 <!-- placeholder while the page loads -->
                 <div v-else class="queue-skeleton">
@@ -1289,6 +1290,11 @@ watchEffect(() => {
 onBeforeUnmount(() => {
   setStatusBarColorOverride(undefined);
 });
+// the artwork's play-now button on a queue row
+function playQueueIndex(index: number) {
+  const queue = store.activePlayerQueue;
+  if (queue) api.queueCommandPlayIndex(queue.queue_id, index);
+}
 </script>
 
 <style scoped>

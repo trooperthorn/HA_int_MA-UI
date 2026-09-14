@@ -37,6 +37,15 @@
           @keydown.escape="searchInput = ''"
           @keydown.stop
         />
+        <button
+          v-if="searchInput"
+          type="button"
+          class="browser-column__search-clear"
+          :aria-label="$t('clear')"
+          @click="searchInput = ''"
+        >
+          <X :size="11" />
+        </button>
       </div>
     </div>
     <div
@@ -77,7 +86,7 @@
 </template>
 
 <script setup lang="ts">
-import { Search } from "@lucide/vue";
+import { Search, X } from "@lucide/vue";
 import { useVirtualizer } from "@tanstack/vue-virtual";
 import { computed, ref, watch } from "vue";
 import { Spinner } from "@/components/ui/spinner";
@@ -331,7 +340,7 @@ defineExpose({
 .browser-column__search-input {
   width: 100%;
   height: 20px;
-  padding: 0 6px 0 20px;
+  padding: 0 18px 0 20px;
   border-radius: 10px;
   border: 0;
   background: rgba(var(--v-theme-fg), 0.06);
@@ -344,6 +353,34 @@ defineExpose({
 }
 
 .browser-column__search-input:focus {
+  background: rgba(var(--v-theme-fg), 0.1);
+}
+
+/* the browser's own cancel glyph gives way to the button beside it */
+.browser-column__search-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.browser-column__search-clear {
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 7px;
+  padding: 0;
+  background: transparent;
+  color: rgba(var(--v-theme-fg), 0.5);
+  cursor: pointer;
+}
+
+.browser-column__search-clear:hover {
+  color: rgb(var(--v-theme-fg));
   background: rgba(var(--v-theme-fg), 0.1);
 }
 

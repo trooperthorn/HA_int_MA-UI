@@ -17,17 +17,24 @@
     </Transition>
   </Teleport>
 
-  <Popover :open="open" @update:open="handleOpenChange">
-    <PopoverAnchor :reference="playerBarEndAnchor" />
-    <PopoverTrigger as-child>
+  <!-- the button swaps its percentage for a slider (with the mute button the
+       slider carries) and back; the popover with every grouped player's own
+       slider stays reachable with a right click -->
+  <div class="player-bar-volume flex min-w-0 items-center">
+    <Popover :open="open" @update:open="handleOpenChange">
+      <PopoverAnchor :reference="playerBarEndAnchor" />
       <Button
         data-player-volume-trigger
         variant="ghost"
-        class="player-control-button player-bar-action player-bar-volume-button h-20 w-16 rounded-none px-1"
-        :data-active="open"
+        class="player-control-button player-bar-action player-bar-volume-button h-20 rounded-none px-1"
+        :class="inline ? 'w-12' : 'w-16'"
+        :data-active="open || inline"
         :data-suppress-hover="suppressHover"
         :disabled="disabled"
+        :aria-pressed="inline"
         :aria-label="`${$t('audio_overlay_volume')}: ${displayVolume}%`"
+        @click="toggleInline"
+        @contextmenu.prevent="handleOpenChange(!open)"
         @pointerenter="onPointerEnter"
         @wheel="adjustVolume"
       >
@@ -40,26 +47,40 @@
           />
         </span>
         <span
+          v-if="!inline"
           class="player-bar-action-label w-10 overflow-visible text-center tabular-nums"
         >
           {{ displayVolume }}%
         </span>
       </Button>
-    </PopoverTrigger>
-    <PopoverContent
-      data-player-panel
-      side="top"
-      align="end"
-      :side-offset="PLAYER_BAR_POPOUT_GAP"
-      :collision-padding="PLAYER_BAR_POPOUT_COLLISION_PADDING"
-      class="player-bar-popout player-volume-popover flex w-[340px] max-w-[calc(100vw-2*var(--player-bar-popout-inset-x)-var(--device-inset-left)-var(--device-inset-right))] flex-col overflow-hidden p-0"
-      @open-auto-focus="preventAutoFocus"
-      @interact-outside="handleInteractOutside"
+      <PopoverContent
+        data-player-panel
+        side="top"
+        align="end"
+        :side-offset="PLAYER_BAR_POPOUT_GAP"
+        :collision-padding="PLAYER_BAR_POPOUT_COLLISION_PADDING"
+        class="player-bar-popout player-volume-popover flex w-[340px] max-w-[calc(100vw-2*var(--player-bar-popout-inset-x)-var(--device-inset-left)-var(--device-inset-right))] flex-col overflow-hidden p-0"
+        @open-auto-focus="preventAutoFocus"
+        @interact-outside="handleInteractOutside"
+      >
+        <PanelDragHandle @dismiss="close" />
+        <PlayerVolumePanel :player="player" :allow-wheel="true" />
+      </PopoverContent>
+    </Popover>
+    <div
+      v-if="inline"
+      data-player-volume-inline
+      class="player-bar-volume-inline"
     >
-      <PanelDragHandle @dismiss="close" />
-      <PlayerVolumePanel :player="player" :allow-wheel="true" />
-    </PopoverContent>
-  </Popover>
+      <PlayerVolume
+        :player="player"
+        :prefer-group-volume="true"
+        :enable-popout="false"
+        :allow-wheel="true"
+        width="100%"
+      />
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -69,7 +90,6 @@ import {
   Popover,
   PopoverAnchor,
   PopoverContent,
-  PopoverTrigger,
 } from "@/components/ui/popover";
 import { usePopoutTriggerHover } from "@/composables/usePopoutTriggerHover";
 import {
@@ -82,6 +102,7 @@ import { getVolumeIconComponent } from "@/helpers/utils";
 import { api } from "@/plugins/api";
 import { type Player, PlayerFeature } from "@/plugins/api/interfaces";
 import { computed, ref } from "vue";
+import PlayerVolume from "./PlayerVolume.vue";
 import PlayerVolumePanel from "./PlayerVolumePanel.vue";
 
 const props = defineProps<{
@@ -89,6 +110,8 @@ const props = defineProps<{
 }>();
 
 const open = ref(false);
+// the slider shown in the bar in place of the percentage
+const inline = ref(false);
 const { suppressHover, onPointerEnter } = usePopoutTriggerHover(
   () => open.value,
 );
@@ -121,6 +144,10 @@ const disabled = computed(
 );
 function handleOpenChange(value: boolean) {
   open.value = value;
+}
+
+function toggleInline() {
+  inline.value = !inline.value;
 }
 
 function preventAutoFocus(event: Event) {
@@ -173,5 +200,15 @@ function adjustVolume(event: WheelEvent) {
    component carries */
 .player-bar-popout.player-volume-popover {
   z-index: 998 !important;
+}
+
+.player-bar-volume-inline {
+  width: clamp(150px, 14vw, 220px);
+  flex: none;
+  padding-right: 8px;
+}
+
+.player-bar-volume-inline .player-volume-container {
+  min-height: 28px;
 }
 </style>

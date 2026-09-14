@@ -132,7 +132,7 @@
                     vRow.favorite ? $t('favorites_remove') : $t('favorites_add')
                   "
                   :aria-pressed="vRow.favorite"
-                  @click.stop="api.toggleFavorite(vRow.track as MediaItem)"
+                  @click.stop="toggleFavorite(vRow.track as MediaItem)"
                   @dblclick.stop
                 >
                   <Heart
@@ -388,7 +388,10 @@ const virtualRows = computed(() =>
       start: vItem.start,
       track,
       favorite:
-        track && "favorite" in track ? (track.favorite as boolean) : undefined,
+        track && "favorite" in track
+          ? (favoriteOverrides.value.get(track.uri) ??
+            (track.favorite as boolean))
+          : undefined,
       selected: !!track && selectedUris.value.has(track.uri),
       playing: !!track && track.item_id === playingId.value,
     };
@@ -425,6 +428,7 @@ watch(
   (rows) => {
     // a new listing (filter change) drops the selection; a page append keeps it
     if (rows.length === 0) {
+      favoriteOverrides.value = new Map();
       selectedUris.value = new Map();
       anchorIndex.value = -1;
       focusIndex.value = -1;
@@ -434,6 +438,22 @@ watch(
 );
 
 const selectedTracks = computed(() => [...selectedUris.value.values()]);
+
+// the rows are plain objects behind a shallow ref, so a flipped favorite
+// would only show once the row happened to re-render; the heart keeps its
+// own answer per uri until the listing is replaced
+const favoriteOverrides = shallowRef(new Map<string, boolean>());
+
+function toggleFavorite(item: MediaItem) {
+  const next = !(favoriteOverrides.value.get(item.uri) ?? item.favorite);
+  if (next) void api.addItemToFavorites(item);
+  else void api.removeItemFromFavorites(item.media_type, item.item_id);
+  item.favorite = next;
+  favoriteOverrides.value = new Map(favoriteOverrides.value).set(
+    item.uri,
+    next,
+  );
+}
 
 function commitSelection(next: Map<string, GridItem>) {
   selectedUris.value = next;

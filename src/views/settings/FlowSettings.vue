@@ -539,6 +539,15 @@ function discard() {
   width: 100%;
 }
 
+/* a native select paints its list with the control's own background; a
+   near-transparent one comes out white under the dark theme and hides the
+   text, so the select and its options get the panel's solid gray */
+.flow-settings__select,
+.flow-settings__select option {
+  background: rgb(var(--v-theme-panel));
+  color: rgb(var(--v-theme-fg));
+}
+
 .flow-settings__input--short {
   width: 110px;
 }

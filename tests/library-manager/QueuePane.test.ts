@@ -1,11 +1,14 @@
 import QueuePane from "@/library-manager/panes/QueuePane.vue";
-import { enableAutoUnmount, mount } from "@vue/test-utils";
+import { QueueOption } from "@/plugins/api/interfaces";
+import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   queueCommandPlayIndex: vi.fn(),
   queueCommandDelete: vi.fn(),
   queueCommandClear: vi.fn(),
+  getPlayerQueueItems: vi.fn(async () => [{ queue_item_id: "i2" }]),
+  playMedia: vi.fn(async () => {}),
   focusCurrent: vi.fn(),
   visibleSeen: [] as boolean[],
 }));
@@ -15,9 +18,15 @@ vi.mock("@/plugins/api", () => {
     queueCommandPlayIndex: mocks.queueCommandPlayIndex,
     queueCommandDelete: mocks.queueCommandDelete,
     queueCommandClear: mocks.queueCommandClear,
+    getPlayerQueueItems: mocks.getPlayerQueueItems,
+    playMedia: mocks.playMedia,
   };
   return { api, default: api };
 });
+
+vi.mock("@/library-manager/playerGate", () => ({
+  ensurePlayer: async () => true,
+}));
 
 vi.mock("@/plugins/store", async () => {
   const { reactive } = await import("vue");
@@ -88,8 +97,8 @@ vi.mock("@/layouts/default/PlayerOSD/QueueListItem.vue", () => ({
   default: {
     name: "QueueListItem",
     props: ["item", "state"],
-    emits: ["click"],
-    template: `<div class="qitem" :data-state="state" @click="$emit('click', $event)">{{ item.name }}</div>`,
+    emits: ["click", "playNow"],
+    template: `<div class="qitem" :data-state="state" @click="$emit('click', $event)">{{ item.name }}<button class="qitem-play" @click.stop="$emit('playNow', $event)" /></div>`,
   },
 }));
 
@@ -99,9 +108,9 @@ vi.mock("@/layouts/default/PlayerOSD/QueueModeBanner.vue", () => ({
 
 enableAutoUnmount(afterEach);
 
-function mountPane() {
+function mountPane(props: Record<string, unknown> = {}) {
   return mount(QueuePane, {
-    props: { visible: true },
+    props: { visible: true, ...props },
     global: { mocks: { $t: (key: string) => key } },
     attachTo: document.body,
   });
@@ -147,5 +156,40 @@ describe("QueuePane", () => {
       .find("[aria-label='library_manager.queue.clear']")
       .trigger("click");
     expect(mocks.queueCommandClear).toHaveBeenCalledWith("q1");
+  });
+
+  it("plays a row from the play button over its artwork", async () => {
+    const wrapper = mountPane();
+    await wrapper.findAll(".qitem-play")[0].trigger("click");
+    expect(mocks.queueCommandPlayIndex).toHaveBeenCalledWith("q1", 0);
+  });
+
+  it("clears up next and appends the grid's selection from the divider", async () => {
+    const selection = [{ uri: "library://track/9", name: "Nine" }];
+    const wrapper = mountPane({ selection });
+
+    await wrapper
+      .find("[aria-label='library_manager.queue.clear_up_next']")
+      .trigger("click");
+    await flushPromises();
+    // everything after the current track (index 1): one item, from index 2
+    expect(mocks.getPlayerQueueItems).toHaveBeenCalledWith("q1", 1, 2);
+    expect(mocks.queueCommandDelete).toHaveBeenCalledWith("q1", "i2");
+    expect(mocks.queueCommandClear).not.toHaveBeenCalled();
+
+    await wrapper
+      .find("[aria-label='library_manager.queue.add_selection']")
+      .trigger("click");
+    await flushPromises();
+    expect(mocks.playMedia).toHaveBeenCalledWith(selection, QueueOption.ADD);
+  });
+
+  it("disables the add button without a selection", () => {
+    const wrapper = mountPane();
+    expect(
+      wrapper
+        .find("[aria-label='library_manager.queue.add_selection']")
+        .attributes("disabled"),
+    ).toBeDefined();
   });
 });

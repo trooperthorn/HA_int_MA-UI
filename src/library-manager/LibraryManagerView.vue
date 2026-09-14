@@ -46,10 +46,19 @@
           v-model="searchInput"
           type="search"
           :placeholder="$t('library_manager.search_placeholder')"
-          class="pl-9 h-8"
+          class="pl-9 pr-8 h-8"
           @keydown.escape="clearSearch"
           @keydown.enter="grid?.focus()"
         />
+        <button
+          v-if="searchInput"
+          type="button"
+          class="library-manager__search-clear"
+          :aria-label="$t('clear')"
+          @click="clearSearch"
+        >
+          <X :size="14" />
+        </button>
       </div>
       <label class="library-manager__toggle">
         <Switch
@@ -258,7 +267,7 @@
             :min-size="PANE_DEFAULTS.queueMinSize"
             class="library-manager__pane"
           >
-            <QueuePane :visible="showQueue" />
+            <QueuePane :visible="showQueue" :selection="selection" />
           </SplitterPanel>
           <SplitterResizeHandle
             v-if="showQueue && showSelected"
@@ -345,6 +354,7 @@ import {
 } from "./composables/useLibraryFilter";
 import { PANE_DEFAULTS, usePaneLayout } from "./composables/usePaneLayout";
 import { ensurePlayer } from "./playerGate";
+import { pinRowsToSource } from "./sourcePin";
 import BrowserStrip from "./panes/BrowserStrip.vue";
 import QueuePane from "./panes/QueuePane.vue";
 import SelectedPane from "./panes/SelectedPane.vue";
@@ -620,11 +630,24 @@ watch(
   { immediate: true },
 );
 
+// a listing narrowed to one source plays through that source (see
+// sourcePin.ts for why the rows carry the source's own uri)
+const pinnedSource = computed(() => {
+  const providers = filter.value.provider;
+  return filter.value.scope === "library" && providers?.length === 1
+    ? providers[0]
+    : undefined;
+});
+
 // a fully loaded listing can be sorted here on any column
 const displayRows = computed<GridItem[]>(() => {
   const local = localSortToGridSort(toolbar.sortBy);
-  if (!local || !source.allLoaded.value) return source.rows.value;
-  return sortItemsLocally(source.rows.value, local, columns.value);
+  const rows =
+    !local || !source.allLoaded.value
+      ? source.rows.value
+      : sortItemsLocally(source.rows.value, local, columns.value);
+  const instance = pinnedSource.value;
+  return instance ? pinRowsToSource(rows, instance) : rows;
 });
 
 // a refresh reloads the same listing; the grid returns to where it was
@@ -783,6 +806,29 @@ useKeymap({
   transform: translateY(-50%);
   color: rgba(var(--v-theme-fg), 0.5);
   pointer-events: none;
+}
+
+.library-manager__search-clear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 10px;
+  padding: 0;
+  background: transparent;
+  color: rgba(var(--v-theme-fg), 0.55);
+  cursor: pointer;
+}
+
+.library-manager__search-clear:hover {
+  color: rgb(var(--v-theme-fg));
+  background: rgba(var(--v-theme-fg), 0.08);
 }
 
 .library-manager__toggle {

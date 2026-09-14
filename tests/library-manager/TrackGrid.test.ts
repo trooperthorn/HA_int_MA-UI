@@ -19,13 +19,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MediaType } from "@/plugins/api/interfaces";
 import { track } from "../fixtures/track";
 
-const mockToggleFavorite = vi.hoisted(() => vi.fn());
+const mockAddFavorite = vi.hoisted(() => vi.fn());
+const mockRemoveFavorite = vi.hoisted(() => vi.fn());
 
 vi.mock("@/plugins/api", () => {
   const api = {
     providers: {},
     providerManifests: {},
-    toggleFavorite: mockToggleFavorite,
+    addItemToFavorites: mockAddFavorite,
+    removeItemFromFavorites: mockRemoveFavorite,
   };
   return { api, default: api };
 });
@@ -327,10 +329,20 @@ describe("TrackGrid", () => {
   it("toggles the favorite from the heart without selecting the row", async () => {
     const wrapper = mountGrid();
     await rowAt(wrapper, 3).find("[aria-label=favorites_add]").trigger("click");
-    expect(mockToggleFavorite).toHaveBeenCalledWith(
+    expect(mockAddFavorite).toHaveBeenCalledWith(
       expect.objectContaining({ item_id: "t3" }),
     );
     expect(wrapper.emitted("update:selection")).toBeUndefined();
+
+    // the heart answers before the server does, and flips back the same way
+    const heart = rowAt(wrapper, 3).find("[aria-label=favorites_remove]");
+    expect(heart.exists()).toBe(true);
+    expect(heart.attributes("aria-pressed")).toBe("true");
+    await heart.trigger("click");
+    expect(mockRemoveFavorite).toHaveBeenCalledWith(MediaType.TRACK, "t3");
+    expect(rowAt(wrapper, 3).find("[aria-label=favorites_add]").exists()).toBe(
+      true,
+    );
   });
 
   it("opens a folder on double click instead of playing it", async () => {
