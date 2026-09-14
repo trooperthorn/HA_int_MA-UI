@@ -1,0 +1,232 @@
+diff --git a/dist/audio/decoder.d.ts b/dist/audio/decoder.d.ts
+index b304628dff7028d93377eae51648516d6635ab75..da47e0d9ec7727df52832f58a95f8187503d5718 100644
+--- a/dist/audio/decoder.d.ts
++++ b/dist/audio/decoder.d.ts
+@@ -12,6 +12,7 @@ export declare class SendspinDecoder {
+     private webCodecsDecoderReady;
+     private webCodecsFormat;
+     private useNativeOpus;
++    private useNativeFlac;
+     private nativeDecoderQueue;
+     private opusDecoder;
+     private opusDecoderModule;
+@@ -29,6 +30,9 @@ export declare class SendspinDecoder {
+     private decodePCM;
+     private getFlacDecodingContext;
+     private decodeFLAC;
++    private nativeDecoderWanted;
++    private disableNativeDecoder;
++    private webCodecsConfig;
+     private initWebCodecsDecoder;
+     private createWebCodecsDecoder;
+     private handleAudioData;
+diff --git a/dist/audio/decoder.js b/dist/audio/decoder.js
+index 8a5d7a449beadbe2dfb1251b3e72f7fe1f35c110..6f4c39eb230797701177d0c4f84237e480ae2afd 100644
+--- a/dist/audio/decoder.js
++++ b/dist/audio/decoder.js
+@@ -11,6 +11,8 @@ export class SendspinDecoder {
+         this.webCodecsDecoderReady = null;
+         this.webCodecsFormat = null;
+         this.useNativeOpus = true;
++        // Native FLAC decoder (WebCodecs API, description = codec_header)
++        this.useNativeFlac = true;
+         this.nativeDecoderQueue = [];
+         // Fallback Opus decoder (opus-encdec library)
+         this.opusDecoder = null;
+@@ -37,10 +39,10 @@ export class SendspinDecoder {
+             const serverTimeUs = Number(timestampView.getBigInt64(0, false));
+             // Rest is audio data
+             const audioData = data.slice(9);
+-            // For Opus: use native decoder (non-blocking async path)
+-            if (format.codec === "opus" && this.useNativeOpus) {
++            // For Opus and FLAC: use native decoder (non-blocking async path)
++            if (this.nativeDecoderWanted(format)) {
+                 await this.initWebCodecsDecoder(format);
+-                if (this.useNativeOpus && this.webCodecsDecoder) {
++                if (this.nativeDecoderWanted(format) && this.webCodecsDecoder) {
+                     if (this.queueToNativeOpusDecoder(audioData, serverTimeUs, generation)) {
+                         return; // Async path - callback handles output
+                     }
+@@ -158,13 +160,42 @@ export class SendspinDecoder {
+         }
+     }
+     // ========================================
+-    // Opus - Native WebCodecs Decoder
++    // Opus and FLAC - Native WebCodecs Decoder
+     // ========================================
++    /** Whether this format goes through WebCodecs (until it proves unable to). */
++    nativeDecoderWanted(format) {
++        if (format.codec === "opus")
++            return this.useNativeOpus;
++        // FLAC needs the stream header as the decoder description
++        if (format.codec === "flac")
++            return this.useNativeFlac && !!format.codec_header;
++        return false;
++    }
++    disableNativeDecoder(format) {
++        if (format.codec === "opus")
++            this.useNativeOpus = false;
++        else if (format.codec === "flac")
++            this.useNativeFlac = false;
++    }
++    /** The AudioDecoderConfig for a format; FLAC carries fLaC + STREAMINFO. */
++    webCodecsConfig(format) {
++        const config = {
++            codec: format.codec,
++            sampleRate: format.sample_rate,
++            numberOfChannels: format.channels,
++        };
++        if (format.codec === "flac" && format.codec_header) {
++            config.description = Uint8Array.from(atob(format.codec_header), (c) => c.charCodeAt(0));
++        }
++        return config;
++    }
+     async initWebCodecsDecoder(format) {
+         const tryConfigureExistingDecoder = () => {
+             if (!this.webCodecsDecoder)
+                 return false;
+             const matchesFormat = !!this.webCodecsFormat &&
++                this.webCodecsFormat.codec === format.codec &&
++                this.webCodecsFormat.codec_header === format.codec_header &&
+                 this.webCodecsFormat.sample_rate === format.sample_rate &&
+                 this.webCodecsFormat.channels === format.channels;
+             if (this.webCodecsDecoder.state === "configured" && matchesFormat) {
+@@ -174,11 +205,7 @@ export class SendspinDecoder {
+                 return false;
+             }
+             try {
+-                this.webCodecsDecoder.configure({
+-                    codec: "opus",
+-                    sampleRate: format.sample_rate,
+-                    numberOfChannels: format.channels,
+-                });
++                this.webCodecsDecoder.configure(this.webCodecsConfig(format));
+                 this.webCodecsFormat = format;
+                 return true;
+             }
+@@ -213,37 +240,31 @@ export class SendspinDecoder {
+     }
+     async createWebCodecsDecoder(format) {
+         if (typeof AudioDecoder === "undefined") {
+-            this.useNativeOpus = false;
++            this.disableNativeDecoder(format);
+             return;
+         }
++        const tag = format.codec === "flac" ? "[NativeFlac]" : "[NativeOpus]";
+         try {
+-            const support = await AudioDecoder.isConfigSupported({
+-                codec: "opus",
+-                sampleRate: format.sample_rate,
+-                numberOfChannels: format.channels,
+-            });
++            const config = this.webCodecsConfig(format);
++            const support = await AudioDecoder.isConfigSupported(config);
+             if (!support.supported) {
+-                console.log("[NativeOpus] WebCodecs Opus not supported, will use fallback");
+-                this.useNativeOpus = false;
++                console.log(`${tag} WebCodecs ${format.codec} not supported, will use fallback`);
++                this.disableNativeDecoder(format);
+                 return;
+             }
+             this.webCodecsDecoder = new AudioDecoder({
+                 output: (audioData) => this.handleAudioData(audioData),
+                 error: (error) => {
+-                    console.error("[NativeOpus] WebCodecs decoder error:", error);
++                    console.error(`${tag} WebCodecs decoder error:`, error);
+                 },
+             });
+-            this.webCodecsDecoder.configure({
+-                codec: "opus",
+-                sampleRate: format.sample_rate,
+-                numberOfChannels: format.channels,
+-            });
++            this.webCodecsDecoder.configure(config);
+             this.webCodecsFormat = format;
+-            console.log(`[NativeOpus] Using WebCodecs AudioDecoder: ${format.sample_rate}Hz, ${format.channels}ch`);
++            console.log(`${tag} Using WebCodecs AudioDecoder: ${format.sample_rate}Hz, ${format.channels}ch`);
+         }
+         catch (error) {
+-            console.warn("[NativeOpus] WebCodecs init failed, will use fallback:", error);
+-            this.useNativeOpus = false;
++            console.warn(`${tag} WebCodecs init failed, will use fallback:`, error);
++            this.disableNativeDecoder(format);
+         }
+     }
+     // Handle decoded audio data from native Opus decoder
+diff --git a/dist/audio/scheduler.d.ts b/dist/audio/scheduler.d.ts
+index 872beb035e861ab6f81ba0a98b711c5336d1a97a..ce7bd919044ee9113ae9e6ce222709a43d405d8b 100644
+--- a/dist/audio/scheduler.d.ts
++++ b/dist/audio/scheduler.d.ts
+@@ -21,6 +21,8 @@ export interface AudioSchedulerOptions {
+     silentAudioSrc?: string;
+     syncDelayMs?: number;
+     useHardwareVolume?: boolean;
++    /** AudioContext latencyHint; the browser default ("interactive") when unset. */
++    latencyHint?: AudioContextLatencyCategory | number;
+     correctionMode?: CorrectionMode;
+     storage?: SendspinStorage | null;
+     useOutputLatencyCompensation?: boolean;
+@@ -63,6 +65,7 @@ export declare class AudioScheduler {
+     private silentAudioSrc?;
+     private syncDelayMs;
+     private useHardwareVolume;
++    private latencyHint;
+     constructor(options: AudioSchedulerOptions);
+     get correctionMode(): CorrectionMode;
+     setCorrectionMode(mode: CorrectionMode): void;
+diff --git a/dist/audio/scheduler.js b/dist/audio/scheduler.js
+index b06314d3dcf68511af39f63168709d53d7752ed6..defae284e199810412893bea0ddaf575af4b4b3b 100644
+--- a/dist/audio/scheduler.js
++++ b/dist/audio/scheduler.js
+@@ -101,6 +101,7 @@ export class AudioScheduler {
+         this.silentAudioSrc = options.silentAudioSrc;
+         this.syncDelayMs = clampSyncDelayMs(options.syncDelayMs ?? 0);
+         this.useHardwareVolume = options.useHardwareVolume ?? false;
++        this.latencyHint = options.latencyHint;
+         this._correctionMode = options.correctionMode ?? "sync";
+         this.useOutputLatencyCompensation =
+             options.useOutputLatencyCompensation ?? true;
+@@ -428,7 +429,12 @@ export class AudioScheduler {
+             navigator.audioSession.type = "playback";
+         }
+         const streamSampleRate = this.stateManager.currentStreamFormat?.sample_rate || 48000;
+-        this.audioContext = new AudioContext({ sampleRate: streamSampleRate });
++        // A buffered stream can take the larger, power-friendly output buffer
++        // that "playback" asks for; the output-latency tracker measures and
++        // compensates whatever the platform then adds.
++        this.audioContext = new AudioContext(this.latencyHint === undefined
++            ? { sampleRate: streamSampleRate }
++            : { sampleRate: streamSampleRate, latencyHint: this.latencyHint });
+         this.gainNode = this.audioContext.createGain();
+         const audioElement = this.audioElement;
+         if (this.outputMode === "direct") {
+diff --git a/dist/index.js b/dist/index.js
+index 1e4ff4cc5dab7c11d266b8af1344b8dca3a1841c..5fe71e6102689e252b05741b6bb96f4de3657179 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -92,6 +92,7 @@ export class SendspinPlayer {
+             syncDelayMs: syncDelay,
+             useHardwareVolume: config.useHardwareVolume ?? false,
+             correctionMode: config.correctionMode ?? "sync",
++            latencyHint: config.latencyHint,
+             storage,
+             useOutputLatencyCompensation: config.useOutputLatencyCompensation ?? true,
+             correctionThresholds: config.correctionThresholds,
+diff --git a/dist/types.d.ts b/dist/types.d.ts
+index a8091286bdb0e5a1e8b19d31eab3ce888f18136b..297533f5b18ba9178495a4de6fe16ee85c345fe5 100644
+--- a/dist/types.d.ts
++++ b/dist/types.d.ts
+@@ -420,6 +420,13 @@ export interface SendspinPlayerConfig extends SendspinCoreConfig {
+      * Default: true
+      */
+     useOutputLatencyCompensation?: boolean;
++    /**
++     * latencyHint for the AudioContext. The browser default ("interactive")
++     * asks for the smallest output buffer; "playback" lets a buffered stream
++     * use a larger, power-friendly one. The extra output latency is measured
++     * and compensated like any other.
++     */
++    latencyHint?: AudioContextLatencyCategory | number;
+ }
+ /**
+  * A decoded audio chunk with raw PCM samples.

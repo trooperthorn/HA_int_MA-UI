@@ -143,6 +143,7 @@ const {
         codecs?: string[];
         minBufferMs?: number;
         requiredLeadTimeMs?: number;
+        latencyHint?: string;
         onStateChange?: (state: {
           isPlaying: boolean;
           volume: number;
@@ -543,6 +544,70 @@ describe("SendspinPlayer MediaSession", () => {
       wrapper.unmount();
       restore();
     } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("starts adaptive mode on the rung the connection type suggests and follows changes", async () => {
+    vi.useFakeTimers();
+    const nav = navigator as { connection?: unknown };
+    const listeners = new Set<() => void>();
+    const connection = {
+      effectiveType: "3g",
+      saveData: false,
+      rtt: 400,
+      addEventListener: (_: string, handler: () => void) =>
+        listeners.add(handler),
+      removeEventListener: (_: string, handler: () => void) =>
+        listeners.delete(handler),
+    };
+    nav.connection = connection;
+    try {
+      const restore = withAudioDecoder(true);
+      mockPrepareSendspinSession.mockResolvedValue(undefined);
+      mockGetPlayerConfigEntries.mockResolvedValue([
+        {
+          key: "preferred_sendspin_format",
+          options: [{ value: "automatic" }, { value: "opus:48000:16:2" }],
+        },
+        { key: "sendspin_opus_bitrate", options: [] },
+      ]);
+      setWebPlayerAdaptive("on");
+      const wrapper = mount(SendspinPlayer, {
+        props: { playerId: "web-player" },
+      });
+      await flushPromises();
+      // 3G: the middle rung before any dropout
+      expect(webPlayerStatus.rung).toBe(2);
+      expect(listeners.size).toBe(1);
+      expect(mockSetMinBufferMs).toHaveBeenLastCalledWith(5000);
+      // the test user agent counts as a phone: the power-friendly hint
+      expect(sendspinState.lastOptions?.latencyHint).toBe("playback");
+
+      // the phone drops to 2G: the last rung at once
+      connection.effectiveType = "2g";
+      for (const handler of listeners) handler();
+      await flushPromises();
+      expect(webPlayerStatus.rung).toBe(3);
+
+      // back on 4G nothing moves up; that is the quiet timer's call
+      connection.effectiveType = "4g";
+      connection.rtt = 50;
+      for (const handler of listeners) handler();
+      await flushPromises();
+      expect(webPlayerStatus.rung).toBe(3);
+
+      // off puts the rung back so later mounts start clean
+      setWebPlayerAdaptive("off");
+      await flushPromises();
+      expect(webPlayerStatus.rung).toBe(0);
+      setWebPlayerAdaptive("auto");
+      mockGetPlayerConfigEntries.mockResolvedValue([]);
+      wrapper.unmount();
+      expect(listeners.size).toBe(0);
+      restore();
+    } finally {
+      delete nav.connection;
       vi.useRealTimers();
     }
   });

@@ -4,7 +4,8 @@ Why the built-in web player registers as a player in a browser but often never
 appears in the Home Assistant Companion app.
 
 Written 2026-09-13 against this fork at `d8784ac` and
-`@sendspin/sendspin-js@5.0.0`.
+`@sendspin/sendspin-js@5.0.0` (since patched at install time, see
+`SENDSPIN-JS-PATCH.md`).
 
 **Nothing here was executed.** No build was run, no WebView was attached, no
 device was tested. Every finding is from reading this repository's source, the

@@ -44,8 +44,11 @@ import {
 } from "@/plugins/web_player_tuning";
 import {
   AdaptiveController,
+  connectionTarget,
   LADDER,
+  readConnection,
   resolveRung,
+  rungForConnection,
 } from "@/plugins/web_player_adaptive";
 import type { ConfigValueType } from "@/plugins/api/interfaces";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
@@ -367,6 +370,10 @@ function startPlayer() {
           // directly delays first audio and must stay small. Once playback is
           // running the buffer grows well beyond this on its own.
           minBufferMs: buffer.minBufferMs,
+          // A phone runs a buffered stream, not an instrument: the larger
+          // output buffer "playback" asks for survives the WebView being
+          // throttled, and the SDK measures and compensates its latency.
+          latencyHint: isMobileOutput ? "playback" : undefined,
           onStateChange: (state) => {
             reportFormat();
             // Update reactive state when player state changes
@@ -534,12 +541,29 @@ let adaptiveTimer: number | undefined;
 function stopAdaptive() {
   if (adaptiveTimer) clearInterval(adaptiveTimer);
   adaptiveTimer = undefined;
+  connectionTarget()?.removeEventListener("change", applyConnectionFloor);
+}
+
+// the browser knows the kind of link before a dropout has been heard:
+// start on the rung it suggests, and follow it when a phone changes
+// networks (Wi-Fi to cellular); the ladder only ever moves down here
+function applyConnectionFloor() {
+  if (!webPlayerStatus.adaptive) return;
+  const floor = rungForConnection(readConnection());
+  if (adaptive.floor(floor, Date.now())) {
+    webPlayerStatus.rung = adaptive.rung;
+    console.debug(
+      `Sendspin: adaptive mode started at rung ${adaptive.rung} for this connection`,
+    );
+  }
 }
 
 function startAdaptive() {
   stopAdaptive();
   adaptive.reset(Date.now());
   adaptive.rung = webPlayerStatus.rung;
+  applyConnectionFloor();
+  connectionTarget()?.addEventListener("change", applyConnectionFloor);
   adaptiveTimer = window.setInterval(() => {
     if (!player || !webPlayerStatus.adaptive) return;
     const info = player.syncInfo;
