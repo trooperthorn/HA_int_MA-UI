@@ -267,14 +267,6 @@ function setLibrarySource(value: string) {
   if (value !== LIBRARY_SOURCE_ALL) ensureSourceCounts(value);
 }
 
-// the listing the grid shows follows the change when it is a library node
-watch(librarySource, () => {
-  const active = findNode(props.activeNode);
-  if (active?.filter && props.activeNode.startsWith("library")) {
-    emit("select", active.filter);
-  }
-});
-
 function librarySourceMenu(): ContextMenuItem[] {
   const current = librarySource.value ?? LIBRARY_SOURCE_ALL;
   return [
@@ -756,6 +748,23 @@ const visibleRows = computed<VisibleRow[]>(() => {
 function findNode(id: string): TreeNode | undefined {
   return visibleRows.value.find((row) => row.node.id === id)?.node;
 }
+
+// the listing the grid shows follows a change of library source when it
+// is a library node. Immediate, so a stored source also narrows the
+// listing the view starts on (the view begins on the library's tracks,
+// which has no row of its own, so the library root stands in); nothing
+// is emitted while no source was ever set, the unnarrowed listing is
+// already what shows. Sits below the rows it reads.
+watch(
+  librarySource,
+  (source, previous) => {
+    if (source === undefined && previous === undefined) return;
+    if (!props.activeNode.startsWith("library")) return;
+    const active = findNode(props.activeNode) ?? findNode("library");
+    if (active?.filter) emit("select", active.filter);
+  },
+  { immediate: true },
+);
 
 // ---- expand / select --------------------------------------------------------
 

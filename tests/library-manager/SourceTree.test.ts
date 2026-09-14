@@ -488,6 +488,23 @@ describe("SourceTree", () => {
     });
   });
 
+  it("narrows the starting listing to a stored source, and leaves it alone without one", async () => {
+    const untouched = mountTree();
+    await flushPromises();
+    expect(untouched.emitted("select")).toBeUndefined();
+    untouched.unmount();
+
+    prefs.value["libraryManager.librarySource"] = "spotify--1";
+    const wrapper = mountTree();
+    await flushPromises();
+    // the view starts on the library's tracks, which has no row; the
+    // library root carries the source for it
+    expect(wrapper.emitted("select")?.at(-1)?.[0]).toMatchObject({
+      node: "library",
+      provider: ["spotify--1"],
+    });
+  });
+
   it("emits a library filter for a library node and a browse filter for a folder", async () => {
     const wrapper = mountTree();
     await flushPromises();
