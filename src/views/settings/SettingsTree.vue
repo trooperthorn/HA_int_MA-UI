@@ -208,6 +208,12 @@ const nodes = computed<SettingsTreeNode[]>(() =>
           route: { name: "frontendlibraryview" },
         },
         {
+          id: "frontendflow",
+          label: t("settings.flow.title"),
+          icon: "mdi-sitemap",
+          route: { name: "frontendflow" },
+        },
+        {
           id: "frontendkeyboard",
           label: t("settings.keyboard.title"),
           icon: "mdi-keyboard",

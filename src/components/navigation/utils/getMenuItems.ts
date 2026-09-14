@@ -16,6 +16,7 @@ import {
   Search,
   Settings,
   Sparkles,
+  Waypoints,
 } from "@lucide/vue";
 import { Component } from "vue";
 
@@ -89,6 +90,14 @@ const MENU_ITEM_REGISTRY: MenuItemDefinition[] = [
     icon: LayoutList,
     path: "/library",
     isLibraryNode: true,
+    group: "library",
+  },
+  {
+    id: "flow",
+    label: "flow.title",
+    icon: Waypoints,
+    path: "/flow",
+    isLibraryNode: false,
     group: "library",
   },
   {

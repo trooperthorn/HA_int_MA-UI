@@ -232,6 +232,12 @@ export const routes: RouteRecordRaw[] = [
         },
       },
       {
+        path: "/flow",
+        name: "flow",
+        component: () =>
+          import(/* webpackChunkName: "flow" */ "@/flow/FlowView.vue"),
+      },
+      {
         path: "/library",
         name: "librarymanager",
         component: () =>
@@ -566,6 +572,15 @@ export const routes: RouteRecordRaw[] = [
             component: () =>
               import(
                 /* webpackChunkName: "frontendlibraryview" */ "@/views/settings/LibraryViewSettings.vue"
+              ),
+            props: true,
+          },
+          {
+            path: "frontend/flow",
+            name: "frontendflow",
+            component: () =>
+              import(
+                /* webpackChunkName: "frontendflow" */ "@/views/settings/FlowSettings.vue"
               ),
             props: true,
           },
