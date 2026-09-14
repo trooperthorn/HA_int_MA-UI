@@ -9,6 +9,17 @@ export type WebPlayerCodecPref = "auto" | "opus" | "flac" | "pcm";
 
 export const BUFFER_STORAGE_KEY = "frontend.settings.web_player_buffer_ms";
 export const CODEC_STORAGE_KEY = "frontend.settings.web_player_codec";
+export const BITRATE_STORAGE_KEY = "frontend.settings.web_player_bitrate";
+export const ADAPTIVE_STORAGE_KEY = "frontend.settings.web_player_adaptive";
+
+// Opus bitrates the server offers (bits per second); 0 is the encoder default
+export const BITRATE_CHOICES = [
+  0, 48000, 64000, 96000, 128000, 160000, 192000, 256000,
+];
+
+// "auto" runs adaptive mode on remote links only
+export type AdaptivePref = "auto" | "on" | "off";
+export const ADAPTIVE_CHOICES: AdaptivePref[] = ["auto", "on", "off"];
 
 // 0 stands for automatic: a short buffer on the LAN, a long one elsewhere
 export const BUFFER_AUTO = 0;
@@ -59,10 +70,40 @@ function readCodec(): WebPlayerCodecPref {
     : "auto";
 }
 
+function readBitrate(): number {
+  const raw = readStorage(BITRATE_STORAGE_KEY);
+  const parsed = raw === null ? NaN : Number(raw);
+  return BITRATE_CHOICES.includes(parsed) ? parsed : 0;
+}
+
+function readAdaptive(): AdaptivePref {
+  const raw = readStorage(ADAPTIVE_STORAGE_KEY);
+  return ADAPTIVE_CHOICES.includes(raw as AdaptivePref)
+    ? (raw as AdaptivePref)
+    : "auto";
+}
+
 export const webPlayerTuning = reactive({
   bufferMs: readBuffer(),
   codec: readCodec(),
+  bitrate: readBitrate(),
+  adaptive: readAdaptive(),
 });
+
+export function setWebPlayerBitrate(bitrate: number) {
+  webPlayerTuning.bitrate = bitrate;
+  writeStorage(BITRATE_STORAGE_KEY, bitrate ? String(bitrate) : null);
+}
+
+export function setWebPlayerAdaptive(pref: AdaptivePref) {
+  webPlayerTuning.adaptive = pref;
+  writeStorage(ADAPTIVE_STORAGE_KEY, pref === "auto" ? null : pref);
+}
+
+/** Whether adaptive mode runs for the link the player is on. */
+export function adaptiveActive(pref: AdaptivePref, direct: boolean): boolean {
+  return pref === "on" || (pref === "auto" && !direct);
+}
 
 export function setWebPlayerBuffer(ms: number) {
   webPlayerTuning.bufferMs = ms;
@@ -123,4 +164,9 @@ export const webPlayerStatus = reactive({
   sampleRate: null as number | null,
   minBufferMs: null as number | null,
   requiredLeadTimeMs: null as number | null,
+  // the Opus bitrate asked of the server, 0 for its default
+  bitrate: 0,
+  // adaptive mode: whether it is watching, and the rung it is on
+  adaptive: false,
+  rung: 0,
 });

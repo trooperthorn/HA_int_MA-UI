@@ -4,9 +4,12 @@ import type { MusicAssistantApi } from "@/plugins/api";
 import { PlaybackState } from "@/plugins/api/interfaces";
 import { webPlayer, WebPlayerMode } from "@/plugins/web_player";
 import {
+  setWebPlayerAdaptive,
   setWebPlayerBuffer,
   setWebPlayerCodec,
+  webPlayerStatus,
 } from "@/plugins/web_player_tuning";
+import { SETTLE_MS } from "@/plugins/web_player_adaptive";
 import { flushPromises, mount } from "@vue/test-utils";
 import { nextTick } from "vue";
 import {
@@ -75,6 +78,8 @@ const {
   mockUseMediaBrowserMetaData,
   mockSetMinBufferMs,
   mockSetRequiredLeadTimeMs,
+  mockGetPlayerConfigEntries,
+  mockSavePlayerConfig,
   connectionState,
   routeState,
   sendspinState,
@@ -87,7 +92,15 @@ const {
     vi.fn<MusicAssistantApi["playerCommandPrevious"]>();
   const mockPlayerCommandSeek = vi.fn<MusicAssistantApi["playerCommandSeek"]>();
   const mockSendCommand = vi.fn<MusicAssistantApi["sendCommand"]>();
+  const mockGetPlayerConfigEntries = vi.fn(
+    async (): Promise<
+      Array<{ key: string; options: Array<{ value: unknown }> }>
+    > => [],
+  );
+  const mockSavePlayerConfig = vi.fn(async () => ({}));
   return {
+    mockGetPlayerConfigEntries,
+    mockSavePlayerConfig,
     authState: {
       guest: null as "music_quiz" | "party" | null,
     },
@@ -105,6 +118,8 @@ const {
       playerCommandPrevious: mockPlayerCommandPrevious,
       playerCommandSeek: mockPlayerCommandSeek,
       sendCommand: mockSendCommand,
+      getPlayerConfigEntries: mockGetPlayerConfigEntries,
+      savePlayerConfig: mockSavePlayerConfig,
     },
     storeMock: {
       activePlayerId: "active-player",
@@ -123,6 +138,7 @@ const {
     mockSendspinUnlock: vi.fn<() => Promise<void>>(),
     sendspinState: {
       pairingToken: null as string | null,
+      syncInfo: { resyncCount: 0, syncErrorMs: 0 },
       lastOptions: null as {
         codecs?: string[];
         minBufferMs?: number;
@@ -215,6 +231,9 @@ vi.mock("@sendspin/sendspin-js", () => ({
     connect = mockSendspinConnect;
     get pairingToken() {
       return sendspinState.pairingToken;
+    }
+    get syncInfo() {
+      return sendspinState.syncInfo;
     }
     disconnect = mockSendspinDisconnect;
     setCorrectionMode = vi.fn();
@@ -441,6 +460,91 @@ describe("SendspinPlayer MediaSession", () => {
     await flushPromises();
     wrapper.unmount();
     restore();
+  });
+
+  it("switches the codec on the server when it offers it, without a restart", async () => {
+    const restore = withAudioDecoder(true);
+    mockPrepareSendspinSession.mockResolvedValue(undefined);
+    mockGetPlayerConfigEntries.mockResolvedValue([
+      {
+        key: "preferred_sendspin_format",
+        options: [
+          { value: "automatic" },
+          { value: "opus:48000:16:2" },
+          { value: "flac:48000:16:2" },
+        ],
+      },
+      { key: "sendspin_opus_bitrate", options: [] },
+    ]);
+    const wrapper = mount(SendspinPlayer, {
+      props: { playerId: "web-player" },
+    });
+    await flushPromises();
+
+    setWebPlayerCodec("flac");
+    await flushPromises();
+    expect(mockSavePlayerConfig).toHaveBeenCalledWith("web-player", {
+      preferred_sendspin_format: "flac:48000:16:2",
+      sendspin_opus_bitrate: 0,
+    });
+    expect(mockSendspinDisconnect).not.toHaveBeenCalled();
+
+    setWebPlayerCodec("auto");
+    await flushPromises();
+    mockGetPlayerConfigEntries.mockResolvedValue([]);
+    wrapper.unmount();
+    restore();
+  });
+
+  it("steps down the ladder when the stream keeps resyncing", async () => {
+    vi.useFakeTimers();
+    try {
+      const restore = withAudioDecoder(true);
+      mockPrepareSendspinSession.mockResolvedValue(undefined);
+      mockGetPlayerConfigEntries.mockResolvedValue([
+        {
+          key: "preferred_sendspin_format",
+          options: [{ value: "automatic" }, { value: "opus:48000:16:2" }],
+        },
+        { key: "sendspin_opus_bitrate", options: [] },
+      ]);
+      setWebPlayerAdaptive("on");
+      const wrapper = mount(SendspinPlayer, {
+        props: { playerId: "web-player" },
+      });
+      await flushPromises();
+      expect(webPlayerStatus.adaptive).toBe(true);
+
+      // let the stream settle, then two resyncs a few seconds apart
+      await vi.advanceTimersByTimeAsync(SETTLE_MS + 2_000);
+      sendspinState.syncInfo = { resyncCount: 1, syncErrorMs: 0 };
+      await vi.advanceTimersByTimeAsync(2_000);
+      sendspinState.syncInfo = { resyncCount: 2, syncErrorMs: 0 };
+      await vi.advanceTimersByTimeAsync(2_000);
+      await flushPromises();
+
+      expect(webPlayerStatus.rung).toBe(1);
+      // rung 1: opus at 128 kb/s on the server, a 2.5 s buffer on the player
+      expect(mockSavePlayerConfig).toHaveBeenLastCalledWith("web-player", {
+        preferred_sendspin_format: "opus:48000:16:2",
+        sendspin_opus_bitrate: 128000,
+      });
+      expect(mockSetMinBufferMs).toHaveBeenLastCalledWith(2500);
+
+      // off puts the user's own choices back
+      setWebPlayerAdaptive("off");
+      await flushPromises();
+      expect(webPlayerStatus.rung).toBe(0);
+      expect(mockSetMinBufferMs).toHaveBeenLastCalledWith(500);
+
+      setWebPlayerAdaptive("auto");
+      sendspinState.syncInfo = { resyncCount: 0, syncErrorMs: 0 };
+      mockGetPlayerConfigEntries.mockResolvedValue([]);
+      wrapper.unmount();
+      restore();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps Sendspin audio hidden behind custom controls", () => {

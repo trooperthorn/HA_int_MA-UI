@@ -181,9 +181,13 @@ import {
 import { eventbus } from "@/plugins/eventbus";
 import { store } from "@/plugins/store";
 import {
+  ADAPTIVE_CHOICES,
+  BITRATE_CHOICES,
   BUFFER_AUTO,
   BUFFER_CHOICES_MS,
   CODEC_CHOICES,
+  setWebPlayerAdaptive,
+  setWebPlayerBitrate,
   setWebPlayerBuffer,
   setWebPlayerCodec,
   webPlayerStatus,
@@ -367,7 +371,34 @@ function openMainMenu(event: MouseEvent) {
         action: () => setWebPlayerCodec(codec),
       })),
     },
+    {
+      label: "library_manager.mobile.web_player.bitrate",
+      icon: Gauge,
+      subItems: BITRATE_CHOICES.map<ContextMenuItem>((bitrate) => ({
+        label: bitrate
+          ? `${bitrate / 1000} kb/s`
+          : "library_manager.mobile.web_player.bitrate_default",
+        selected: webPlayerTuning.bitrate === bitrate,
+        action: () => setWebPlayerBitrate(bitrate),
+      })),
+    },
+    {
+      label: "library_manager.mobile.web_player.adaptive",
+      icon: ArrowDownUp,
+      subItems: ADAPTIVE_CHOICES.map<ContextMenuItem>((pref) => ({
+        label: `library_manager.mobile.web_player.adaptive_${pref}`,
+        selected: webPlayerTuning.adaptive === pref,
+        action: () => setWebPlayerAdaptive(pref),
+      })),
+    },
   ];
+  if (webPlayerStatus.adaptive) {
+    items.splice(2, 0, {
+      label: "library_manager.mobile.web_player.rung",
+      labelArgs: { rung: webPlayerStatus.rung },
+      disabled: true,
+    });
+  }
   eventbus.emit("contextmenu", {
     items,
     posX: event.clientX,

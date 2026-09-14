@@ -252,8 +252,23 @@ what it negotiated (codec, sample rate, buffer, local or remote link), a
 **Web player buffer** choice (Automatic is 0.5 s on the local network and
 2.5 s over a remote link such as the Home Assistant app away from home;
 0.5 s to 10 s otherwise) and a **Web player codec** choice (Automatic, Opus,
-FLAC, PCM; the choice goes first and the automatic set stays as fallback).
-Both are kept per device in the browser's storage, so a phone on cellular
-and a desktop on the LAN keep their own. Sort and layout are remembered in
-the `libraryManager.mobile` preference.
+FLAC, PCM; a choice the server offers for this player switches the stream
+in place through the player's preferred-format setting, otherwise the
+session restarts advertising it first), an **Opus bitrate** choice (the
+app's `sendspin_opus_bitrate` server edit; encoder default or 48 to 256
+kb/s) and **Adaptive mode** (Automatic runs it on remote links only). All
+are kept per device in the browser's storage, so a phone on cellular and a
+desktop on the LAN keep their own.
+
+Adaptive mode watches what the player reports about the stream (resyncs
+and sync error) and steps down a ladder when the link is not keeping up:
+your own settings, then Opus 128 kb/s with at least a 2.5 s buffer, Opus
+96 kb/s with 5 s, Opus 64 kb/s with 10 s. Two resyncs within a minute or a
+sync error over 250 ms held for ten seconds step down; ten quiet minutes
+step back up one rung; thirty seconds after each move are ignored while
+the stream settles. Codec and bitrate change on the server (the stream
+follows in place), the buffer on the running player; your own choices are
+the ceiling and the buffer never shrinks below them. The menu shows the
+rung it is on. Sort and layout are remembered in the `libraryManager.mobile`
+preference.
 

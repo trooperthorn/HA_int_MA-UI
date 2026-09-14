@@ -36,11 +36,18 @@ import {
   isDirectConnection,
 } from "@/plugins/sendspin-connection";
 import {
+  adaptiveActive,
   resolveBuffer,
   resolveCodecs,
   webPlayerStatus,
   webPlayerTuning,
 } from "@/plugins/web_player_tuning";
+import {
+  AdaptiveController,
+  LADDER,
+  resolveRung,
+} from "@/plugins/web_player_adaptive";
+import type { ConfigValueType } from "@/plugins/api/interfaces";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 
@@ -402,6 +409,15 @@ function startPlayer() {
           webPlayerStatus.connected = true;
           reportFormat();
           registerPairing();
+          startAdaptive();
+          // the server keeps a preferred format per player; the bitrate
+          // the rung asks for has to be there on every fresh session
+          if (effective.value.bitrate || webPlayerStatus.rung > 0) {
+            void applyServerFormat(
+              effective.value.codec,
+              effective.value.bitrate,
+            );
+          }
         });
       })
       .catch((error) => {
@@ -410,13 +426,35 @@ function startPlayer() {
   }
 }
 
-// a new buffer applies to the running player; a new codec needs a fresh
-// session
+// ---- adaptive mode and live settings ----------------------------------------
+
+// what the stream runs with: the user's choices, lowered by the rung the
+// adaptive mode is on (rung 0 is the choices themselves)
+const effective = computed(() => {
+  const direct = webPlayerStatus.direct;
+  const chosenBuffer = resolveBuffer(webPlayerTuning.bufferMs, direct);
+  const rung = LADDER[webPlayerStatus.rung] ?? LADDER[0];
+  const wanted = resolveRung(rung, {
+    codec: webPlayerTuning.codec,
+    bitrate: webPlayerTuning.bitrate,
+    bufferMs: chosenBuffer.minBufferMs,
+  });
+  return {
+    codec: wanted.codec,
+    bitrate: wanted.bitrate,
+    buffer: resolveBuffer(wanted.bufferMs, direct),
+  };
+});
+
+// a new buffer applies to the running player
 watch(
-  () => webPlayerTuning.bufferMs,
-  (bufferMs) => {
+  () => [
+    effective.value.buffer.minBufferMs,
+    effective.value.buffer.requiredLeadTimeMs,
+  ],
+  () => {
     if (!player) return;
-    const buffer = resolveBuffer(bufferMs, webPlayerStatus.direct);
+    const buffer = effective.value.buffer;
     player.setMinBufferMs(buffer.minBufferMs);
     player.setRequiredLeadTimeMs(buffer.requiredLeadTimeMs);
     webPlayerStatus.minBufferMs = buffer.minBufferMs;
@@ -424,16 +462,114 @@ watch(
   },
 );
 
+// Codec and bitrate are the server's to change: its preferred-format
+// setting switches the stream in place, and the app's sendspin_opus_bitrate
+// edit adds the bitrate beside it. Returns false when the server does not
+// offer the codec for this player (the browser never advertised it), in
+// which case the caller restarts the session advertising it first.
+async function applyServerFormat(
+  codec: (typeof webPlayerTuning)["codec"],
+  bitrate: number,
+): Promise<boolean> {
+  let entries;
+  try {
+    entries = await api.getPlayerConfigEntries(props.playerId);
+  } catch (error) {
+    console.warn("Sendspin: cannot read the player settings", error);
+    return false;
+  }
+  const values: Record<string, ConfigValueType> = {};
+  const format = entries.find(
+    (entry) => entry.key === "preferred_sendspin_format",
+  );
+  let offered = format === undefined;
+  if (format) {
+    const option =
+      codec === "auto"
+        ? "automatic"
+        : format.options.find((candidate) =>
+            String(candidate.value).startsWith(`${codec}:`),
+          )?.value;
+    offered = option !== undefined;
+    values.preferred_sendspin_format = option ?? "automatic";
+  }
+  if (entries.some((entry) => entry.key === "sendspin_opus_bitrate")) {
+    values.sendspin_opus_bitrate = bitrate;
+    webPlayerStatus.bitrate = bitrate;
+  }
+  if (Object.keys(values).length === 0) return false;
+  try {
+    await api.savePlayerConfig(props.playerId, values);
+  } catch (error) {
+    console.warn("Sendspin: cannot save the player settings", error);
+    return false;
+  }
+  return offered;
+}
+
+function restartPlayer() {
+  if (!player) return;
+  player.disconnect("restart");
+  player = null;
+  webPlayerStatus.connected = false;
+  webPlayerStatus.codec = null;
+  startPlayer();
+}
+
 watch(
-  () => webPlayerTuning.codec,
-  () => {
+  [() => effective.value.codec, () => effective.value.bitrate],
+  ([codec, bitrate]) => {
     if (!player) return;
-    player.disconnect("restart");
-    player = null;
-    webPlayerStatus.connected = false;
-    webPlayerStatus.codec = null;
-    startPlayer();
+    void applyServerFormat(codec, bitrate).then((applied) => {
+      if (!applied) restartPlayer();
+    });
   },
+);
+
+// the adaptive loop: every couple of seconds ask the player how the
+// stream is doing and move on the ladder when it says so
+const adaptive = new AdaptiveController();
+let adaptiveTimer: number | undefined;
+
+function stopAdaptive() {
+  if (adaptiveTimer) clearInterval(adaptiveTimer);
+  adaptiveTimer = undefined;
+}
+
+function startAdaptive() {
+  stopAdaptive();
+  adaptive.reset(Date.now());
+  adaptive.rung = webPlayerStatus.rung;
+  adaptiveTimer = window.setInterval(() => {
+    if (!player || !webPlayerStatus.adaptive) return;
+    const info = player.syncInfo;
+    if (!info) return;
+    const verdict = adaptive.observe({
+      now: Date.now(),
+      resyncCount: info.resyncCount,
+      syncErrorMs: info.syncErrorMs,
+    });
+    if (verdict) {
+      webPlayerStatus.rung = adaptive.rung;
+      console.debug(
+        `Sendspin: adaptive mode stepped ${verdict} to rung ${adaptive.rung}`,
+      );
+    }
+  }, 2000);
+}
+
+// whether the loop should act follows the setting and the link; switching
+// it off puts the user's own choices back
+watch(
+  () => adaptiveActive(webPlayerTuning.adaptive, webPlayerStatus.direct),
+  (active) => {
+    webPlayerStatus.adaptive = active;
+    if (!active) {
+      webPlayerStatus.rung = 0;
+      adaptive.rung = 0;
+    }
+  },
+  { immediate: true },
 );
 
 // Setup on mount
@@ -493,6 +629,7 @@ onBeforeUnmount(() => {
     webPlayerStatus.connected = false;
     webPlayerStatus.codec = null;
   }
+  stopAdaptive();
   if (unsubMetadata) unsubMetadata();
   if (silentAudioInterval) clearInterval(silentAudioInterval);
   if (lastSeekPosTimeout) clearTimeout(lastSeekPosTimeout);
