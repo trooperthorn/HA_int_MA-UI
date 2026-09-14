@@ -14,10 +14,7 @@
       >
         <!-- player.current_media has content loaded (will work for all sources)  -->
         <div
-          v-if="
-            store.activePlayer?.powered != false &&
-            store.activePlayer?.current_media?.image_url
-          "
+          v-if="store.activePlayer?.powered != false && nowPlayingArt"
           class="w-full h-full"
         >
           <!-- cover: wide or tall art fills the square instead of leaving bands -->
@@ -25,7 +22,7 @@
             class="media-thumb"
             style="border-radius: 4px"
             cover
-            :src="getMediaImageUrl(store.activePlayer.current_media.image_url)"
+            :src="nowPlayingArt"
             :alt="$t('tooltip.artwork')"
           />
         </div>
@@ -200,7 +197,8 @@ import { openCurrentTrackDetails } from "@/helpers/now_playing";
 import { isQueueEnded } from "@/helpers/queue_position";
 import { resolveActiveElapsedTime } from "@/helpers/activeElapsedTime";
 import { resolveCurrentChapter } from "@/helpers/chapters";
-import { ImageColorPalette, getMediaImageUrl } from "@/helpers/utils";
+import { nowPlayingImageUrl } from "@/helpers/now_playing_image";
+import { ImageColorPalette } from "@/helpers/utils";
 import { MediaType, PlaybackState, PlayerType } from "@/plugins/api/interfaces";
 import { getBreakpointValue } from "@/plugins/breakpoint";
 import { store } from "@/plugins/store";
@@ -313,6 +311,10 @@ function onTitleClick() {
   }
   openPlayer();
 }
+// the queue item's own artwork first; the player's url for anything else
+const nowPlayingArt = computed(() =>
+  nowPlayingImageUrl(store.activePlayer, store.curQueueItem, 512),
+);
 </script>
 
 <style scoped>

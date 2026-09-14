@@ -77,13 +77,8 @@
           >
             <!-- current media image -->
             <v-img
-              v-if="
-                store.activePlayer?.powered != false &&
-                store.activePlayer?.current_media?.image_url
-              "
-              :src="
-                getMediaImageUrl(store.activePlayer.current_media.image_url)
-              "
+              v-if="store.activePlayer?.powered != false && nowPlayingArt"
+              :src="nowPlayingArt"
               :alt="$t('tooltip.artwork')"
             />
             <!-- fallback: display player icon in box -->
@@ -344,10 +339,8 @@
         >
           <div class="main-media-details-image main-media-details-image-alt">
             <v-img
-              v-if="store.activePlayer?.current_media?.image_url"
-              :src="
-                getMediaImageUrl(store.activePlayer.current_media.image_url)
-              "
+              v-if="nowPlayingArt"
+              :src="nowPlayingArt"
               :alt="$t('tooltip.artwork')"
             />
             <!-- fallback: display player icon in box -->
@@ -508,7 +501,6 @@ import { getPlayerMenuItems } from "@/helpers/player_menu_items";
 import {
   ImageColorPalette,
   formatDuration,
-  getMediaImageUrl,
   getPlayerName,
 } from "@/helpers/utils";
 import LyricsOffsetMenuControl from "@/layouts/default/PlayerOSD/LyricsOffsetMenuControl.vue";
@@ -525,6 +517,7 @@ import PlayerVolume from "@/layouts/default/PlayerOSD/PlayerVolume.vue";
 import QueueListItem from "@/layouts/default/PlayerOSD/QueueListItem.vue";
 import QueueModeBanner from "@/layouts/default/PlayerOSD/QueueModeBanner.vue";
 import { useFullscreenQueue } from "@/layouts/default/PlayerOSD/useFullscreenQueue";
+import { nowPlayingImageUrl } from "@/helpers/now_playing_image";
 import { useNowPlayingSource } from "@/composables/nowPlayingSource";
 import { resolveActiveElapsedTime } from "@/helpers/activeElapsedTime";
 import { resolveCurrentChapter } from "@/helpers/chapters";
@@ -1295,6 +1288,10 @@ function playQueueIndex(index: number) {
   const queue = store.activePlayerQueue;
   if (queue) api.queueCommandPlayIndex(queue.queue_id, index);
 }
+// the queue item's own artwork first; the player's url for anything else
+const nowPlayingArt = computed(() =>
+  nowPlayingImageUrl(store.activePlayer, store.curQueueItem, 1024),
+);
 </script>
 
 <style scoped>

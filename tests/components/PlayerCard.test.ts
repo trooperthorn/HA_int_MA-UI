@@ -76,6 +76,7 @@ vi.mock("@/helpers/player_menu_items", () => ({
 
 vi.mock("@/helpers/utils", () => ({
   getMediaImageUrl: (url: string) => url,
+  getImageThumbForItem: () => undefined,
   getPlayerName: (player: Player) => {
     const childCount = player.group_members.filter(
       (playerId) =>
