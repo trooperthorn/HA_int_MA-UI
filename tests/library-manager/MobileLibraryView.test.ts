@@ -1,4 +1,5 @@
 import MobileLibraryView from "@/library-manager/mobile/MobileLibraryView.vue";
+import { webPlayerTuning } from "@/plugins/web_player_tuning";
 import {
   handleMediaItemClick,
   handleMenuBtnClick,
@@ -187,6 +188,52 @@ describe("MobileLibraryView", () => {
     expect(
       wrapper.findAll("[data-kind]").map((el) => el.attributes("data-kind")),
     ).toEqual(["playlists", "artists", "albums"]);
+  });
+
+  it("offers create and the web player buffer and codec from the header menu", async () => {
+    const wrapper = mountView();
+    await flushPromises();
+
+    await wrapper
+      .find('[aria-label="library_manager.mobile.menu"]')
+      .trigger("click", { clientX: 5, clientY: 6 });
+    const menu = mocks.emit.mock.calls.at(-1)!;
+    expect(menu[0]).toBe("contextmenu");
+    const items = (menu[1] as { items: Array<Record<string, unknown>> }).items;
+    expect(items.map((item) => item.label)).toEqual([
+      "library_manager.mobile.create",
+      "library_manager.mobile.web_player.off",
+      "library_manager.mobile.web_player.buffer",
+      "library_manager.mobile.web_player.codec",
+    ]);
+    expect(items[1].disabled).toBe(true);
+
+    const buffers = items[2].subItems as Array<Record<string, unknown>>;
+    expect(buffers.map((item) => item.label)).toEqual([
+      "library_manager.mobile.web_player.buffer_auto",
+      "500 ms",
+      "1 s",
+      "2.5 s",
+      "5 s",
+      "10 s",
+    ]);
+    expect(buffers[0].selected).toBe(true);
+    (buffers[4].action as () => void)();
+    expect(webPlayerTuning.bufferMs).toBe(5000);
+
+    const codecs = items[3].subItems as Array<Record<string, unknown>>;
+    expect(codecs.map((item) => item.label)).toEqual([
+      "library_manager.mobile.web_player.codec_auto",
+      "OPUS",
+      "FLAC",
+      "PCM",
+    ]);
+    (codecs[1].action as () => void)();
+    expect(webPlayerTuning.codec).toBe("opus");
+
+    // back to automatic so the other cases see the defaults
+    (buffers[0].action as () => void)();
+    (codecs[0].action as () => void)();
   });
 
   it("picks a source from the filter chip and lists only what it holds", async () => {

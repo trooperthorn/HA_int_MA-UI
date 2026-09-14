@@ -3,6 +3,10 @@ import { BrowserMediaControlsMode } from "@/helpers/device_settings";
 import type { MusicAssistantApi } from "@/plugins/api";
 import { PlaybackState } from "@/plugins/api/interfaces";
 import { webPlayer, WebPlayerMode } from "@/plugins/web_player";
+import {
+  setWebPlayerBuffer,
+  setWebPlayerCodec,
+} from "@/plugins/web_player_tuning";
 import { flushPromises, mount } from "@vue/test-utils";
 import { nextTick } from "vue";
 import {
@@ -69,6 +73,9 @@ const {
   mockSendspinDisconnect,
   mockSendspinUnlock,
   mockUseMediaBrowserMetaData,
+  mockSetMinBufferMs,
+  mockSetRequiredLeadTimeMs,
+  connectionState,
   routeState,
   sendspinState,
 } = vi.hoisted(() => {
@@ -118,6 +125,8 @@ const {
       pairingToken: null as string | null,
       lastOptions: null as {
         codecs?: string[];
+        minBufferMs?: number;
+        requiredLeadTimeMs?: number;
         onStateChange?: (state: {
           isPlaying: boolean;
           volume: number;
@@ -128,6 +137,9 @@ const {
       } | null,
     },
     mockUseMediaBrowserMetaData: vi.fn(() => vi.fn()),
+    mockSetMinBufferMs: vi.fn<(ms: number) => void>(),
+    mockSetRequiredLeadTimeMs: vi.fn<(ms: number) => void>(),
+    connectionState: { direct: true },
     routeState: {
       current: null as { meta: Record<string, unknown> } | null,
     },
@@ -186,7 +198,7 @@ vi.mock("@/plugins/web_player", async () => {
 });
 
 vi.mock("@/plugins/sendspin-connection", () => ({
-  isDirectConnection: () => true,
+  isDirectConnection: () => connectionState.direct,
   prepareSendspinSession: mockPrepareSendspinSession,
 }));
 
@@ -206,6 +218,8 @@ vi.mock("@sendspin/sendspin-js", () => ({
     }
     disconnect = mockSendspinDisconnect;
     setCorrectionMode = vi.fn();
+    setMinBufferMs = mockSetMinBufferMs;
+    setRequiredLeadTimeMs = mockSetRequiredLeadTimeMs;
     setMuted = vi.fn();
     setVolume = vi.fn();
     unlock = mockSendspinUnlock;
@@ -367,6 +381,64 @@ describe("SendspinPlayer MediaSession", () => {
     await flushPromises();
     expect(sendspinState.lastOptions?.codecs).toEqual(["flac", "pcm"]);
     expect(sendspinState.lastOptions?.codecs).not.toContain("opus");
+    wrapper.unmount();
+    restore();
+  });
+
+  it("buffers 0.5 s on the LAN and 2.5 s over a remote link", async () => {
+    mockPrepareSendspinSession.mockResolvedValue(undefined);
+    connectionState.direct = true;
+    let wrapper = mount(SendspinPlayer, {
+      props: { playerId: "web-player" },
+    });
+    await flushPromises();
+    expect(sendspinState.lastOptions).toMatchObject({
+      minBufferMs: 500,
+      requiredLeadTimeMs: 250,
+    });
+    wrapper.unmount();
+
+    // the Home Assistant ingress proxy, a phone on cellular
+    connectionState.direct = false;
+    wrapper = mount(SendspinPlayer, {
+      props: { playerId: "web-player" },
+    });
+    await flushPromises();
+    expect(sendspinState.lastOptions).toMatchObject({
+      minBufferMs: 2500,
+      requiredLeadTimeMs: 1000,
+    });
+    wrapper.unmount();
+    connectionState.direct = true;
+  });
+
+  it("applies a chosen buffer to the running player and restarts it for a codec", async () => {
+    const restore = withAudioDecoder(true);
+    mockPrepareSendspinSession.mockResolvedValue(undefined);
+    const wrapper = mount(SendspinPlayer, {
+      props: { playerId: "web-player" },
+    });
+    await flushPromises();
+    expect(mockSendspinConnect).toHaveBeenCalledTimes(1);
+
+    setWebPlayerBuffer(5000);
+    await nextTick();
+    expect(mockSetMinBufferMs).toHaveBeenCalledWith(5000);
+    expect(mockSetRequiredLeadTimeMs).toHaveBeenCalledWith(1000);
+    expect(mockSendspinDisconnect).not.toHaveBeenCalled();
+
+    // the codecs are advertised at creation, so a new choice means a
+    // new session with the choice first and the automatic set behind it
+    setWebPlayerCodec("pcm");
+    await flushPromises();
+    expect(mockSendspinDisconnect).toHaveBeenCalledWith("restart");
+    expect(mockSendspinConnect).toHaveBeenCalledTimes(2);
+    expect(sendspinState.lastOptions?.codecs).toEqual(["pcm", "opus", "flac"]);
+    expect(sendspinState.lastOptions?.minBufferMs).toBe(5000);
+
+    setWebPlayerBuffer(0);
+    setWebPlayerCodec("auto");
+    await flushPromises();
     wrapper.unmount();
     restore();
   });
