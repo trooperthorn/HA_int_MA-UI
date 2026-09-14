@@ -2717,9 +2717,10 @@
         "clear_filters": "Clear filters",
         "loading_all": "Loading {0} of {1} to sort",
         "tree": {
-            "library": "Library (all sources)",
-            "sources": "Sources",
-            "album_artists": "Album artists",
+            "library": "Library",
+            "source_all": "All sources",
+            "folders": "Folders",
+                        "album_artists": "Album artists",
             "recently_added": "Recently added",
             "files_to_edit": "Files to edit",
             "album_artist": "Album artist",
@@ -2770,7 +2771,11 @@
             "add_to_queue": "Add to queue",
             "go_to_album": "Go to album",
             "go_to_artist": "Go to artist",
-            "more": "More actions"
+            "more": "More actions",
+            "media_info": "Media info",
+            "file_location": "File location",
+            "remove_source": "Remove from {provider}",
+            "remove_source_confirm": "Drop this item's {provider} entry? When it is the item's only source, the item leaves the library as well."
         },
         "playing_here": "No player was picked, so this browser plays it.",
         "sync_issues": {
@@ -2787,6 +2792,7 @@
         "mobile": {
             "create": "Create",
             "sort": "Sort",
+            "source": "Source",
             "sort_recents": "Recents",
             "sort_alphabetical": "Alphabetical",
             "grid": "Grid view",

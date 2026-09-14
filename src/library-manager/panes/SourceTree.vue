@@ -24,6 +24,7 @@
       :aria-level="row.depth + 1"
       @click="onRowClick(row.node)"
       @dblclick="row.expandable && toggle(row.node)"
+      @contextmenu.prevent="onRowContextMenu($event, row.node)"
     >
       <button
         v-if="row.expandable"
@@ -69,6 +70,7 @@ import {
   Disc3,
   FileWarning,
   Folder,
+  FolderTree,
   LibraryBig,
   ListMusic,
   Play,
@@ -94,6 +96,7 @@ import {
 } from "@/composables/userPreferences";
 import { onLibrarySyncCompleted } from "@/composables/useLibrarySync";
 import { useBackgroundTasks } from "@/composables/background-tasks/useBackgroundTasks";
+import type { ContextMenuItem } from "@/helpers/context_menu_item";
 import { isSelectablePlayer } from "@/helpers/players";
 import { togglePlayerQueue } from "@/helpers/player_queue";
 import { api, ConnectionState } from "@/plugins/api";
@@ -104,8 +107,10 @@ import {
   type BrowseFolder,
   type ProviderInstance,
 } from "@/plugins/api/interfaces";
+import { eventbus } from "@/plugins/eventbus";
 import { store } from "@/plugins/store";
 import type { NodeFilter } from "../composables/useLibraryFilter";
+import { countSourceItems, type CountableKey } from "../sourceCounts";
 import {
   collectSyncIssues,
   groupSyncIssues,
@@ -125,6 +130,8 @@ export interface TreeNode {
   action?: () => void;
   children?: TreeNode[];
   loadChildren?: () => Promise<TreeNode[]>;
+  // right-click menu, when the node has one
+  contextMenu?: () => ContextMenuItem[];
 }
 
 const props = defineProps<{ activeNode: string }>();
@@ -137,7 +144,6 @@ const { tasks } = useBackgroundTasks();
 const EXPANDED_PREFERENCE_KEY = "libraryManager.tree";
 const storedExpanded = getPreference<string[]>(EXPANDED_PREFERENCE_KEY, [
   "library",
-  "sources",
 ]);
 const expanded = ref(new Set(storedExpanded.value));
 const loadingIds = ref(new Set<string>());
@@ -170,6 +176,54 @@ async function refreshCount(key: string, load: () => Promise<number>) {
   }
 }
 
+// ---- per-source counts -----------------------------------------------------
+
+// there is no count endpoint that takes a provider; these are found by
+// probing the listings (see sourceCounts.ts), one kind at a time, on demand
+const sourceCounts = ref<Record<string, Partial<Record<CountableKey, number>>>>(
+  {},
+);
+const sourceCountsInFlight = new Set<string>();
+
+const SOURCE_COUNT_KEYS: readonly CountableKey[] = [
+  "tracks",
+  "playlists",
+  "artists",
+  "album_artists",
+  "albums",
+  "genres",
+];
+
+async function ensureSourceCount(instanceId: string, key: CountableKey) {
+  const token = `${instanceId}:${key}`;
+  if (sourceCounts.value[instanceId]?.[key] !== undefined) return;
+  if (sourceCountsInFlight.has(token)) return;
+  sourceCountsInFlight.add(token);
+  try {
+    const value = await countSourceItems(key, instanceId, counts.value[key]);
+    sourceCounts.value = {
+      ...sourceCounts.value,
+      [instanceId]: { ...sourceCounts.value[instanceId], [key]: value },
+    };
+  } catch (err) {
+    console.error("[SourceTree] source count failed for %s", token, err);
+  } finally {
+    sourceCountsInFlight.delete(token);
+  }
+}
+
+function ensureSourceCounts(instanceId: string) {
+  for (const key of SOURCE_COUNT_KEYS) void ensureSourceCount(instanceId, key);
+}
+
+// a sync changes the counts; the probed ones are dropped and found again
+function resetSourceCounts() {
+  sourceCounts.value = {};
+  for (const instanceId of Object.keys(providerFolders.value)) {
+    void ensureSourceCount(instanceId, "tracks");
+  }
+}
+
 const unsubscribers: Array<() => void> = [];
 onMounted(() => {
   for (const [key, mediaType, load] of COUNT_LOADERS) {
@@ -177,25 +231,68 @@ onMounted(() => {
       onLibrarySyncCompleted(mediaType, () => void refreshCount(key, load)),
     );
   }
+  unsubscribers.push(
+    onLibrarySyncCompleted(MediaType.TRACK, resetSourceCounts),
+  );
 });
 onBeforeUnmount(() => unsubscribers.forEach((unsubscribe) => unsubscribe()));
 
-// ---- nodes -----------------------------------------------------------------
+// ---- the library's source ----------------------------------------------------
 
-const libraryNode = (
-  id: string,
-  label: string,
-  icon: Component,
-  countKey: string | undefined,
-  filter: Partial<NodeFilter> & { mediaType: MediaType },
-): TreeNode => ({
-  id: `library.${id}`,
-  label,
-  icon,
-  count: countKey ? counts.value[countKey] : undefined,
-  expandable: false,
-  filter: { scope: "library", node: `library.${id}`, ...filter },
+// the Library node lists every source or, chosen from its right-click menu,
+// one of them; the choice is remembered per user
+const LIBRARY_SOURCE_PREFERENCE_KEY = "libraryManager.librarySource";
+const LIBRARY_SOURCE_ALL = "all";
+const storedLibrarySource = getPreference<string>(
+  LIBRARY_SOURCE_PREFERENCE_KEY,
+  LIBRARY_SOURCE_ALL,
+);
+
+const musicProviders = computed<ProviderInstance[]>(() =>
+  Object.values(api.providers)
+    .filter((provider) => provider.type === ProviderType.MUSIC)
+    .sort((left, right) => left.name.localeCompare(right.name)),
+);
+
+// a source that has gone away falls back to every source
+const librarySource = computed<string | undefined>(() => {
+  const value = storedLibrarySource.value;
+  if (!value || value === LIBRARY_SOURCE_ALL) return undefined;
+  return api.getProvider(value) ? value : undefined;
 });
+
+function setLibrarySource(value: string) {
+  if (value === (librarySource.value ?? LIBRARY_SOURCE_ALL)) return;
+  void setUserPreference(LIBRARY_SOURCE_PREFERENCE_KEY, value);
+  if (value !== LIBRARY_SOURCE_ALL) ensureSourceCounts(value);
+}
+
+// the listing the grid shows follows the change when it is a library node
+watch(librarySource, () => {
+  const active = findNode(props.activeNode);
+  if (active?.filter && props.activeNode.startsWith("library")) {
+    emit("select", active.filter);
+  }
+});
+
+function librarySourceMenu(): ContextMenuItem[] {
+  const current = librarySource.value ?? LIBRARY_SOURCE_ALL;
+  return [
+    {
+      label: "library_manager.tree.source_all",
+      icon: LibraryBig,
+      selected: current === LIBRARY_SOURCE_ALL,
+      action: () => setLibrarySource(LIBRARY_SOURCE_ALL),
+    },
+    ...musicProviders.value.map<ContextMenuItem>((provider) => ({
+      label: provider.name,
+      selected: current === provider.instance_id,
+      action: () => setLibrarySource(provider.instance_id),
+    })),
+  ];
+}
+
+// ---- nodes -----------------------------------------------------------------
 
 // the listings every source offers, in the order they appear under a source;
 // the library gets them all, a provider only the ones its features back.
@@ -251,47 +348,137 @@ const SOURCE_LISTINGS: Array<{
   },
 ];
 
-const libraryChildren = computed<TreeNode[]>(() => [
-  ...SOURCE_LISTINGS.map((listing) =>
-    libraryNode(
-      listing.id,
-      t(listing.labelKey),
-      listing.icon,
-      listing.countKey,
-      listing.filter,
+const isCountable = (key: string): key is CountableKey =>
+  SOURCE_COUNT_KEYS.includes(key as CountableKey);
+
+// the count shown for a listing: the library's, or the source's when the
+// listing is narrowed to one
+function countFor(
+  countKey: string | undefined,
+  instanceId: string | undefined,
+): number | undefined {
+  if (!countKey) return undefined;
+  if (!instanceId) return counts.value[countKey];
+  return isCountable(countKey)
+    ? sourceCounts.value[instanceId]?.[countKey]
+    : undefined;
+}
+
+// a listing with nothing in it (no playlists on a filesystem, say) is left
+// out once that is known
+function listingsFor(
+  instanceId: string | undefined,
+  provider: ProviderInstance | undefined,
+) {
+  return SOURCE_LISTINGS.filter((listing) => {
+    if (provider && !offersListing(provider, listing.feature)) return false;
+    return countFor(listing.countKey, instanceId) !== 0;
+  });
+}
+
+const libraryNode = (
+  id: string,
+  label: string,
+  icon: Component,
+  countKey: string | undefined,
+  filter: Partial<NodeFilter> & { mediaType: MediaType },
+): TreeNode => {
+  const source = librarySource.value;
+  return {
+    id: `library.${id}`,
+    label,
+    icon,
+    count: countFor(countKey, source),
+    expandable: false,
+    filter: {
+      scope: "library",
+      node: `library.${id}`,
+      ...(source ? { provider: [source] } : {}),
+      ...filter,
+    },
+  };
+};
+
+const libraryChildren = computed<TreeNode[]>(() => {
+  const source = librarySource.value;
+  const provider = source ? api.getProvider(source) : undefined;
+  return [
+    ...listingsFor(source, provider).map((listing) =>
+      libraryNode(
+        listing.id,
+        t(listing.labelKey),
+        listing.icon,
+        listing.countKey,
+        listing.filter,
+      ),
     ),
-  ),
-  libraryNode(
-    "recently_added",
-    t("library_manager.tree.recently_added"),
-    Clock,
-    undefined,
-    { mediaType: MediaType.TRACK, sortOverride: "timestamp_added_desc" },
-  ),
-  libraryNode(
-    "files_to_edit",
-    t("library_manager.tree.files_to_edit"),
-    FileWarning,
-    undefined,
-    { mediaType: MediaType.TRACK, filesToEdit: true },
-  ),
-]);
+    libraryNode(
+      "recently_added",
+      t("library_manager.tree.recently_added"),
+      Clock,
+      undefined,
+      { mediaType: MediaType.TRACK, sortOverride: "timestamp_added_desc" },
+    ),
+    libraryNode(
+      "files_to_edit",
+      t("library_manager.tree.files_to_edit"),
+      FileWarning,
+      undefined,
+      { mediaType: MediaType.TRACK, filesToEdit: true },
+    ),
+  ];
+});
+
+const libraryLabel = computed(() => {
+  const source = librarySource.value;
+  const provider = source ? api.getProvider(source) : undefined;
+  return `${t("library_manager.tree.library")} (${
+    provider ? provider.name : t("library_manager.tree.source_all")
+  })`;
+});
+
+// ---- sources -----------------------------------------------------------------
 
 // the provider root listing is the same one the Browse page shows; each
 // folder there stands for a provider and carries the path to browse it
 const providerRoots = ref<BrowseFolder[]>([]);
+// the folders a provider's own listing offers beyond the standard ones (a
+// filesystem's directories, a streaming provider's extras)
+const providerFolders = ref<Record<string, BrowseFolder[]>>({});
 const providerRootsLoaded = ref(false);
 
-async function loadProviderRoots(): Promise<TreeNode[]> {
-  if (!providerRootsLoaded.value) {
+async function loadProviderRoots() {
+  if (providerRootsLoaded.value) return;
+  providerRootsLoaded.value = true;
+  try {
     const items = await api.browse(undefined, store.activePlayerId);
     providerRoots.value = items.filter(isChildFolder);
-    providerRootsLoaded.value = true;
+  } catch (err) {
+    providerRootsLoaded.value = false;
+    console.error("[SourceTree] failed to list the sources", err);
+    return;
   }
-  const nodes = providerRoots.value.map(providerNode);
-  // a source with nothing under it should not offer to open; find out now
-  for (const node of nodes) void ensureChildren(node);
-  return nodes;
+  for (const folder of providerRoots.value) {
+    const instanceId = instanceIdOf(folder);
+    void ensureSourceCount(instanceId, "tracks");
+    void loadProviderFolders(folder);
+  }
+}
+
+async function loadProviderFolders(folder: BrowseFolder) {
+  const instanceId = instanceIdOf(folder);
+  try {
+    const items = await api.browse(folder.path, store.activePlayerId);
+    providerFolders.value = {
+      ...providerFolders.value,
+      [instanceId]: items
+        .filter(isChildFolder)
+        .filter((item) => !STANDARD_FOLDERS.has(item.item_id)),
+    };
+  } catch (err) {
+    console.error("[SourceTree] failed to browse %s", folder.path, err);
+    providerFolders.value = { ...providerFolders.value, [instanceId]: [] };
+  }
 }
 
 // providers list a ".." entry that browses back up; the tree already has a parent
@@ -341,6 +528,7 @@ function sourceListingNode(
     id,
     label: t(listing.labelKey),
     icon: listing.icon,
+    count: countFor(listing.countKey, instanceId),
     expandable: false,
     filter: {
       scope: "library",
@@ -351,8 +539,8 @@ function sourceListingNode(
   };
 }
 
-// a music provider lists like the library, narrowed to itself; anything else
-// (radio, folder trees) browses
+// a music provider lists like the library, narrowed to itself, with its
+// folders grouped under one node; anything else (radio) browses
 function providerNode(folder: BrowseFolder): TreeNode {
   const instanceId = instanceIdOf(folder);
   const provider =
@@ -360,31 +548,50 @@ function providerNode(folder: BrowseFolder): TreeNode {
   const listsTracks =
     !!provider && offersListing(provider, ProviderFeature.LIBRARY_TRACKS);
   const node = folderNode(folder);
+  const browseFilter: NodeFilter = {
+    scope: "browse",
+    node: `source:${instanceId}`,
+    mediaType: MediaType.FOLDER,
+    browsePath: folder.path,
+    provider: [instanceId],
+  };
+  const folders = providerFolders.value[instanceId];
+  const listings = provider
+    ? listingsFor(instanceId, provider).map((listing) =>
+        sourceListingNode(instanceId, listing),
+      )
+    : [];
+  const children: TreeNode[] = [...listings];
+  if (folders === undefined) {
+    // still browsing; the group appears once the folders are known
+  } else if (folders.length > 0) {
+    children.push({
+      id: `source:${instanceId}.folders`,
+      label: t("library_manager.tree.folders"),
+      icon: FolderTree,
+      expandable: true,
+      children: folders.map(folderNode),
+      filter: node.filter,
+    });
+  }
   return {
     ...node,
+    id: `source:${instanceId}`,
     providerDomain:
       provider?.type === ProviderType.MUSIC ? provider.domain : undefined,
+    count: listsTracks ? sourceCounts.value[instanceId]?.tracks : undefined,
+    // while the folders are still being browsed the node may yet have some
+    expandable: folders === undefined || children.length > 0,
+    children,
     filter: listsTracks
       ? {
           scope: "library",
-          node: node.id,
+          node: `source:${instanceId}`,
           mediaType: MediaType.TRACK,
           provider: [instanceId],
         }
-      : node.filter,
-    loadChildren: async () => {
-      const items = await api.browse(folder.path, store.activePlayerId);
-      const listings = provider
-        ? SOURCE_LISTINGS.filter((listing) =>
-            offersListing(provider, listing.feature),
-          ).map((listing) => sourceListingNode(instanceId, listing))
-        : [];
-      const folders = items
-        .filter(isChildFolder)
-        .filter((item) => !STANDARD_FOLDERS.has(item.item_id))
-        .map(folderNode);
-      return [...listings, ...folders];
-    },
+      : browseFilter,
+    loadChildren: undefined,
   };
 }
 
@@ -408,6 +615,10 @@ function folderNode(folder: BrowseFolder): TreeNode {
     },
   };
 }
+
+const sourceNodes = computed<TreeNode[]>(() =>
+  providerRoots.value.map(providerNode),
+);
 
 const loadedChildren = ref(new Map<string, TreeNode[]>());
 // expandable nodes whose load turned up nothing to expand
@@ -466,46 +677,46 @@ const syncIssueNodes = computed<TreeNode[]>(() => {
   ];
 });
 
-const roots = computed<TreeNode[]>(() => [
-  {
-    id: "now_playing",
-    label: t("now_playing"),
-    icon: Play,
-    expandable: false,
-    action: togglePlayerQueue,
-  },
-  {
-    id: "library",
-    label: t("library_manager.tree.library"),
-    icon: LibraryBig,
-    count: counts.value.tracks,
-    expandable: true,
-    children: libraryChildren.value,
-    filter: {
-      scope: "library",
-      node: "library",
-      mediaType: MediaType.TRACK,
+// the library and every source sit side by side at the top level
+const roots = computed<TreeNode[]>(() => {
+  const source = librarySource.value;
+  return [
+    {
+      id: "now_playing",
+      label: t("now_playing"),
+      icon: Play,
+      expandable: false,
+      action: togglePlayerQueue,
     },
-  },
-  {
-    id: "sources",
-    label: t("library_manager.tree.sources"),
-    icon: LibraryBig,
-    expandable: true,
-    loadChildren: loadProviderRoots,
-  },
-  ...syncIssueNodes.value,
-  {
-    id: "players",
-    label: t("players"),
-    icon: Speaker,
-    count: selectablePlayerCount.value,
-    expandable: false,
-    action: () => {
-      store.showPlayersMenu = true;
+    {
+      id: "library",
+      label: libraryLabel.value,
+      icon: LibraryBig,
+      count: source ? sourceCounts.value[source]?.tracks : counts.value.tracks,
+      expandable: true,
+      children: libraryChildren.value,
+      filter: {
+        scope: "library",
+        node: "library",
+        mediaType: MediaType.TRACK,
+        ...(source ? { provider: [source] } : {}),
+      },
+      contextMenu: librarySourceMenu,
     },
-  },
-]);
+    ...sourceNodes.value,
+    ...syncIssueNodes.value,
+    {
+      id: "players",
+      label: t("players"),
+      icon: Speaker,
+      count: selectablePlayerCount.value,
+      expandable: false,
+      action: () => {
+        store.showPlayersMenu = true;
+      },
+    },
+  ];
+});
 
 interface VisibleRow {
   node: TreeNode;
@@ -542,6 +753,10 @@ const visibleRows = computed<VisibleRow[]>(() => {
   return rows;
 });
 
+function findNode(id: string): TreeNode | undefined {
+  return visibleRows.value.find((row) => row.node.id === id)?.node;
+}
+
 // ---- expand / select --------------------------------------------------------
 
 async function ensureChildren(node: TreeNode) {
@@ -576,7 +791,20 @@ function expand(node: TreeNode) {
   if (!isExpandable(node) || expanded.value.has(node.id)) return;
   expanded.value = new Set(expanded.value).add(node.id);
   persistExpanded();
+  onExpanded(node);
   void ensureChildren(node);
+}
+
+// opening a source shows its listing counts, which are only probed then
+function onExpanded(node: TreeNode) {
+  const match = /^source:([^.]+)$/.exec(node.id);
+  if (match) ensureSourceCounts(match[1]);
+  for (const child of childrenOf(node)) {
+    if (expanded.value.has(child.id)) {
+      onExpanded(child);
+      void ensureChildren(child);
+    }
+  }
 }
 
 function collapse(node: TreeNode) {
@@ -604,8 +832,19 @@ function onRowClick(node: TreeNode) {
   activate(node);
 }
 
-// a reload lands here before the server connection is up; counts and lazy
-// branches the user left open are (re)fetched whenever it becomes usable
+function onRowContextMenu(event: MouseEvent, node: TreeNode) {
+  if (!node.contextMenu) return;
+  focusedId.value = node.id;
+  eventbus.emit("contextmenu", {
+    items: node.contextMenu(),
+    posX: event.clientX,
+    posY: event.clientY,
+  });
+}
+
+// a reload lands here before the server connection is up; counts, the
+// sources and lazy branches the user left open are (re)fetched whenever it
+// becomes usable
 const connected = computed(
   () => api.state.value === ConnectionState.INITIALIZED,
 );
@@ -614,12 +853,19 @@ watch(
   (ready) => {
     if (!ready) return;
     for (const [key, , load] of COUNT_LOADERS) void refreshCount(key, load);
-    for (const node of roots.value) {
-      if (expanded.value.has(node.id)) void ensureChildren(node);
-    }
+    void loadProviderRoots();
+    if (librarySource.value) ensureSourceCounts(librarySource.value);
   },
   { immediate: true },
 );
+
+// sources arrive after the connection; the branches left open under them
+// (and their counts) load once they are in the tree
+watch(sourceNodes, (nodes) => {
+  for (const node of nodes) {
+    if (expanded.value.has(node.id)) onExpanded(node);
+  }
+});
 
 // ---- keyboard --------------------------------------------------------------
 

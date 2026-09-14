@@ -6,6 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   browse: vi.fn<MusicAssistantApi["browse"]>(),
+  getLibraryTracks: vi.fn(),
+  getLibraryArtists: vi.fn(),
+  getLibraryAlbums: vi.fn(),
+  getLibraryPlaylists: vi.fn(),
+  emit: vi.fn(),
   getLibraryArtistsCount: vi.fn(),
   getLibraryAlbumsCount: vi.fn(),
   getLibraryTracksCount: vi.fn(),
@@ -20,6 +25,10 @@ vi.mock("@/plugins/api", async () => {
   const api = {
     state: ref("initialized"),
     browse: mocks.browse,
+    getLibraryTracks: mocks.getLibraryTracks,
+    getLibraryArtists: mocks.getLibraryArtists,
+    getLibraryAlbums: mocks.getLibraryAlbums,
+    getLibraryPlaylists: mocks.getLibraryPlaylists,
     getLibraryArtistsCount: mocks.getLibraryArtistsCount,
     getLibraryAlbumsCount: mocks.getLibraryAlbumsCount,
     getLibraryTracksCount: mocks.getLibraryTracksCount,
@@ -44,6 +53,7 @@ vi.mock("@/plugins/api", async () => {
       "spotify--1": {
         type: "music",
         domain: "spotify",
+        name: "Spotify",
         instance_id: "spotify--1",
         available: true,
         supported_features: [
@@ -57,6 +67,7 @@ vi.mock("@/plugins/api", async () => {
       "filesystem_local--1": {
         type: "music",
         domain: "filesystem_local",
+        name: "Filesystem",
         instance_id: "filesystem_local--1",
         available: true,
         supported_features: ["browse"],
@@ -64,6 +75,7 @@ vi.mock("@/plugins/api", async () => {
       "radiobrowser--1": {
         type: "music",
         domain: "radiobrowser",
+        name: "RadioBrowser",
         instance_id: "radiobrowser--1",
         available: true,
         supported_features: ["browse", "library_radios"],
@@ -88,15 +100,26 @@ vi.mock("@/plugins/store", async () => {
   };
 });
 
+const prefs = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
 vi.mock("@/composables/userPreferences", async () => {
-  const { computed } = await import("vue");
+  const { computed, reactive } = await import("vue");
+  const state = reactive(prefs.value);
+  prefs.value = state;
+  mocks.setUserPreference.mockImplementation(
+    async (key: string, value: unknown) => {
+      state[key] = value;
+    },
+  );
   return {
     setUserPreference: mocks.setUserPreference,
     useUserPreferences: () => ({
-      getPreference: <T>(_key: string, fallback: T) => computed(() => fallback),
+      getPreference: <T>(key: string, fallback: T) =>
+        computed(() => (state[key] as T | undefined) ?? fallback),
     }),
   };
 });
+
+vi.mock("@/plugins/eventbus", () => ({ eventbus: { emit: mocks.emit } }));
 
 vi.mock("@/composables/useLibrarySync", () => ({
   onLibrarySyncCompleted: () => () => {},
@@ -160,6 +183,41 @@ const rowLabels = (wrapper: ReturnType<typeof mountTree>) =>
     .findAll(".source-tree__row")
     .map((row) => row.find(".source-tree__label").text());
 
+const rowTexts = (wrapper: ReturnType<typeof mountTree>) =>
+  wrapper.findAll(".source-tree__row").map((row) => {
+    const label = row.find(".source-tree__label").text();
+    const count = row.find(".source-tree__count");
+    return count.exists() ? `${label} ${count.text()}` : label;
+  });
+
+// the library row names its source
+const LIBRARY_ALL =
+  "library_manager.tree.library (library_manager.tree.source_all)";
+
+// per-source counts are probed by asking for one item at an offset; each
+// listing here has a fixed length per source
+const SOURCE_SIZES: Record<string, Record<string, number>> = {
+  "spotify--1": { tracks: 120, artists: 9, albums: 14, playlists: 3 },
+  "filesystem_local--1": { tracks: 380, artists: 25, albums: 31, playlists: 0 },
+};
+const probe =
+  (key: string, offsetIndex: number, providerIndex: number) =>
+  async (...args: unknown[]) => {
+    const offset = args[offsetIndex] as number;
+    const provider = args[providerIndex] as string;
+    const size = SOURCE_SIZES[provider]?.[key] ?? 0;
+    if (offset >= size) return [];
+    // the genre count pages the tracks in whole and reads their tags
+    const limit = args[2] as number;
+    if (key === "tracks" && limit > 1) {
+      return [
+        { item_id: "1", metadata: { genres: ["Rock", "Pop"] } },
+        { item_id: "2", metadata: { genres: ["Rock"] } },
+      ];
+    }
+    return [{ item_id: String(offset) }];
+  };
+
 describe("SourceTree", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -173,6 +231,17 @@ describe("SourceTree", () => {
     mocks.getLibraryTracksCount.mockResolvedValue(500);
     mocks.getLibraryGenresCount.mockResolvedValue(7);
     mocks.getLibraryPlaylistsCount.mockResolvedValue(3);
+    mocks.setUserPreference.mockImplementation(
+      async (key: string, value: unknown) => {
+        prefs.value[key] = value;
+      },
+    );
+    delete prefs.value["libraryManager.librarySource"];
+    delete prefs.value["libraryManager.tree"];
+    mocks.getLibraryTracks.mockImplementation(probe("tracks", 3, 5));
+    mocks.getLibraryArtists.mockImplementation(probe("artists", 3, 6));
+    mocks.getLibraryAlbums.mockImplementation(probe("albums", 3, 6));
+    mocks.getLibraryPlaylists.mockImplementation(probe("playlists", 3, 5));
     mocks.browse.mockImplementation(async (path?: string) => {
       if (!path) {
         return [
@@ -208,7 +277,8 @@ describe("SourceTree", () => {
     await flushPromises();
 
     const labels = rowLabels(wrapper);
-    const libraryStart = labels.indexOf("library_manager.tree.library");
+    const libraryStart = labels.indexOf(LIBRARY_ALL);
+    expect(libraryStart).toBeGreaterThan(0);
     expect(labels.slice(libraryStart + 1, libraryStart + 8)).toEqual([
       "playlists",
       "artists",
@@ -219,6 +289,12 @@ describe("SourceTree", () => {
       "library_manager.tree.files_to_edit",
     ]);
     expect(labels).not.toContain("tracks");
+    // every source sits beside the library, not under a group
+    expect(labels).not.toContain("library_manager.tree.sources");
+    const spotify = wrapper
+      .findAll(".source-tree__row")
+      .find((row) => row.text().includes("Spotify"))!;
+    expect(spotify.attributes("aria-level")).toBe("1");
   });
 
   it("gives a music source the library listings and drops folders with nothing behind them", async () => {
@@ -257,11 +333,13 @@ describe("SourceTree", () => {
     });
 
     // a listing under the source carries the source
-    await rows()
-      .find(
-        (row) => row.text().startsWith("genres") && row.text() === "genres",
-      )!
-      .trigger("click");
+    // the source's genres node, the one after its listings, with its count
+    const genres = rows().filter(
+      (row) => row.find(".source-tree__label").text() === "genres",
+    );
+    expect(genres).toHaveLength(2);
+    expect(genres[1].find(".source-tree__count").text()).toBe("2");
+    await genres[1].trigger("click");
     expect(wrapper.emitted("select")?.at(-1)?.[0]).toMatchObject({
       scope: "library",
       node: "source:spotify--1.genres",
@@ -283,16 +361,29 @@ describe("SourceTree", () => {
     expect(filesystem.find("button.source-tree__chevron").exists()).toBe(true);
     await filesystem.find(".source-tree__chevron").trigger("click");
     await flushPromises();
+    // no playlists on the filesystem, so no playlists node; the directories
+    // are grouped under a folders node with the source's counts beside it
     const labels = rowLabels(wrapper);
     const start = labels.indexOf("Filesystem");
-    expect(labels.slice(start + 1, start + 7)).toEqual([
-      "playlists",
+    expect(labels.slice(start + 1, start + 6)).toEqual([
       "artists",
       "library_manager.tree.album_artists",
       "genres",
       "albums",
-      "Music",
+      "library_manager.tree.folders",
     ]);
+    expect(rowTexts(wrapper)).toContain("Filesystem 380");
+    expect(rowTexts(wrapper)).toContain("artists 25");
+    expect(rowTexts(wrapper)).toContain("albums 31");
+    // the distinct genres tagged on the source's tracks
+    expect(rowTexts(wrapper)).toContain("genres 2");
+
+    const folders = rows().find(
+      (row) => row.text() === "library_manager.tree.folders",
+    )!;
+    await folders.find(".source-tree__chevron").trigger("click");
+    await flushPromises();
+    expect(rowLabels(wrapper)).toContain("Music");
 
     await rows()
       .find((row) => row.text() === "Music")!
@@ -308,19 +399,17 @@ describe("SourceTree", () => {
     const wrapper = mountTree();
     await flushPromises();
 
-    const rows = wrapper.findAll(".source-tree__row");
-    const text = rows.map((row) => {
-      const label = row.find(".source-tree__label").text();
-      const count = row.find(".source-tree__count");
-      return count.exists() ? `${label} ${count.text()}` : label;
-    });
+    const text = rowTexts(wrapper);
     expect(text).toContain("artists 30");
     expect(text).toContain("library_manager.tree.album_artists 12");
     expect(text).toContain("albums 40");
-    expect(text).toContain("library_manager.tree.library 500");
+    expect(text).toContain(`${LIBRARY_ALL} 500`);
     expect(text).toContain("genres 7");
     expect(text).toContain("playlists 3");
     expect(text).toContain("players 1");
+    // each source shows how many tracks it holds
+    expect(text).toContain("Spotify 120");
+    expect(text).toContain("Filesystem 380");
 
     expect(mocks.browse).toHaveBeenCalledWith(undefined, "p1");
     expect(rowLabels(wrapper)).toContain("Spotify");
@@ -349,8 +438,54 @@ describe("SourceTree", () => {
     ).toHaveLength(1);
     expect(mocks.setUserPreference).toHaveBeenCalledWith(
       "libraryManager.tree",
-      expect.arrayContaining(["browse:spotify--1://"]),
+      expect.arrayContaining(["source:spotify--1"]),
     );
+  });
+
+  it("narrows the library to one source from its right-click menu", async () => {
+    const wrapper = mountTree("library.artists");
+    await flushPromises();
+
+    const rows = () => wrapper.findAll(".source-tree__row");
+    await rows()
+      .find((row) => row.text().startsWith(LIBRARY_ALL))!
+      .trigger("contextmenu");
+    const menu = mocks.emit.mock.calls.at(-1)!;
+    expect(menu[0]).toBe("contextmenu");
+    const items = (menu[1] as { items: Array<Record<string, unknown>> }).items;
+    expect(items.map((item) => [item.label, item.selected])).toEqual([
+      ["library_manager.tree.source_all", true],
+      ["Filesystem", false],
+      ["RadioBrowser", false],
+      ["Spotify", false],
+    ]);
+
+    (items[3].action as () => void)();
+    await flushPromises();
+    expect(mocks.setUserPreference).toHaveBeenCalledWith(
+      "libraryManager.librarySource",
+      "spotify--1",
+    );
+    // the row names the source, carries its counts, and the listing the
+    // grid shows follows
+    const text = rowTexts(wrapper);
+    expect(text).toContain("library_manager.tree.library (Spotify) 120");
+    expect(text).toContain("artists 9");
+    expect(text).toContain("albums 14");
+    expect(wrapper.emitted("select")?.at(-1)?.[0]).toMatchObject({
+      node: "library.artists",
+      provider: ["spotify--1"],
+    });
+    const playlists = rows().find(
+      (row) => row.find(".source-tree__label").text() === "playlists",
+    )!;
+    expect(playlists.find(".source-tree__count").text()).toBe("3");
+    await playlists.trigger("click");
+    expect(wrapper.emitted("select")?.at(-1)?.[0]).toMatchObject({
+      node: "library.playlists",
+      leadFacet: "playlist",
+      provider: ["spotify--1"],
+    });
   });
 
   it("emits a library filter for a library node and a browse filter for a folder", async () => {

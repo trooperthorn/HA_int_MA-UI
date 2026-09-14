@@ -315,7 +315,8 @@ defineExpose({
 .browser-column__search {
   position: relative;
   margin-left: auto;
-  width: 120px;
+  width: 50%;
+  min-width: 90px;
 }
 
 .browser-column__search-icon {

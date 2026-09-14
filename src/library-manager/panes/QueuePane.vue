@@ -130,7 +130,7 @@
 
 <script setup lang="ts">
 import { ListX, LocateFixed } from "@lucide/vue";
-import { computed, ref, toRef } from "vue";
+import { computed, nextTick, ref, toRef, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -141,6 +141,7 @@ import {
 import QueueListItem from "@/layouts/default/PlayerOSD/QueueListItem.vue";
 import QueueModeBanner from "@/layouts/default/PlayerOSD/QueueModeBanner.vue";
 import { useFullscreenQueue } from "@/layouts/default/PlayerOSD/useFullscreenQueue";
+import { useUserPreferences } from "@/composables/userPreferences";
 import { currentQueueIndex } from "@/helpers/queue_position";
 import { api } from "@/plugins/api";
 import { store } from "@/plugins/store";
@@ -159,6 +160,7 @@ const {
   queueEnded,
   totalSize,
   measureRow,
+  remeasureRows,
   playerActive,
   hoveredMarqueeSync,
   requestBadgeColor,
@@ -171,6 +173,15 @@ const {
   ghostY,
   rowOffset,
 } = useFullscreenQueue(ref(false), { visible: toRef(props, "visible") });
+
+// the "Up next" row holds the queue mode banner; collapsing it shrinks the
+// row, so the rows below it move up once the change has rendered
+const { getPreference } = useUserPreferences();
+const bannerCollapsed = getPreference<boolean>(
+  "queueModeBannerCollapsed",
+  false,
+);
+watch(bannerCollapsed, () => void nextTick(remeasureRows));
 
 const positionLabel = computed(() => {
   const queue = store.activePlayerQueue;

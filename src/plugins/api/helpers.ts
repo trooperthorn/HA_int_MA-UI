@@ -170,22 +170,26 @@ export const getProviderIconDomain = function (
 };
 
 /**
- * Provider icon domain for media listing tiles. Playlists always surface their
- * source provider icon: a playlist listing is library-only by definition, so a
- * bookshelf icon would be redundant and the source is the useful signal. Every
- * other item type follows getProviderIconDomain.
+ * Provider icon domain for media listing rows and tiles: the source the item
+ * comes from (Spotify, a filesystem, ...), never the library bookshelf. A
+ * listing is library-only by definition, so the badge would be redundant and
+ * the source is the useful signal. An item held by several providers shows the
+ * first one that is currently available.
  */
 export const getListItemProviderIconDomain = function (
   item: MediaItemType | ItemMapping,
 ): string {
   if (
-    item.media_type === MediaType.PLAYLIST &&
     "provider_mappings" in item &&
     Array.isArray(item.provider_mappings) &&
     item.provider_mappings.length > 0
   ) {
-    return item.provider_mappings[0].provider_domain;
+    const mapping =
+      item.provider_mappings.find((entry) => entry.available) ??
+      item.provider_mappings[0];
+    return mapping.provider_domain;
   }
+  if (item.provider !== "library") return item.provider;
   return getProviderIconDomain(item);
 };
 

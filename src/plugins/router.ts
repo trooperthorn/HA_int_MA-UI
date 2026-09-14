@@ -148,7 +148,7 @@ export const routes: RouteRecordRaw[] = [
     children: [
       {
         path: "",
-        redirect: "/discover",
+        redirect: "/library",
       },
       {
         // "/home" has now been renamed to "/discover". This

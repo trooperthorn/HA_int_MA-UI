@@ -170,7 +170,7 @@ describe("ShuffleBtn", () => {
         player: playerOnSource({ shuffle_enabled: true }),
       });
 
-      expect(wrapper.findComponent(ShuffleIcon).exists()).toBe(true);
+      expect(wrapper.find(".shuffle-btn__glyph--off").exists()).toBe(false);
       expect(button(wrapper).attributes("title")).toBe("shuffle_disable");
     });
 
@@ -181,7 +181,8 @@ describe("ShuffleBtn", () => {
       const live = reactive(playerOnSource({ shuffle_enabled: false }));
       const wrapper = mountButton({ player: live });
 
-      expect(wrapper.findComponent(ShuffleIcon).exists()).toBe(false);
+      // the same glyph in both states; off is the gray one
+      expect(wrapper.find(".shuffle-btn__glyph--off").exists()).toBe(true);
 
       live.source_list = [
         playerSource({
@@ -193,7 +194,7 @@ describe("ShuffleBtn", () => {
       ];
       await nextTick();
 
-      expect(wrapper.findComponent(ShuffleIcon).exists()).toBe(true);
+      expect(wrapper.find(".shuffle-btn__glyph--off").exists()).toBe(false);
       expect(button(wrapper).attributes("title")).toBe("shuffle_disable");
     });
 
@@ -217,7 +218,7 @@ describe("ShuffleBtn", () => {
       const wrapper = mountButton({ player: playerOnSource() });
 
       expect(isDisabled(wrapper)).toBe(false);
-      expect(wrapper.findComponent(ShuffleIcon).exists()).toBe(false);
+      expect(wrapper.find(".shuffle-btn__glyph--off").exists()).toBe(true);
       expect(button(wrapper).attributes("title")).toBe("shuffle_enable");
     });
 

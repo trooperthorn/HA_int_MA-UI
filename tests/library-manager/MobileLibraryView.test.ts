@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   getLibraryArtists: vi.fn(),
   setUserPreference: vi.fn(),
   openCommandCenter: vi.fn(),
+  emit: vi.fn(),
 }));
 
 vi.mock("@/plugins/api", async () => {
@@ -26,6 +27,23 @@ vi.mock("@/plugins/api", async () => {
     getLibraryAudiobooks: mocks.getLibraryAudiobooks,
     getLibraryAlbums: mocks.getLibraryAlbums,
     getLibraryArtists: mocks.getLibraryArtists,
+    providers: {
+      "spotify--1": {
+        type: "music",
+        domain: "spotify",
+        name: "Spotify",
+        instance_id: "spotify--1",
+      },
+      "filesystem_local--1": {
+        type: "music",
+        domain: "filesystem_local",
+        name: "Filesystem",
+        instance_id: "filesystem_local--1",
+      },
+    },
+    getProvider(id: string) {
+      return (this.providers as Record<string, unknown>)[id];
+    },
   };
   return { api, default: api, ConnectionState: { INITIALIZED: "initialized" } };
 });
@@ -35,7 +53,11 @@ vi.mock("@/plugins/store", async () => {
   return { store: reactive({ curQueueItem: undefined }) };
 });
 
-vi.mock("@/plugins/eventbus", () => ({ eventbus: { emit: vi.fn() } }));
+vi.mock("@/plugins/eventbus", () => ({ eventbus: { emit: mocks.emit } }));
+
+vi.mock("@/components/ProviderIcon.vue", () => ({
+  default: { name: "ProviderIcon", props: ["domain"], template: "<i />" },
+}));
 
 const prefs = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
 vi.mock("@/composables/userPreferences", async () => {
@@ -149,6 +171,7 @@ describe("MobileLibraryView", () => {
       0,
       "timestamp_added_desc",
       true,
+      undefined,
     );
     // the album was added in 2026, the playlist played in 2023, the artist in 2020
     expect(names(wrapper)).toEqual(["Origin", "Party Lists", "Muse"]);
@@ -160,6 +183,48 @@ describe("MobileLibraryView", () => {
       "playlist • sean",
       "artist",
     ]);
+    // playlists, artists, albums, then the kinds with nothing in them gone
+    expect(
+      wrapper.findAll("[data-kind]").map((el) => el.attributes("data-kind")),
+    ).toEqual(["playlists", "artists", "albums"]);
+  });
+
+  it("picks a source from the filter chip and lists only what it holds", async () => {
+    const wrapper = mountView();
+    await flushPromises();
+
+    await wrapper
+      .find('[aria-label="library_manager.mobile.source"]')
+      .trigger("click", { clientX: 5, clientY: 6 });
+    const menu = mocks.emit.mock.calls.at(-1)!;
+    expect(menu[0]).toBe("contextmenu");
+    const items = (menu[1] as { items: Array<Record<string, unknown>> }).items;
+    expect(items.map((item) => item.label)).toEqual([
+      "library_manager.tree.source_all",
+      "Filesystem",
+      "Spotify",
+    ]);
+
+    mocks.getLibraryPlaylists.mockResolvedValue([]);
+    (items[1].action as () => void)();
+    await flushPromises();
+    expect(mocks.setUserPreference).toHaveBeenCalledWith(
+      "libraryManager.mobile",
+      { source: "filesystem_local--1" },
+    );
+    expect(mocks.getLibraryAlbums).toHaveBeenLastCalledWith(
+      undefined,
+      undefined,
+      100,
+      0,
+      "timestamp_added_desc",
+      undefined,
+      "filesystem_local--1",
+    );
+    expect(
+      wrapper.findAll("[data-kind]").map((el) => el.attributes("data-kind")),
+    ).toEqual(["artists", "albums"]);
+    expect(names(wrapper)).toEqual(["Origin", "Muse"]);
   });
 
   it("narrows to one kind with a chip and shows everything again on a second tap", async () => {

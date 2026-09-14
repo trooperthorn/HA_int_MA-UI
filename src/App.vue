@@ -451,7 +451,7 @@ const completeInitialization = async () => {
     router.push({ name: "onboarding" });
   }
   // Don't push to any route here - let the router handle navigation naturally
-  // from the URL hash. The router config already redirects "/" to "/discover"
+  // from the URL hash. The router config already redirects "/" to "/library"
   api.state.value = ConnectionState.INITIALIZED;
   initializationCompleted = true;
   initializedAccess = userAccess;

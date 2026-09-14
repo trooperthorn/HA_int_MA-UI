@@ -141,6 +141,12 @@ export function useFullscreenQueue(
     virtualizer.value.measureElement(el as HTMLElement | null);
   };
 
+  // a row whose content changed height without the browser reporting it
+  // (the queue mode banner collapsing) leaves a gap until remeasured
+  const remeasureRows = () => {
+    virtualizer.value.measure();
+  };
+
   const totalSize = computed(() => virtualizer.value.getTotalSize());
 
   // Visible (+ overscan) rows with their data, section state and any divider.
@@ -412,6 +418,7 @@ export function useFullscreenQueue(
     queueEnded,
     totalSize,
     measureRow,
+    remeasureRows,
     playerActive,
     hoveredMarqueeSync,
     requestBadgeColor,
