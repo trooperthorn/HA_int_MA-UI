@@ -13,12 +13,19 @@
       {{ $t("library_manager.selected.empty") }}
     </div>
 
+    <!-- artwork only: nothing to show without an image, so the pane stays
+         blank rather than filling with the placeholder cover -->
+    <div
+      v-else-if="variant === 'art' && !hasImage"
+      class="selected-pane__empty"
+    ></div>
+
     <div
       v-else
       class="selected-pane__body"
       :class="{ 'selected-pane__body--art': variant === 'art' }"
     >
-      <div v-if="variant !== 'details'" class="selected-pane__art">
+      <div v-if="variant !== 'details' && hasImage" class="selected-pane__art">
         <MediaItemThumb :item="item" size="100%" />
       </div>
       <template v-if="variant !== 'art'">
@@ -50,29 +57,31 @@
         <div v-if="pathLine" class="selected-pane__path" :title="pathLine">
           {{ pathLine }}
         </div>
-
-        <TooltipProvider :delay-duration="300">
-          <div class="selected-pane__actions" role="toolbar">
-            <Tooltip v-for="action in actions" :key="action.id">
-              <TooltipTrigger as-child>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  class="selected-pane__action"
-                  :class="{ 'selected-pane__action--on': action.active }"
-                  :aria-label="action.label"
-                  :data-action="action.id"
-                  @click="action.run($event)"
-                >
-                  <component :is="action.icon" :size="16" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">{{ action.label }}</TooltipContent>
-            </Tooltip>
-          </div>
-        </TooltipProvider>
       </template>
     </div>
+
+    <!-- the actions sit under the scrolling text so a short pane still
+         shows every button -->
+    <TooltipProvider v-if="item && variant !== 'art'" :delay-duration="300">
+      <div class="selected-pane__actions" role="toolbar">
+        <Tooltip v-for="action in actions" :key="action.id">
+          <TooltipTrigger as-child>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="selected-pane__action"
+              :class="{ 'selected-pane__action--on': action.active }"
+              :aria-label="action.label"
+              :data-action="action.id"
+              @click="action.run($event)"
+            >
+              <component :is="action.icon" :size="16" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">{{ action.label }}</TooltipContent>
+        </Tooltip>
+      </div>
+    </TooltipProvider>
   </div>
 </template>
 
@@ -104,6 +113,7 @@ import {
   handleMenuBtnClick,
   handlePlayBtnClick,
 } from "@/helpers/media_item_actions";
+import { getImageThumbForItem } from "@/helpers/utils";
 import { api } from "@/plugins/api";
 import {
   MediaType,
@@ -136,6 +146,8 @@ const router = useRouter();
 
 // the panel describes the last item picked; actions apply to every one
 const item = computed(() => props.items.at(-1));
+
+const hasImage = computed(() => !!getImageThumbForItem(item.value));
 
 const artists = computed(() => {
   const current = item.value;
@@ -377,6 +389,7 @@ const actions = computed<PaneAction[]>(() => {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 1;
   min-height: 0;
   overflow: auto;
   padding: 12px;
@@ -455,8 +468,9 @@ const actions = computed<PaneAction[]>(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
-  margin-top: 10px;
-  padding-top: 10px;
+  flex: none;
+  margin-top: auto;
+  padding: 8px 12px;
   border-top: 1px solid rgba(var(--v-theme-fg), 0.08);
 }
 

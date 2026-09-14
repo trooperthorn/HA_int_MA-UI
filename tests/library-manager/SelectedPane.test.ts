@@ -169,7 +169,21 @@ describe("SelectedPane", () => {
   });
 
   it("splits into a details half and an artwork half", () => {
-    const item = track({ item_id: "t1", name: "Uprising", artists: [artist] });
+    const item = track({
+      item_id: "t1",
+      name: "Uprising",
+      artists: [artist],
+      metadata: {
+        images: [
+          {
+            type: "thumb",
+            path: "https://example.test/uprising.jpg",
+            provider: "builtin",
+            remotely_accessible: true,
+          },
+        ],
+      } as never,
+    });
     const details = mount(SelectedPane, {
       props: { items: [item], variant: "details" },
       global: { mocks: { $t: (key: string) => key } },
@@ -187,6 +201,19 @@ describe("SelectedPane", () => {
     expect(art.findComponent({ name: "MediaItemThumb" }).exists()).toBe(true);
     expect(art.find(".selected-pane__name").exists()).toBe(false);
     expect(art.find("[data-action=play]").exists()).toBe(false);
+
+    // no artwork, no placeholder cover: the half stays blank
+    const blank = mount(SelectedPane, {
+      props: {
+        items: [track({ item_id: "t2", name: "Plain", artists: [artist] })],
+        variant: "art",
+      },
+      global: { mocks: { $t: (key: string) => key } },
+    });
+    expect(blank.findComponent({ name: "MediaItemThumb" }).exists()).toBe(
+      false,
+    );
+    expect(blank.find(".selected-pane__body").exists()).toBe(false);
   });
 
   it("keeps only the actions that take several items", async () => {

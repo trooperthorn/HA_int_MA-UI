@@ -275,7 +275,7 @@ export class AuthManager {
     // stays: the full application still needs it to reach a remote server.
     returnUrl.searchParams.delete("join");
     returnUrl.searchParams.delete("dashboard");
-    returnUrl.hash = "/discover";
+    returnUrl.hash = "/library";
     window.history.replaceState({}, "", returnUrl);
     window.location.reload();
   }

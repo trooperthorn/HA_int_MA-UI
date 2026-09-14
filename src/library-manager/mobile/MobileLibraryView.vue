@@ -29,18 +29,26 @@
       </button>
     </header>
 
-    <!-- one chip per kind; tapping the picked one shows everything again -->
+    <!-- one chip per kind the source holds; tapping the picked one shows
+         everything again. The first chip picks the source. -->
     <div class="mobile-library__chips" role="tablist">
       <button
         type="button"
         class="mobile-library__chip mobile-library__chip--icon"
-        :aria-label="t('library_manager.mobile.sort')"
-        @click="cycleSort()"
+        :class="{ 'mobile-library__chip--on': !!source }"
+        :aria-label="t('library_manager.mobile.source')"
+        @click="openSourceMenu($event)"
       >
-        <SlidersHorizontal :size="18" />
+        <ProviderIcon
+          v-if="sourceDomain"
+          :domain="sourceDomain"
+          :size="18"
+          monochrome
+        />
+        <SlidersHorizontal v-else :size="18" />
       </button>
       <button
-        v-for="kind in KINDS"
+        v-for="kind in visibleKinds"
         :key="kind.id"
         type="button"
         role="tab"
@@ -118,7 +126,14 @@
         </div>
         <div class="mobile-library__text">
           <div class="mobile-library__name">{{ row.item.name }}</div>
-          <div class="mobile-library__subtitle">{{ row.subtitle }}</div>
+          <div class="mobile-library__subtitle">
+            <ProviderIcon
+              :domain="row.sourceDomain"
+              :size="12"
+              class="mobile-library__source"
+            />
+            <span class="truncate">{{ row.subtitle }}</span>
+          </div>
         </div>
       </button>
     </div>
@@ -138,6 +153,8 @@ import {
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import MediaItemThumb from "@/components/MediaItemThumb.vue";
+import ProviderIcon from "@/components/ProviderIcon.vue";
+import type { ContextMenuItem } from "@/helpers/context_menu_item";
 import { Spinner } from "@/components/ui/spinner";
 import { useCommandCenter } from "@/composables/useCommandCenter";
 import { onLibrarySyncCompleted } from "@/composables/useLibrarySync";
@@ -151,7 +168,12 @@ import {
 } from "@/helpers/media_item_actions";
 import { getArtistsString } from "@/helpers/utils";
 import { api, ConnectionState } from "@/plugins/api";
-import { MediaType, type MediaItemType } from "@/plugins/api/interfaces";
+import { getListItemProviderIconDomain } from "@/plugins/api/helpers";
+import {
+  MediaType,
+  ProviderType,
+  type MediaItemType,
+} from "@/plugins/api/interfaces";
 import { eventbus } from "@/plugins/eventbus";
 import { store } from "@/plugins/store";
 
@@ -172,15 +194,23 @@ interface KindDef {
 
 const KINDS: readonly KindDef[] = [
   { id: "playlists", labelKey: "playlists", mediaType: MediaType.PLAYLIST },
+  { id: "artists", labelKey: "artists", mediaType: MediaType.ARTIST },
+  { id: "albums", labelKey: "albums", mediaType: MediaType.ALBUM },
   { id: "podcasts", labelKey: "podcasts", mediaType: MediaType.PODCAST },
   {
     id: "audiobooks",
     labelKey: "audiobooks",
     mediaType: MediaType.AUDIOBOOK,
   },
-  { id: "albums", labelKey: "albums", mediaType: MediaType.ALBUM },
-  { id: "artists", labelKey: "artists", mediaType: MediaType.ARTIST },
 ];
+
+// artists and albums are always offered; the rest only while the source
+// has some
+const OPTIONAL_KINDS: ReadonlySet<Kind> = new Set([
+  "playlists",
+  "podcasts",
+  "audiobooks",
+]);
 
 // how many of each kind the list holds; the chips narrow to one kind for
 // the rest
@@ -195,12 +225,15 @@ type LibraryItem = MediaItemType & {
 interface Row {
   item: LibraryItem;
   subtitle: string;
+  sourceDomain: string;
 }
 
 const PREFERENCE_KEY = "libraryManager.mobile";
 interface MobilePreference {
   sort?: Sort;
   layout?: Layout;
+  // a provider instance id; every source when unset
+  source?: string;
 }
 
 const { t } = useI18n();
@@ -213,9 +246,59 @@ const sort = computed<Sort>(() => preference.value.sort ?? "recents");
 const layout = computed<Layout>(() => preference.value.layout ?? "list");
 const loading = ref(false);
 const items = ref<LibraryItem[]>([]);
+// kinds the current source turned out to hold nothing of
+const emptyKinds = ref(new Set<Kind>());
+
+// a source that has gone away means every source
+const source = computed<string | undefined>(() => {
+  const value = preference.value.source;
+  return value && api.getProvider(value) ? value : undefined;
+});
+const sourceDomain = computed(() =>
+  source.value ? api.getProvider(source.value)?.domain : undefined,
+);
+
+const visibleKinds = computed(() =>
+  KINDS.filter(
+    (kind) => !OPTIONAL_KINDS.has(kind.id) || !emptyKinds.value.has(kind.id),
+  ),
+);
 
 function pick(kind: Kind) {
   picked.value = picked.value === kind ? undefined : kind;
+}
+
+function setSource(value: string | undefined) {
+  if (value === source.value) return;
+  picked.value = undefined;
+  void setUserPreference(PREFERENCE_KEY, {
+    ...preference.value,
+    source: value,
+  });
+}
+
+function openSourceMenu(event: MouseEvent) {
+  const providers = Object.values(api.providers)
+    .filter((provider) => provider.type === ProviderType.MUSIC)
+    .sort((left, right) => left.name.localeCompare(right.name));
+  const menuItems: ContextMenuItem[] = [
+    {
+      label: "library_manager.tree.source_all",
+      icon: LibraryBig,
+      selected: !source.value,
+      action: () => setSource(undefined),
+    },
+    ...providers.map<ContextMenuItem>((provider) => ({
+      label: provider.name,
+      selected: source.value === provider.instance_id,
+      action: () => setSource(provider.instance_id),
+    })),
+  ];
+  eventbus.emit("contextmenu", {
+    items: menuItems,
+    posX: event.clientX,
+    posY: event.clientY,
+  });
 }
 
 function cycleSort() {
@@ -236,11 +319,26 @@ function toggleLayout() {
 
 function loadKind(kind: Kind): Promise<LibraryItem[]> {
   const order = "timestamp_added_desc";
+  const provider = source.value;
   switch (kind) {
     case "playlists":
-      return api.getLibraryPlaylists(undefined, undefined, PER_KIND, 0, order);
+      return api.getLibraryPlaylists(
+        undefined,
+        undefined,
+        PER_KIND,
+        0,
+        order,
+        provider,
+      );
     case "podcasts":
-      return api.getLibraryPodcasts(undefined, undefined, PER_KIND, 0, order);
+      return api.getLibraryPodcasts(
+        undefined,
+        undefined,
+        PER_KIND,
+        0,
+        order,
+        provider,
+      );
     case "audiobooks":
       return api.getLibraryAudiobooks(
         undefined,
@@ -248,9 +346,18 @@ function loadKind(kind: Kind): Promise<LibraryItem[]> {
         PER_KIND,
         0,
         order,
+        provider,
       ) as Promise<LibraryItem[]>;
     case "albums":
-      return api.getLibraryAlbums(undefined, undefined, PER_KIND, 0, order);
+      return api.getLibraryAlbums(
+        undefined,
+        undefined,
+        PER_KIND,
+        0,
+        order,
+        undefined,
+        provider,
+      );
     case "artists":
       return api.getLibraryArtists(
         undefined,
@@ -259,6 +366,7 @@ function loadKind(kind: Kind): Promise<LibraryItem[]> {
         0,
         order,
         true,
+        provider,
       );
   }
 }
@@ -279,6 +387,12 @@ async function load() {
     );
     if (forGeneration !== generation) return;
     items.value = results.flat();
+    // a full load says which kinds the source has nothing of
+    if (!picked.value) {
+      emptyKinds.value = new Set(
+        kinds.filter((kind, index) => results[index].length === 0),
+      );
+    }
   } finally {
     if (forGeneration === generation) loading.value = false;
   }
@@ -288,7 +402,7 @@ const connected = computed(
   () => api.state.value === ConnectionState.INITIALIZED,
 );
 watch(
-  [connected, picked],
+  [connected, picked, source],
   ([ready]) => {
     if (ready) void load();
   },
@@ -357,7 +471,11 @@ const rows = computed<Row[]>(() => {
         NAME_COLLATOR.compare(left.name, right.name)
       : NAME_COLLATOR.compare(left.name, right.name),
   );
-  return sorted.map((item) => ({ item, subtitle: subtitleOf(item) }));
+  return sorted.map((item) => ({
+    item,
+    subtitle: subtitleOf(item),
+    sourceDomain: getListItemProviderIconDomain(item),
+  }));
 });
 
 // ---- tap and hold ------------------------------------------------------------
@@ -591,33 +709,57 @@ function onTap(event: MouseEvent, item: LibraryItem) {
 }
 
 .mobile-library__subtitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin-top: 2px;
   font-size: 13px;
   color: rgba(var(--v-theme-fg), 0.6);
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* grid: two square tiles per row, text below */
+.mobile-library__source {
+  flex: none;
+  opacity: 0.8;
+}
+
+/* grid: two square tiles per row in portrait, four in landscape, text
+   below; the tile is sized by the column and the image fills it, so no
+   image is stretched */
 .mobile-library__list--grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px 12px;
   padding: 0 16px;
+}
+
+@media (orientation: landscape) {
+  .mobile-library__list--grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .mobile-library__list--grid .mobile-library__row {
   flex-direction: column;
   align-items: stretch;
   gap: 8px;
+  min-width: 0;
   padding: 0;
 }
 
 .mobile-library__list--grid .mobile-library__thumb {
+  position: relative;
   width: 100%;
   height: auto;
   aspect-ratio: 1;
+}
+
+.mobile-library__list--grid .mobile-library__thumb > * {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .mobile-library__list--grid .mobile-library__thumb--round {

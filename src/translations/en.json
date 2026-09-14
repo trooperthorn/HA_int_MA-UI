@@ -2717,9 +2717,10 @@
         "clear_filters": "Clear filters",
         "loading_all": "Loading {0} of {1} to sort",
         "tree": {
-            "library": "Library (all sources)",
-            "sources": "Sources",
-            "album_artists": "Album artists",
+            "library": "Library",
+            "source_all": "All sources",
+            "folders": "Folders",
+                        "album_artists": "Album artists",
             "recently_added": "Recently added",
             "files_to_edit": "Files to edit",
             "album_artist": "Album artist",
@@ -2787,6 +2788,7 @@
         "mobile": {
             "create": "Create",
             "sort": "Sort",
+            "source": "Source",
             "sort_recents": "Recents",
             "sort_alphabetical": "Alphabetical",
             "grid": "Grid view",

@@ -8,7 +8,27 @@ const mocks = vi.hoisted(() => ({
   filters: [] as Array<Ref<Record<string, unknown>>>,
   setUserPreference: vi.fn(),
   storedFacets: null as unknown,
+  // the sources with at least one playlist
+  playlistSources: ["spotify--1"] as string[],
+  getLibraryPlaylists: vi.fn(),
+  libraryPlaylistsCount: 3 as number | undefined,
 }));
+
+vi.mock("@/plugins/api", () => {
+  const api = { getLibraryPlaylists: mocks.getLibraryPlaylists };
+  return { api, default: api };
+});
+
+vi.mock("@/plugins/store", async () => {
+  const { reactive } = await import("vue");
+  return {
+    store: reactive({
+      get libraryPlaylistsCount() {
+        return mocks.libraryPlaylistsCount;
+      },
+    }),
+  };
+});
 
 vi.mock("@/library-manager/composables/useItemSource", () => ({
   useItemSource: (filter: Ref<Record<string, unknown>>) => {
@@ -88,9 +108,9 @@ enableAutoUnmount(afterEach);
 
 const storage = { getItem: () => null, setItem: () => {} };
 
-function mountStrip(picks = { genres: [] }) {
+function mountStrip(picks = { genres: [] }, provider = ["spotify--1"]) {
   return mount(BrowserStrip, {
-    props: { picks, storage, provider: ["spotify--1"] },
+    props: { picks, storage, provider },
     global: { mocks: { $t: (key: string) => key } },
   });
 }
@@ -100,6 +120,28 @@ describe("BrowserStrip", () => {
     vi.clearAllMocks();
     mocks.filters.length = 0;
     mocks.storedFacets = null;
+    mocks.getLibraryPlaylists.mockImplementation(async (...args: unknown[]) =>
+      mocks.playlistSources.includes(args[5] as string)
+        ? [{ item_id: "p1", provider: "spotify--1", name: "Mix" }]
+        : [],
+    );
+  });
+
+  it("leads with artists for a source that has no playlists", async () => {
+    const wrapper = mountStrip({ genres: [] }, ["filesystem_local--1"]);
+    await flushPromises();
+
+    const selects = wrapper.findAll("select.browser-column__facet");
+    expect(
+      selects.map((select) => (select.element as HTMLSelectElement).value),
+    ).toEqual(["artist", "album", "album_artist"]);
+
+    // the choice is kept per source
+    await selects[0].setValue("genre");
+    expect(mocks.setUserPreference).toHaveBeenCalledWith(
+      "libraryManager.browserFacets.filesystem_local--1",
+      ["genre", "album", "album_artist"],
+    );
   });
 
   it("lists genre, artist and album by default, each narrowed to the source", async () => {
@@ -139,7 +181,7 @@ describe("BrowserStrip", () => {
     await first.setValue("playlist");
 
     expect(mocks.setUserPreference).toHaveBeenCalledWith(
-      "libraryManager.browserFacets",
+      "libraryManager.browserFacets.spotify--1",
       ["playlist", "artist", "album"],
     );
     expect(mocks.filters[0].value.mediaType).toBe(MediaType.PLAYLIST);

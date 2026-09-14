@@ -234,7 +234,7 @@ describe("AuthManager guest sessions", () => {
     expect(window.location.search).not.toContain("join");
     expect(window.location.search).not.toContain("dashboard");
     expect(window.location.search).toContain("remote_id=REMOTE");
-    expect(window.location.hash).toBe("#/discover");
+    expect(window.location.hash).toBe("#/library");
 
     reloadSpy.mockRestore();
   });

@@ -37,6 +37,8 @@
 <script setup lang="ts">
 import { SplitterGroup, SplitterPanel, SplitterResizeHandle } from "reka-ui";
 import { computed, ref, watch, type ComponentPublicInstance } from "vue";
+import { api } from "@/plugins/api";
+import { store } from "@/plugins/store";
 import { useI18n } from "vue-i18n";
 import {
   setUserPreference,
@@ -44,7 +46,7 @@ import {
 } from "@/composables/userPreferences";
 import {
   BROWSER_FACETS,
-  BROWSER_FACETS_PREFERENCE_KEY,
+  browserFacetsPreferenceKey,
   facetDef,
   isBrowserFacet,
   normalizeFacets,
@@ -83,10 +85,56 @@ const { getPreference } = useUserPreferences();
 
 // ---- facets: what each of the three columns lists ---------------------------
 
-const storedFacets = getPreference<unknown>(BROWSER_FACETS_PREFERENCE_KEY, []);
-const facets = ref<BrowserFacet[]>(normalizeFacets(storedFacets.value));
-watch(storedFacets, (value) => {
-  const next = normalizeFacets(value);
+// the columns are remembered per source, and a source without playlists
+// leads with its artists rather than an empty playlist column
+const preferenceKey = computed(() =>
+  browserFacetsPreferenceKey(props.provider),
+);
+const storedFacets = computed<unknown>(
+  () => getPreference<unknown>(preferenceKey.value, []).value,
+);
+
+const hasPlaylists = ref(true);
+watch(
+  () => (props.provider?.length === 1 ? props.provider[0] : undefined),
+  async (instanceId) => {
+    if (!instanceId) {
+      hasPlaylists.value = true;
+      return;
+    }
+    try {
+      const items = await api.getLibraryPlaylists(
+        undefined,
+        undefined,
+        1,
+        0,
+        undefined,
+        instanceId,
+      );
+      hasPlaylists.value = items.length > 0;
+    } catch (err) {
+      console.error("[BrowserStrip] playlist probe failed", err);
+      hasPlaylists.value = true;
+    }
+  },
+  { immediate: true },
+);
+// the whole library: the store's count says whether there are any
+watch(
+  () => store.libraryPlaylistsCount,
+  (count) => {
+    if (!props.provider?.length && count !== undefined) {
+      hasPlaylists.value = count > 0;
+    }
+  },
+  { immediate: true },
+);
+
+const facets = ref<BrowserFacet[]>(
+  normalizeFacets(storedFacets.value, hasPlaylists.value),
+);
+watch([storedFacets, hasPlaylists], ([value, playlists]) => {
+  const next = normalizeFacets(value, playlists);
   if (next.join() !== facets.value.join()) facets.value = next;
 });
 
@@ -105,7 +153,7 @@ function setFacet(index: number, value: string) {
   if (other >= 0) next[other] = next[index];
   next[index] = value;
   facets.value = next;
-  void setUserPreference(BROWSER_FACETS_PREFERENCE_KEY, next);
+  void setUserPreference(preferenceKey.value, next);
   // whatever the column had picked no longer applies
   emit("update:picks", clearFrom(Math.min(index, other < 0 ? index : other)));
 }

@@ -12,11 +12,10 @@
     @click="toggleShuffle"
   >
     <ShuffleIcon
-      v-if="shuffleActive"
       :size="size"
-      :smart="smartShuffleActive"
+      :smart="shuffleActive && smartShuffleActive"
+      :class="{ 'shuffle-btn__glyph--off': !shuffleActive }"
     />
-    <MoveRight v-else :size="size" />
   </Icon>
 </template>
 
@@ -31,7 +30,6 @@ import api from "@/plugins/api";
 import { isQueueInfiniteStream } from "@/plugins/api/helpers";
 import { Player, PlayerQueue } from "@/plugins/api/interfaces";
 import { $t } from "@/plugins/i18n";
-import { MoveRight } from "@lucide/vue";
 import { computed, toRef } from "vue";
 
 // properties
@@ -127,6 +125,12 @@ function toggleShuffle() {
 </script>
 
 <style scoped>
+/* the same glyph in both states: gray while shuffle is off, the primary
+   color (set by the Icon) while it is on */
+.shuffle-btn__glyph--off {
+  opacity: 0.45;
+}
+
 /* Disabled icons drop pointer events (so no tooltip), but in dynamic mode we
    want the title to explain why shuffle is unavailable. Re-enable hover just for
    that case; the Icon still guards the click itself. */
