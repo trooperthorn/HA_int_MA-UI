@@ -708,6 +708,23 @@ export interface BrowsePathFolder {
   path: string;
 }
 
+// music/trash/* (an app-side edit of the server): a Filesystem provider's
+// .music-assistant-trash folder
+export interface TrashEntry {
+  // relative to the trash folder
+  path: string;
+  size: number;
+  // unix seconds
+  trashed_at: number;
+}
+
+export interface TrashMoveResult {
+  // relative to the provider folder
+  path: string;
+  // relative to the trash folder
+  trashed_path: string;
+}
+
 export interface BrowsePathResult {
   roots: BrowsePathRoot[];
   // null when only the roots were asked for

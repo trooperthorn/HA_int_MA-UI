@@ -14,6 +14,10 @@ const mocks = vi.hoisted(() => ({
   removeProviderMapping: vi.fn<MusicAssistantApi["removeProviderMapping"]>(),
   removeItemFromLibrary: vi.fn<MusicAssistantApi["removeItemFromLibrary"]>(),
   addProviderMapping: vi.fn<MusicAssistantApi["addProviderMapping"]>(),
+  trashList: vi.fn<MusicAssistantApi["trashList"]>(),
+  trashMove: vi.fn<MusicAssistantApi["trashMove"]>(),
+  trashRestore: vi.fn<MusicAssistantApi["trashRestore"]>(),
+  trashEmpty: vi.fn<MusicAssistantApi["trashEmpty"]>(),
 }));
 
 vi.mock("@/plugins/api", () => {
@@ -115,6 +119,17 @@ describe("Duplicates", () => {
     mocks.removeProviderMapping.mockResolvedValue(undefined);
     mocks.removeItemFromLibrary.mockResolvedValue(undefined);
     mocks.addProviderMapping.mockResolvedValue(undefined);
+    // an app image without the trash commands, unless a test says otherwise
+    mocks.trashList.mockRejectedValue(new Error("unknown command"));
+    mocks.trashMove.mockImplementation(async (_instance, path) => ({
+      path,
+      trashed_path: path,
+    }));
+    mocks.trashRestore.mockImplementation(async (_instance, path) => ({
+      path,
+      trashed_path: path,
+    }));
+    mocks.trashEmpty.mockResolvedValue({ deleted: 2 });
   });
 
   it("scans, groups and removes a lesser copy", async () => {
@@ -205,5 +220,116 @@ describe("Duplicates", () => {
         .findAll("[data-group-kind]")
         .map((group) => group.attributes("data-group-kind")),
     ).toEqual(["probable"]);
+  });
+
+  it("hides every trash action when the server lacks the commands", async () => {
+    const wrapper = mountPage();
+    await wrapper.find("[data-duplicates-scan]").trigger("click");
+    await flushPromises();
+    expect(mocks.trashList).toHaveBeenCalledWith("filesystem_local--ssd", {
+      suppressGlobalError: true,
+    });
+    expect(wrapper.find("[data-duplicates-trash]").exists()).toBe(false);
+    expect(wrapper.find("[data-duplicates-trash-selected]").exists()).toBe(
+      false,
+    );
+    expect(wrapper.find("[data-duplicates-bin]").exists()).toBe(false);
+  });
+
+  it("moves a lesser copy to the trash: mapping removed, file renamed, bin refreshed", async () => {
+    mocks.trashList
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { path: "E/O/9.mp3", size: 5_000_000, trashed_at: 1_700_000_000 },
+      ]);
+    const wrapper = mountPage();
+    await wrapper.find("[data-duplicates-scan]").trigger("click");
+    await flushPromises();
+
+    const rows = wrapper
+      .findAll("[data-group-kind]")[0]
+      .findAll("[data-duplicates-row]");
+    // the keeper never offers the trash
+    expect(rows[0].find("[data-duplicates-trash]").exists()).toBe(false);
+    await rows[1].find("[data-duplicates-trash]").trigger("click");
+    await flushPromises();
+    expect(mocks.removeProviderMapping).toHaveBeenCalledWith(
+      MediaType.TRACK,
+      "1",
+      TRACKS[0].provider_mappings[1],
+    );
+    expect(mocks.trashMove).toHaveBeenCalledWith(
+      "filesystem_local--ssd",
+      "E/O/9.mp3",
+    );
+    const bin = wrapper.find("[data-duplicates-bin]");
+    expect(bin.attributes("data-bin-instance")).toBe("filesystem_local--ssd");
+    const entries = bin.findAll("[data-duplicates-trash-entry]");
+    expect(entries).toHaveLength(1);
+    expect(entries[0].text()).toContain("E/O/9.mp3");
+    expect(entries[0].text()).toContain("5.0 MB");
+
+    // restore, then empty behind its confirmation
+    await entries[0].find("[data-duplicates-restore]").trigger("click");
+    await flushPromises();
+    expect(mocks.trashRestore).toHaveBeenCalledWith(
+      "filesystem_local--ssd",
+      "E/O/9.mp3",
+    );
+    await bin.find("[data-duplicates-empty]").trigger("click");
+    await flushPromises();
+    expect(mocks.trashEmpty).not.toHaveBeenCalled();
+    await bin.find("[data-duplicates-confirm-empty]").trigger("click");
+    await flushPromises();
+    expect(mocks.trashEmpty).toHaveBeenCalledWith("filesystem_local--ssd");
+  });
+
+  it("moves the selected copies and the orphaned sheets to the trash in bulk", async () => {
+    mocks.trashList.mockResolvedValue([]);
+    mocks.getTasks.mockResolvedValue([
+      {
+        task_id: "t",
+        name: "Sync",
+        status: "completed",
+        metadata: {
+          task_domain: "music_sync",
+          provider_instance: "filesystem_local--ssd",
+          provider_domain: "filesystem_local",
+          provider_name: "SSD",
+        },
+        logs: [
+          "2026-09-14 20:52:37 WARNING [music_assistant.Filesystem (local disk)] Failed to process A/B/B.cue: Audio file not found for CUE sheet",
+        ],
+      },
+    ] as never);
+    const wrapper = mountPage();
+    await wrapper.find("[data-duplicates-scan]").trigger("click");
+    await flushPromises();
+
+    await wrapper.find("[data-duplicates-select-lesser]").trigger("click");
+    await wrapper.find("[data-duplicates-trash-selected]").trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("settings.duplicates.confirm_trash");
+    await wrapper.find("[data-duplicates-confirm]").trigger("click");
+    await flushPromises();
+    expect(mocks.removeProviderMapping).toHaveBeenCalledTimes(1);
+    expect(mocks.trashMove).toHaveBeenCalledWith(
+      "filesystem_local--ssd",
+      "E/O/9.mp3",
+    );
+
+    const cueSection = wrapper.find('[data-group-kind="cue"]');
+    expect(cueSection.exists()).toBe(true);
+    await cueSection.find("[data-duplicates-trash-cues]").trigger("click");
+    await flushPromises();
+    await cueSection.find("[data-duplicates-confirm-cues]").trigger("click");
+    await flushPromises();
+    expect(mocks.trashMove).toHaveBeenLastCalledWith(
+      "filesystem_local--ssd",
+      "A/B/B.cue",
+    );
+    expect(cueSection.find("[data-duplicates-cue]").classes()).toContain(
+      "duplicates__row--gone",
+    );
   });
 });

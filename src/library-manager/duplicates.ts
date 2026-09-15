@@ -9,6 +9,7 @@ import {
   ExternalID,
   type ProviderMapping,
   type Track,
+  type TrashEntry,
 } from "@/plugins/api/interfaces";
 import { collectSyncIssues, type SyncIssue } from "./syncIssues";
 
@@ -53,6 +54,13 @@ export interface DuplicateGroup {
   rows: CopyRow[];
   // index into rows of the copy to keep
   keep: number;
+}
+
+/** One Filesystem source's trash folder, as the page shows it. */
+export interface TrashBin {
+  instance: string;
+  name: string;
+  entries: TrashEntry[];
 }
 
 export interface CueRow {
@@ -351,6 +359,34 @@ export async function scanLibrary(
     if (page.length < PAGE_SIZE) break;
   }
   return tracks;
+}
+
+/**
+ * The trash folders of the given Filesystem sources. The commands are an
+ * app-side edit of the server; a server without them answers "unknown
+ * command" on the first source, and null says so (the page then hides
+ * every trash action).
+ */
+export async function loadTrashBins(
+  sources: { id: string; name: string }[],
+): Promise<TrashBin[] | null> {
+  const bins: TrashBin[] = [];
+  for (const source of sources) {
+    try {
+      const entries = await api.trashList(source.id, {
+        suppressGlobalError: true,
+      });
+      bins.push({ instance: source.id, name: source.name, entries });
+    } catch (error) {
+      if (bins.length === 0) {
+        console.info("duplicates: trash commands unavailable", error);
+        return null;
+      }
+      // this source's folder could not be read; the others still count
+      bins.push({ instance: source.id, name: source.name, entries: [] });
+    }
+  }
+  return bins;
 }
 
 export async function loadCueRows(): Promise<CueRow[]> {

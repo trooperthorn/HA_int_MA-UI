@@ -21,6 +21,8 @@ import {
   type AuthToken,
   type BackgroundTask,
   type BrowsePathResult,
+  type TrashEntry,
+  type TrashMoveResult,
   type CommandMessage,
   type ErrorResultMessage,
   type EventMessage,
@@ -2297,6 +2299,41 @@ export class MusicAssistantApi {
     options?: CommandOptions,
   ): Promise<BrowsePathResult> {
     return this.sendCommand("config/providers/browse_path", { path }, options);
+  }
+
+  /**
+   * The trash of a Filesystem provider (an app-side edit of the server):
+   * move a file into .music-assistant-trash on the same drive, list the
+   * folder, move a file back, or delete the folder's contents.
+   */
+  public trashMove(
+    provider_instance: string,
+    path: string,
+    options?: CommandOptions,
+  ): Promise<TrashMoveResult> {
+    return this.sendCommand(
+      "music/trash/move",
+      { provider_instance, path },
+      options,
+    );
+  }
+
+  public trashList(
+    provider_instance: string,
+    options?: CommandOptions,
+  ): Promise<TrashEntry[]> {
+    return this.sendCommand("music/trash/list", { provider_instance }, options);
+  }
+
+  public trashRestore(
+    provider_instance: string,
+    path: string,
+  ): Promise<TrashMoveResult> {
+    return this.sendCommand("music/trash/restore", { provider_instance, path });
+  }
+
+  public trashEmpty(provider_instance: string): Promise<{ deleted: number }> {
+    return this.sendCommand("music/trash/empty", { provider_instance });
   }
 
   public async getProviderConfigEntries(
