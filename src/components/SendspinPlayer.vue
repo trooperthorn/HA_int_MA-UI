@@ -43,6 +43,10 @@ import {
   webPlayerTuning,
 } from "@/plugins/web_player_tuning";
 import {
+  installWebPlayerLog,
+  logWebPlayerEvent,
+} from "@/plugins/web_player_log";
+import {
   AdaptiveController,
   connectionTarget,
   LADDER,
@@ -376,6 +380,15 @@ function startPlayer() {
           latencyHint: isMobileOutput ? "playback" : undefined,
           onStateChange: (state) => {
             reportFormat();
+            if (
+              state.isPlaying !== isPlaying.value ||
+              state.playerState !== playerState.value
+            ) {
+              logWebPlayerEvent(
+                "info",
+                `state ${state.playerState}, ${state.isPlaying ? "playing" : "idle"}, format ${webPlayerStatus.codec ?? "?"} ${webPlayerStatus.sampleRate ?? "?"} Hz`,
+              );
+            }
             // Update reactive state when player state changes
             isPlaying.value = state.isPlaying;
             volume.value = state.volume;
@@ -516,6 +529,7 @@ async function applyServerFormat(
 
 function restartPlayer() {
   if (!player) return;
+  logWebPlayerEvent("info", "restarting the player to advertise a codec");
   player.disconnect("restart");
   player = null;
   webPlayerStatus.connected = false;
@@ -537,6 +551,17 @@ watch(
 // stream is doing and move on the ladder when it says so
 const adaptive = new AdaptiveController();
 let adaptiveTimer: number | undefined;
+// a health line in the log every so often while audio plays
+const HEALTH_LOG_EVERY_TICKS = 15;
+let healthTicks = 0;
+
+function logHealth(info: NonNullable<SendspinPlayer["syncInfo"]>) {
+  const progress = player?.trackProgress;
+  logWebPlayerEvent(
+    "debug",
+    `health sync=${Math.round(info.syncErrorMs)}ms resyncs=${info.resyncCount} latency=${Math.round(info.outputLatencyMs)}ms rate=${info.playbackRate.toFixed(4)} method=${info.correctionMethod} pos=${progress ? Math.round(progress.positionMs / 1000) : "?"}s rung=${webPlayerStatus.rung}`,
+  );
+}
 
 function stopAdaptive() {
   if (adaptiveTimer) clearInterval(adaptiveTimer);
@@ -564,10 +589,15 @@ function startAdaptive() {
   adaptive.rung = webPlayerStatus.rung;
   applyConnectionFloor();
   connectionTarget()?.addEventListener("change", applyConnectionFloor);
+  healthTicks = 0;
   adaptiveTimer = window.setInterval(() => {
-    if (!player || !webPlayerStatus.adaptive) return;
+    if (!player) return;
     const info = player.syncInfo;
     if (!info) return;
+    if (isPlaying.value && ++healthTicks % HEALTH_LOG_EVERY_TICKS === 0) {
+      logHealth(info);
+    }
+    if (!webPlayerStatus.adaptive) return;
     const verdict = adaptive.observe({
       now: Date.now(),
       resyncCount: info.resyncCount,
@@ -598,6 +628,7 @@ watch(
 
 // Setup on mount
 onMounted(() => {
+  installWebPlayerLog();
   console.debug("Sendspin: Component mounted, connecting...");
 
   registerWebPlayerAudioUnlock(primeAudio);
@@ -646,9 +677,12 @@ onBeforeUnmount(() => {
     // goodbye, which is what a hand-over to another tab needs. Once this
     // browser wants no player at all, say so instead, or it stays targetable
     // while nothing is listening.
-    player.disconnect(
-      isPlaybackMode(webPlayer.mode) ? "restart" : "user_request",
+    const reason = isPlaybackMode(webPlayer.mode) ? "restart" : "user_request";
+    logWebPlayerEvent(
+      "info",
+      `player torn down (${reason}), api ${String(api.state?.value ?? "?")}`,
     );
+    player.disconnect(reason);
     player = null;
     webPlayerStatus.connected = false;
     webPlayerStatus.codec = null;
