@@ -20,6 +20,7 @@ import {
   type Artist,
   type AuthToken,
   type BackgroundTask,
+  type BrowsePathResult,
   type CommandMessage,
   type ErrorResultMessage,
   type EventMessage,
@@ -2268,6 +2269,18 @@ export class MusicAssistantApi {
   public async getProviderConfig(instance_id: string): Promise<ProviderConfig> {
     // Return configuration for a single provider.
     return this.sendCommand("config/providers/get", { instance_id });
+  }
+
+  /**
+   * The folders under one of the app's music roots (an app-side edit of the
+   * server); path undefined returns the roots only. Rejects with "unknown
+   * command" on a server without the edit.
+   */
+  public browseProviderPath(
+    path?: string,
+    options?: CommandOptions,
+  ): Promise<BrowsePathResult> {
+    return this.sendCommand("config/providers/browse_path", { path }, options);
   }
 
   public async getProviderConfigEntries(

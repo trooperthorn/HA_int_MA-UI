@@ -860,6 +860,16 @@
       "save": "Save",
       "saved": "Routing saved",
       "discard": "Discard changes"
+    },
+    "folder_picker": {
+      "title": "Choose a folder",
+      "browse": "Browse",
+      "use_folder": "Use this folder",
+      "pick_root": "Pick where to look: the music drive, the media folder or the share folder.",
+      "no_folders": "No folders here",
+      "not_mounted": "{path} is not present on the server (the drive is not mounted)",
+      "not_mounted_short": "not mounted",
+      "failed": "The server could not list that folder"
     }
   },
   "show_info": "Show info",

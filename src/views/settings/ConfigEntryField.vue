@@ -269,6 +269,15 @@
       @click:clear="onClear"
     />
 
+    <!-- the filesystem provider's path: a text field with a folder browser -->
+    <FolderPickerField
+      v-else-if="isFolderPath"
+      :entry="confEntry"
+      :label="displayLabel()"
+      :disabled="isFieldDisabled"
+      @update:value="onUpdateValue($event)"
+    />
+
     <!-- all other: textbox with single value -->
     <v-text-field
       v-else
@@ -307,6 +316,7 @@ import {
 } from "@/plugins/api/interfaces";
 import IconPicker from "@/components/IconPicker.vue";
 import AlertField from "./fields/AlertField.vue";
+import FolderPickerField from "./fields/FolderPickerField.vue";
 import HassControlPickerField from "./fields/HassControlPickerField.vue";
 import HassControlsField from "./fields/HassControlsField.vue";
 import LabelField from "./fields/LabelField.vue";
@@ -317,6 +327,7 @@ import {
   HASS_CONTROL_KEYS,
   isHassControlPickerEntry,
 } from "@/helpers/config_entry_ui";
+import { isFolderPathEntry } from "@/helpers/folder_picker";
 import { HASS_DOMAIN } from "@/helpers/hass_controls";
 import { $t } from "@/plugins/i18n";
 import { computed } from "vue";
@@ -335,6 +346,11 @@ const isHassControlsEntry = computed(
   () =>
     props.providerDomain === HASS_DOMAIN &&
     HASS_CONTROL_KEYS.has(props.confEntry.key),
+);
+
+// only the filesystem provider's own path entry, in its setup and reconfigure flows
+const isFolderPath = computed(() =>
+  isFolderPathEntry(props.providerDomain, props.confEntry.key),
 );
 
 const isFieldDisabled = computed(() => {
