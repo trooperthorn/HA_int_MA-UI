@@ -43,9 +43,23 @@ the older library row. The winner is marked **keep**.
 - **Remove track** on a probable row removes that library track outright.
 - **Export CSV** writes the visible groups and sheets with their paths.
 
-Removing files from the disk (the lesser copies, the orphaned sheets) is the
-app repository's trash action, not built yet; until then the CSV names the
-files for cleaning by hand.
+## The trash
 
-Code: `src/library-manager/duplicates.ts` (grouping, ranking, CSV) and
-`src/views/settings/Duplicates.vue`.
+With the app's `music/trash/*` commands (ha_app_music_assistant's
+`music_trash` patch) the page also moves files. **Move to trash** on a
+lesser copy removes its mapping from the library and renames the file into
+`.music-assistant-trash/` at the root of that source's folder, keeping its
+relative path; **Move selected to trash** does the same in bulk behind a
+confirmation, and orphaned CUE sheets get the same action one by one or
+all at once. The move is a rename on the same drive: nothing is copied and
+no space is used, and the sync skips the dot folder. A trash section per
+file source lists what it holds with **Restore** (the file goes back where
+it came from and the next sync imports it again; refused when that path is
+taken) and **Empty trash**, the only action that deletes anything, behind
+its own confirmation.
+
+A server without the commands (an older app image, or upstream) hides every
+trash action; the CSV still names the files for cleaning by hand.
+
+Code: `src/library-manager/duplicates.ts` (grouping, ranking, CSV, trash
+listing) and `src/views/settings/Duplicates.vue`.

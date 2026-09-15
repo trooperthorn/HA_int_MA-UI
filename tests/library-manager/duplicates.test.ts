@@ -2,6 +2,7 @@ import {
   buildGroups,
   cueRowsFrom,
   keepIndex,
+  loadTrashBins,
   normalizeName,
   rowsOf,
   summarizeFormat,
@@ -12,10 +13,13 @@ import type { SyncIssue } from "@/library-manager/syncIssues";
 import type { ProviderMapping, Track } from "@/plugins/api/interfaces";
 import { describe, expect, it, vi } from "vitest";
 
+const trashList = vi.hoisted(() => vi.fn());
+
 vi.mock("@/plugins/api", () => ({
   api: {
     getProvider: (instance: string) =>
       instance === "filesystem_local--ssd" ? { name: "SSD" } : undefined,
+    trashList,
   },
 }));
 
@@ -286,5 +290,30 @@ describe("cue rows and csv", () => {
     expect(lines.at(-1)).toContain(
       "cue,orphaned CUE sheet,,,,,SSD,Aaron Lewis/Town Line/Town Line.cue",
     );
+  });
+});
+
+describe("loadTrashBins", () => {
+  it("is null without the commands, and keeps going past one unreadable source", async () => {
+    trashList.mockRejectedValueOnce(new Error("unknown command"));
+    expect(await loadTrashBins([{ id: "a", name: "A" }])).toBeNull();
+
+    trashList
+      .mockResolvedValueOnce([{ path: "x.mp3", size: 1, trashed_at: 1 }])
+      .mockRejectedValueOnce(new Error("io"));
+    expect(
+      await loadTrashBins([
+        { id: "a", name: "A" },
+        { id: "b", name: "B" },
+      ]),
+    ).toEqual([
+      {
+        instance: "a",
+        name: "A",
+        entries: [{ path: "x.mp3", size: 1, trashed_at: 1 }],
+      },
+      { instance: "b", name: "B", entries: [] },
+    ]);
+    expect(await loadTrashBins([])).toEqual([]);
   });
 });

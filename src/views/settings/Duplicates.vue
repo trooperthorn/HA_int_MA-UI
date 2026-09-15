@@ -113,21 +113,39 @@
         <span class="duplicates__status">
           {{ $t("settings.duplicates.selected", { count: selected.size }) }}
         </span>
-        <Button
-          v-if="!confirmBulk"
-          type="button"
-          variant="destructive"
-          size="sm"
-          :disabled="selected.size === 0 || busy"
-          data-duplicates-remove-selected
-          @click="confirmBulk = true"
-        >
-          {{ $t("settings.duplicates.remove_selected") }}
-        </Button>
+        <template v-if="!confirmBulk">
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
+            :disabled="selected.size === 0 || busy"
+            data-duplicates-remove-selected
+            @click="confirmBulk = 'remove'"
+          >
+            {{ $t("settings.duplicates.remove_selected") }}
+          </Button>
+          <Button
+            v-if="bins"
+            type="button"
+            variant="destructive"
+            size="sm"
+            :disabled="selected.size === 0 || busy"
+            data-duplicates-trash-selected
+            @click="confirmBulk = 'trash'"
+          >
+            <Trash2 class="size-4" />
+            {{ $t("settings.duplicates.trash_selected") }}
+          </Button>
+        </template>
         <template v-else>
           <span class="duplicates__confirm">
             {{
-              $t("settings.duplicates.confirm_remove", { count: selected.size })
+              $t(
+                confirmBulk === "trash"
+                  ? "settings.duplicates.confirm_trash"
+                  : "settings.duplicates.confirm_remove",
+                { count: selected.size },
+              )
             }}
           </span>
           <Button
@@ -136,7 +154,9 @@
             size="sm"
             :disabled="busy"
             data-duplicates-confirm
-            @click="removeSelected()"
+            @click="
+              confirmBulk === 'trash' ? trashSelected() : removeSelected()
+            "
           >
             {{ $t("settings.duplicates.confirm") }}
           </Button>
@@ -144,7 +164,7 @@
             type="button"
             variant="outline"
             size="sm"
-            @click="confirmBulk = false"
+            @click="confirmBulk = ''"
           >
             {{ $t("cancel") }}
           </Button>
@@ -264,6 +284,24 @@
               )
             }}
           </Button>
+          <Button
+            v-if="
+              bins &&
+              row.local &&
+              !removed.has(row.id) &&
+              index !== group.keep &&
+              group.kind !== 'probable'
+            "
+            type="button"
+            variant="ghost"
+            size="sm"
+            :disabled="busy"
+            data-duplicates-trash
+            @click="trashCopy(row)"
+          >
+            <Trash2 class="size-4" />
+            {{ $t("settings.duplicates.trash_copy") }}
+          </Button>
         </div>
       </section>
       <Button
@@ -298,11 +336,58 @@
           <span class="duplicates__group-reason">{{
             $t("settings.duplicates.cue_hint")
           }}</span>
+          <template v-if="bins && pendingCues.length">
+            <Button
+              v-if="!confirmCues"
+              type="button"
+              variant="destructive"
+              size="sm"
+              class="ml-auto"
+              :disabled="busy"
+              data-duplicates-trash-cues
+              @click="confirmCues = true"
+            >
+              <Trash2 class="size-4" />
+              {{
+                $t("settings.duplicates.trash_all_cues", {
+                  count: pendingCues.length,
+                })
+              }}
+            </Button>
+            <template v-else>
+              <span class="duplicates__confirm ml-auto">
+                {{
+                  $t("settings.duplicates.confirm_trash_cues", {
+                    count: pendingCues.length,
+                  })
+                }}
+              </span>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                :disabled="busy"
+                data-duplicates-confirm-cues
+                @click="trashAllCues()"
+              >
+                {{ $t("settings.duplicates.confirm") }}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                @click="confirmCues = false"
+              >
+                {{ $t("cancel") }}
+              </Button>
+            </template>
+          </template>
         </header>
         <div
           v-for="cue in visibleCues"
           :key="cue.path"
           class="duplicates__row"
+          :class="{ 'duplicates__row--gone': trashedCues.has(cue.path) }"
           data-duplicates-cue
         >
           <span class="duplicates__spacer"></span>
@@ -317,6 +402,119 @@
             :title="cue.path"
             >{{ cue.path }}</span
           >
+          <span class="duplicates__cell duplicates__cell--format"></span>
+          <span class="duplicates__cell duplicates__cell--tags"></span>
+          <Button
+            v-if="bins && !trashedCues.has(cue.path)"
+            type="button"
+            variant="ghost"
+            size="sm"
+            :disabled="busy"
+            data-duplicates-trash-cue
+            @click="trashCue(cue)"
+          >
+            <Trash2 class="size-4" />
+            {{ $t("settings.duplicates.trash_copy") }}
+          </Button>
+        </div>
+      </section>
+
+      <!-- the trash folder of every file source: restore or empty -->
+      <section
+        v-for="bin in bins ?? []"
+        :key="bin.instance"
+        class="duplicates__group"
+        data-duplicates-bin
+        :data-bin-instance="bin.instance"
+      >
+        <header class="duplicates__group-head">
+          <span class="duplicates__kind" data-kind="trash">{{
+            $t("settings.duplicates.kind_trash")
+          }}</span>
+          <span class="duplicates__group-title">{{
+            $t("settings.duplicates.trash_title", { source: bin.name })
+          }}</span>
+          <span class="duplicates__group-reason">{{
+            $t("settings.duplicates.trash_hint", {
+              count: bin.entries.length,
+            })
+          }}</span>
+          <template v-if="bin.entries.length">
+            <Button
+              v-if="confirmEmpty !== bin.instance"
+              type="button"
+              variant="destructive"
+              size="sm"
+              class="ml-auto"
+              :disabled="busy"
+              data-duplicates-empty
+              @click="confirmEmpty = bin.instance"
+            >
+              {{ $t("settings.duplicates.empty_trash") }}
+            </Button>
+            <template v-else>
+              <span class="duplicates__confirm ml-auto">
+                {{
+                  $t("settings.duplicates.confirm_empty", {
+                    count: bin.entries.length,
+                  })
+                }}
+              </span>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                :disabled="busy"
+                data-duplicates-confirm-empty
+                @click="emptyBin(bin)"
+              >
+                {{ $t("settings.duplicates.confirm_delete") }}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                @click="confirmEmpty = ''"
+              >
+                {{ $t("cancel") }}
+              </Button>
+            </template>
+          </template>
+        </header>
+        <div
+          v-for="entry in bin.entries"
+          :key="entry.path"
+          class="duplicates__row"
+          data-duplicates-trash-entry
+        >
+          <span class="duplicates__spacer"></span>
+          <span class="duplicates__mark">{{
+            $t("settings.duplicates.trashed")
+          }}</span>
+          <span class="duplicates__cell duplicates__cell--source">{{
+            bin.name
+          }}</span>
+          <span
+            class="duplicates__cell duplicates__cell--path"
+            :title="entry.path"
+            >{{ entry.path }}</span
+          >
+          <span class="duplicates__cell duplicates__cell--format">{{
+            formatSize(entry.size)
+          }}</span>
+          <span class="duplicates__cell duplicates__cell--tags">{{
+            formatWhen(entry.trashed_at)
+          }}</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            :disabled="busy"
+            data-duplicates-restore
+            @click="restoreEntry(bin, entry)"
+          >
+            {{ $t("settings.duplicates.restore") }}
+          </Button>
         </div>
       </section>
     </div>
@@ -331,6 +529,7 @@ import { runWithConcurrency } from "@/helpers/concurrency";
 import {
   buildGroups,
   loadCueRows,
+  loadTrashBins,
   scanLibrary,
   TAG_CHECKS,
   toCsv,
@@ -338,11 +537,12 @@ import {
   type CueRow,
   type DuplicateGroup,
   type GroupKind,
+  type TrashBin,
 } from "@/library-manager/duplicates";
 import { api } from "@/plugins/api";
-import { MediaType } from "@/plugins/api/interfaces";
+import { MediaType, type TrashEntry } from "@/plugins/api/interfaces";
 import { $t } from "@/plugins/i18n";
-import { Copy as CopyIcon, Download, RefreshCw } from "@lucide/vue";
+import { Copy as CopyIcon, Download, RefreshCw, Trash2 } from "@lucide/vue";
 import { computed, reactive, ref } from "vue";
 import { toast } from "vue-sonner";
 import SettingsHeaderCard from "./SettingsHeaderCard.vue";
@@ -360,9 +560,14 @@ const sourceFilter = ref("");
 const lossyOnly = ref(false);
 const selected = reactive(new Set<string>());
 const removed = reactive(new Set<string>());
-const confirmBulk = ref(false);
+const confirmBulk = ref<"" | "remove" | "trash">("");
+const confirmCues = ref(false);
+const confirmEmpty = ref("");
 const busy = ref(false);
 const shown = ref(SHOW_STEP);
+// null while the server has no trash commands (an older app image)
+const bins = ref<TrashBin[] | null>(null);
+const trashedCues = reactive(new Set<string>());
 
 const sources = computed(() => {
   const seen = new Map<string, string>();
@@ -373,6 +578,20 @@ const sources = computed(() => {
     seen.set(cue.providerInstance, cue.providerName);
   return [...seen].map(([id, name]) => ({ id, name }));
 });
+// the file sources, the only ones with a trash folder
+const localSources = computed(() => {
+  const seen = new Map<string, string>();
+  for (const group of groups.value) {
+    for (const row of group.rows)
+      if (row.local) seen.set(row.sourceInstance, row.sourceName);
+  }
+  for (const cue of cues.value)
+    seen.set(cue.providerInstance, cue.providerName);
+  return [...seen].map(([id, name]) => ({ id, name }));
+});
+const pendingCues = computed(() =>
+  visibleCues.value.filter((cue) => !trashedCues.has(cue.path)),
+);
 
 const visibleGroups = computed(() =>
   groups.value.filter((group) => {
@@ -407,12 +626,41 @@ function reasonKey(reason: string): string {
   return reason.replace(/\s+/g, "_");
 }
 
+function formatSize(bytes: number): string {
+  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
+  if (bytes >= 1_000) return `${Math.round(bytes / 1_000)} kB`;
+  return `${bytes} B`;
+}
+
+function formatWhen(seconds: number): string {
+  return new Date(seconds * 1000).toLocaleString();
+}
+
+async function loadBins() {
+  bins.value = await loadTrashBins(localSources.value);
+}
+
+// refresh one source's folder after a move or restore
+async function refreshBin(instance: string) {
+  if (!bins.value) return;
+  const bin = bins.value.find((candidate) => candidate.instance === instance);
+  if (!bin) {
+    await loadBins();
+    return;
+  }
+  try {
+    bin.entries = await api.trashList(instance, { suppressGlobalError: true });
+  } catch (error) {
+    console.error("duplicates: trash list failed", error);
+  }
+}
+
 async function scan() {
   scanning.value = true;
   scanned.value = 0;
   selected.clear();
   removed.clear();
-  confirmBulk.value = false;
+  confirmBulk.value = "";
   shown.value = SHOW_STEP;
   try {
     const [tracks, cueRows] = await Promise.all([
@@ -421,8 +669,10 @@ async function scan() {
     ]);
     groups.value = buildGroups(tracks);
     cues.value = cueRows;
+    trashedCues.clear();
     scanned.value = tracks.length;
     scannedAt.value = Date.now();
+    await loadBins();
   } catch (error) {
     console.error("duplicates: scan failed", error);
     toast.error($t("settings.duplicates.scan_failed"));
@@ -482,7 +732,7 @@ async function removeSelected() {
     .flatMap((group) => group.rows)
     .filter((row) => selected.has(row.id));
   busy.value = true;
-  confirmBulk.value = false;
+  confirmBulk.value = "";
   let failed = 0;
   await runWithConcurrency(rows, async (row) => {
     try {
@@ -503,6 +753,125 @@ async function removeSelected() {
       $t("settings.duplicates.remove_some_failed", { count: failed }),
     );
   else toast.success($t("settings.duplicates.removed", { count: rows.length }));
+}
+
+// a lesser copy leaves the library, then its file moves into the trash
+// folder on the same drive; either half failing is reported, and a file
+// that stays on disk after the mapping went is picked up again by a sync
+async function trashRow(row: CopyRow) {
+  await api.removeProviderMapping(MediaType.TRACK, row.trackId, row.mapping);
+  removed.add(row.id);
+  selected.delete(row.id);
+  await api.trashMove(row.sourceInstance, row.path);
+}
+
+async function trashCopy(row: CopyRow) {
+  busy.value = true;
+  try {
+    await trashRow(row);
+    toast.success($t("settings.duplicates.trashed_count", { count: 1 }));
+  } catch (error) {
+    console.error("duplicates: trash failed", error);
+    toast.error($t("settings.duplicates.trash_failed"));
+  } finally {
+    busy.value = false;
+    await refreshBin(row.sourceInstance);
+  }
+}
+
+async function trashSelected() {
+  const rows = groups.value
+    .flatMap((group) => group.rows)
+    .filter((row) => selected.has(row.id) && row.local);
+  busy.value = true;
+  confirmBulk.value = "";
+  let failed = 0;
+  await runWithConcurrency(rows, async (row) => {
+    try {
+      await trashRow(row);
+    } catch {
+      failed += 1;
+    }
+  });
+  selected.clear();
+  busy.value = false;
+  if (failed)
+    toast.error($t("settings.duplicates.trash_some_failed", { count: failed }));
+  else
+    toast.success(
+      $t("settings.duplicates.trashed_count", { count: rows.length }),
+    );
+  for (const instance of new Set(rows.map((row) => row.sourceInstance)))
+    await refreshBin(instance);
+}
+
+async function trashCue(cue: CueRow) {
+  busy.value = true;
+  try {
+    await api.trashMove(cue.providerInstance, cue.path);
+    trashedCues.add(cue.path);
+  } catch (error) {
+    console.error("duplicates: trash failed", error);
+    toast.error($t("settings.duplicates.trash_failed"));
+  } finally {
+    busy.value = false;
+    await refreshBin(cue.providerInstance);
+  }
+}
+
+async function trashAllCues() {
+  const sheets = pendingCues.value;
+  busy.value = true;
+  confirmCues.value = false;
+  let failed = 0;
+  await runWithConcurrency(sheets, async (cue) => {
+    try {
+      await api.trashMove(cue.providerInstance, cue.path);
+      trashedCues.add(cue.path);
+    } catch {
+      failed += 1;
+    }
+  });
+  busy.value = false;
+  if (failed)
+    toast.error($t("settings.duplicates.trash_some_failed", { count: failed }));
+  else
+    toast.success(
+      $t("settings.duplicates.trashed_count", { count: sheets.length }),
+    );
+  for (const instance of new Set(sheets.map((cue) => cue.providerInstance)))
+    await refreshBin(instance);
+}
+
+// back to where it came from; the next sync imports it again
+async function restoreEntry(bin: TrashBin, entry: TrashEntry) {
+  busy.value = true;
+  try {
+    await api.trashRestore(bin.instance, entry.path);
+    toast.success($t("settings.duplicates.restored"));
+  } catch (error) {
+    console.error("duplicates: restore failed", error);
+    toast.error($t("settings.duplicates.restore_failed"));
+  } finally {
+    busy.value = false;
+    await refreshBin(bin.instance);
+  }
+}
+
+// the one action that deletes files
+async function emptyBin(bin: TrashBin) {
+  busy.value = true;
+  confirmEmpty.value = "";
+  try {
+    const result = await api.trashEmpty(bin.instance);
+    toast.success($t("settings.duplicates.emptied", { count: result.deleted }));
+  } catch (error) {
+    console.error("duplicates: empty trash failed", error);
+    toast.error($t("settings.duplicates.empty_failed"));
+  } finally {
+    busy.value = false;
+    await refreshBin(bin.instance);
+  }
 }
 
 // a probable pair: the kept track gains the other rows' mappings, the
@@ -611,6 +980,9 @@ function exportCsv() {
 }
 .duplicates__kind[data-kind="probable"] {
   background: rgba(var(--v-theme-warning), 0.2);
+}
+.duplicates__kind[data-kind="trash"] {
+  background: rgba(var(--v-theme-error), 0.15);
 }
 .duplicates__row {
   display: grid;
