@@ -576,6 +576,15 @@ export const routes: RouteRecordRaw[] = [
             props: true,
           },
           {
+            path: "frontend/duplicates",
+            name: "frontendduplicates",
+            component: () =>
+              import(
+                /* webpackChunkName: "frontendduplicates" */ "@/views/settings/Duplicates.vue"
+              ),
+            props: true,
+          },
+          {
             path: "frontend/flow",
             name: "frontendflow",
             component: () =>
