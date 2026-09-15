@@ -1521,6 +1521,22 @@ export class MusicAssistantApi {
     });
   }
 
+  /**
+   * Attach another provider's copy to a library item (the merge the import
+   * does itself when it recognises a track).
+   */
+  public async addProviderMapping(
+    media_type: MediaType,
+    db_id: string | number,
+    mapping: ProviderMapping,
+  ): Promise<void> {
+    return this.sendCommand("music/add_provider_mapping", {
+      media_type,
+      db_id,
+      mapping,
+    });
+  }
+
   public async removeItemFromLibrary(
     media_type: MediaType,
     library_item_id: string | number,
