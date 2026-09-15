@@ -694,6 +694,29 @@ export interface ConfigValueOption {
   description?: string | null;
 }
 
+// config/providers/browse_path (an app-side edit of the server): the folders
+// under the app's music roots, for picking a filesystem provider path
+export interface BrowsePathRoot {
+  path: string;
+  label: string;
+  // whether the folder exists on the server (a drive that is not mounted does not)
+  present: boolean;
+}
+
+export interface BrowsePathFolder {
+  name: string;
+  path: string;
+}
+
+export interface BrowsePathResult {
+  roots: BrowsePathRoot[];
+  // null when only the roots were asked for
+  path: string | null;
+  // null at a root
+  parent: string | null;
+  folders: BrowsePathFolder[];
+}
+
 export interface ConfigEntry {
   // Model for a Config Entry.
   // The definition of something that can be configured for an object (e.g. provider or player)

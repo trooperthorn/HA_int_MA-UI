@@ -58,6 +58,7 @@
               <ConfigEntryRow
                 :conf-entry="entry"
                 :show-password-values="showPasswordValues"
+                :provider-domain="iconDomain"
                 :disabled="busy || isDisabled(entry)"
                 @update:value="onValueUpdate(entry, $event)"
                 @toggle-password="showPasswordValues = !showPasswordValues"

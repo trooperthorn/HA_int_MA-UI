@@ -81,7 +81,7 @@ vi.mock("@/plugins/store", () => ({
 vi.mock("@/views/settings/ConfigEntryRow.vue", () => ({
   default: {
     name: "ConfigEntryRow",
-    props: ["confEntry", "disabled"],
+    props: ["confEntry", "disabled", "providerDomain"],
     template: "<div />",
   },
 }));
@@ -342,6 +342,8 @@ describe("SetupFlowDialog", () => {
     ).toEqual(["enable_feature", "feature_detail"]);
     expect(rows[0].props("disabled")).toBe(false);
     expect(rows[1].props("disabled")).toBe(true);
+    // the rows know the provider, so a provider-specific field (the folder picker) can appear
+    expect(rows[0].props("providerDomain")).toBe("spotify");
   });
 
   it("gates an entry whose dependency key is not in the step", async () => {
