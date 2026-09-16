@@ -213,6 +213,7 @@ import {
   handlePlayBtnClick,
 } from "@/helpers/media_item_actions";
 import { ensurePlayer } from "../playerGate";
+import { useQueuePlaybackPreferences } from "@/composables/useQueuePlaybackPreferences";
 import { api } from "@/plugins/api";
 import { getListItemProviderIconDomain } from "@/plugins/api/helpers";
 import {
@@ -335,6 +336,16 @@ const menuOptions = (targets: GridItem[]) => {
   const extraItems = props.menuItems?.(targets) ?? [];
   return extraItems.length > 0 ? { extraItems } : undefined;
 };
+
+const { flag: playbackFlag } = useQueuePlaybackPreferences();
+
+// Play in the current display sort order only when the user is sorted by
+// Track # (or the setting is off); otherwise fall back to album order by
+// not forwarding an explicit sort at all.
+const playbackSortBy = computed<string | undefined>(() => {
+  if (!playbackFlag("albumOrderOverridesSort")) return props.sortBy;
+  return sort.value?.columnId === "track_number" ? props.sortBy : undefined;
+});
 
 const sort = computed<GridSort | undefined>(() =>
   sortByToGridSort(props.sortBy, props.visibleColumns),
@@ -550,7 +561,7 @@ function onRowDoubleClick(event: MouseEvent, index: number) {
       clientY,
       props.parentItem,
       false,
-      props.sortBy,
+      playbackSortBy.value,
     );
   });
 }
@@ -574,7 +585,7 @@ function onRowMenu(event: MouseEvent, index: number) {
     event.clientY,
     props.parentItem,
     true,
-    props.sortBy,
+    playbackSortBy.value,
     menuOptions(targets),
   );
 }
@@ -592,7 +603,7 @@ function onMenuButton(event: MouseEvent, index: number) {
     rect ? rect.bottom : event.clientY,
     props.parentItem,
     true,
-    props.sortBy,
+    playbackSortBy.value,
     menuOptions(targets),
   );
 }
@@ -683,7 +694,7 @@ function onKeydown(event: KeyboardEvent) {
           rect ? rect.bottom : 0,
           props.parentItem,
           true,
-          props.sortBy,
+          playbackSortBy.value,
           menuOptions(targets),
         );
         return;
@@ -698,7 +709,7 @@ function onKeydown(event: KeyboardEvent) {
             rect?.top ?? 0,
             props.parentItem,
             false,
-            props.sortBy,
+            playbackSortBy.value,
           );
         });
       }

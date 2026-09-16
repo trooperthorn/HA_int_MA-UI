@@ -49,20 +49,20 @@
       </div>
     </div>
     <div
+      class="browser-column__row browser-column__row--all"
+      role="option"
+      :aria-selected="selectedIds.length === 0"
+      :class="{ 'browser-column__row--selected': selectedIds.length === 0 }"
+      @click="emit('update:selectedIds', [])"
+    >
+      <span class="truncate">{{ allLabel }}</span>
+    </div>
+    <div
       ref="scrollRef"
       class="browser-column__scroll"
       tabindex="0"
       @keydown="onKeydown"
     >
-      <div
-        class="browser-column__row browser-column__row--all"
-        role="option"
-        :aria-selected="selectedIds.length === 0"
-        :class="{ 'browser-column__row--selected': selectedIds.length === 0 }"
-        @click="emit('update:selectedIds', [])"
-      >
-        <span class="truncate">{{ allLabel }}</span>
-      </div>
       <div class="browser-column__body" :style="{ height: `${totalSize}px` }">
         <div
           v-for="vRow in virtualRows"
@@ -151,8 +151,6 @@ const virtualizer = useVirtualizer(
     getScrollElement: () => scrollRef.value,
     estimateSize: () => ROW_HEIGHT,
     overscan: 8,
-    // the "All" row sits above the virtual list
-    paddingStart: ROW_HEIGHT,
   })),
 );
 
@@ -166,7 +164,7 @@ const virtualRows = computed(() =>
     return {
       key: String(vItem.key),
       index: vItem.index,
-      start: vItem.start - ROW_HEIGHT,
+      start: vItem.start,
       item,
       selected: !!item && selectedSet.value.has(item.item_id),
     };
@@ -414,12 +412,11 @@ defineExpose({
 }
 
 .browser-column__row--all {
-  position: sticky;
-  top: 0;
-  z-index: 1;
+  flex: none;
   background: rgb(var(--v-theme-panel));
   color: rgb(var(--v-theme-fg));
   font-weight: 500;
+  border-bottom: 1px solid rgba(var(--v-theme-fg), 0.08);
 }
 
 .browser-column__row:hover {

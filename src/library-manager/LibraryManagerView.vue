@@ -194,26 +194,50 @@
             :order="2"
             class="library-manager__grid-panel"
           >
-            <div v-if="chips.length > 0" class="library-manager__chips">
-              <button
-                v-for="chip in chips"
-                :key="chip.key"
-                type="button"
-                class="library-manager__chip"
-                :title="$t('clear')"
-                @click="chip.clear()"
-              >
-                <span class="library-manager__chip-kind">{{ chip.kind }}</span>
-                <span class="truncate">{{ chip.label }}</span>
-                <X :size="12" />
-              </button>
-              <button
-                type="button"
-                class="library-manager__chip library-manager__chip--clear"
-                @click="clearBrowser()"
-              >
-                {{ $t("library_manager.clear_filters") }}
-              </button>
+            <div class="library-manager__chips">
+              <template v-if="chips.length > 0">
+                <button
+                  v-for="chip in chips"
+                  :key="chip.key"
+                  type="button"
+                  class="library-manager__chip"
+                  :title="$t('clear')"
+                  @click="chip.clear()"
+                >
+                  <span class="library-manager__chip-kind">{{
+                    chip.kind
+                  }}</span>
+                  <span class="truncate">{{ chip.label }}</span>
+                  <X :size="12" />
+                </button>
+                <button
+                  type="button"
+                  class="library-manager__chip library-manager__chip--clear"
+                  @click="clearBrowser()"
+                >
+                  {{ $t("library_manager.clear_filters") }}
+                </button>
+              </template>
+              <div class="library-manager__grid-search">
+                <Search :size="12" class="library-manager__grid-search-icon" />
+                <input
+                  v-model="searchInput"
+                  type="search"
+                  class="library-manager__grid-search-input"
+                  :placeholder="$t('search')"
+                  :aria-label="$t('library_manager.search_placeholder')"
+                  @keydown.escape="clearSearch"
+                />
+                <button
+                  v-if="searchInput"
+                  type="button"
+                  class="library-manager__grid-search-clear"
+                  :aria-label="$t('clear')"
+                  @click="clearSearch"
+                >
+                  <X :size="11" />
+                </button>
+              </div>
             </div>
             <TrackGrid
               ref="grid"
@@ -937,6 +961,65 @@ useKeymap({
 
 .library-manager__chip--clear:hover {
   background: rgba(var(--v-theme-fg), 0.08);
+}
+
+.library-manager__grid-search {
+  position: relative;
+  margin-left: auto;
+  width: 220px;
+  flex: none;
+}
+
+.library-manager__grid-search-icon {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(var(--v-theme-fg), 0.45);
+  pointer-events: none;
+}
+
+.library-manager__grid-search-input {
+  width: 100%;
+  height: 24px;
+  padding: 0 22px 0 26px;
+  border-radius: 12px;
+  border: 0;
+  background: rgba(var(--v-theme-fg), 0.06);
+  color: rgb(var(--v-theme-fg));
+  font-size: 12px;
+  outline: none;
+}
+
+.library-manager__grid-search-input:focus {
+  background: rgba(var(--v-theme-fg), 0.1);
+}
+
+.library-manager__grid-search-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.library-manager__grid-search-clear {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0;
+  background: transparent;
+  color: rgba(var(--v-theme-fg), 0.5);
+  cursor: pointer;
+}
+
+.library-manager__grid-search-clear:hover {
+  color: rgb(var(--v-theme-fg));
+  background: rgba(var(--v-theme-fg), 0.1);
 }
 
 .library-manager__handle.library-manager__handle--row {
