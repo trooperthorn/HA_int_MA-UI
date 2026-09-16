@@ -545,6 +545,30 @@ export const getContextMenuItems = async function (
     });
   }
 
+  // artist: jump straight to its Top Tracks + Albums, same destination
+  // "Show info" opens - a distinctly-labelled shortcut since users browsing
+  // by right-click don't necessarily read "info" as "the tracks and albums".
+  if (
+    items.length === 1 &&
+    firstItem.media_type === MediaType.ARTIST &&
+    itemIsAvailable(firstItem)
+  ) {
+    contextMenuItems.push({
+      label: "artist_top_tracks_and_albums",
+      labelArgs: [],
+      action: () => {
+        router.push({
+          name: firstItem.media_type,
+          params: {
+            itemId: firstItem.item_id,
+            provider: firstItem.provider,
+          },
+        });
+      },
+      icon: ListMusic,
+    });
+  }
+
   // creates an AI Radio show from the playlist, which takes config.providers.write
   if (
     items.length === 1 &&

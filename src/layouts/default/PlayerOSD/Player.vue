@@ -36,8 +36,14 @@
                     staticHeight: '48px',
                   },
                 },
-                previous: { isVisible: getBreakpointValue('bp3') },
-                next: { isVisible: getBreakpointValue('bp3') },
+                previous: {
+                  isVisible: getBreakpointValue('bp3'),
+                  icon: { staticWidth: '48px', staticHeight: '48px' },
+                },
+                next: {
+                  isVisible: getBreakpointValue('bp3'),
+                  icon: { staticWidth: '48px', staticHeight: '48px' },
+                },
               }"
             />
 

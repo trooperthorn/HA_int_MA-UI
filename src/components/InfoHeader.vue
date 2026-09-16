@@ -817,6 +817,15 @@ const collectionNarrators = computed(() => {
 </script>
 
 <style scoped>
+/* the back button sits on transparent artwork with nothing to set it apart;
+   give it the same backdrop chip DetailHero.vue's toolbar controls use, so
+   it doesn't get lost. */
+:deep(.v-toolbar__prepend .v-btn) {
+  background-color: rgba(0, 0, 0, 0.35);
+  border-radius: 8px;
+  opacity: 1;
+}
+
 .selectable {
   -webkit-user-select: text;
   /* Safari */
