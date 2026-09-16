@@ -17,12 +17,20 @@
   >
     <span
       :class="navigation ? 'mobile-navigation-icon' : 'player-bar-action-icon'"
+      :style="navigation ? 'position: relative' : undefined"
     >
       <PlayerIcon
         :icon="store.activePlayer?.icon"
         :size="28"
         :stroke-width="1.4"
         class="size-7"
+      />
+      <!-- a small badge marking this as "tap to see/switch players" rather
+           than a plain status readout of what's currently playing -->
+      <ChevronsUpDown
+        v-if="navigation"
+        :size="11"
+        class="player-select-affordance"
       />
     </span>
     <span
@@ -41,6 +49,7 @@ import { Button } from "@/components/ui/button";
 import { usePopoutTriggerHover } from "@/composables/usePopoutTriggerHover";
 import { $t } from "@/plugins/i18n";
 import { store } from "@/plugins/store";
+import { ChevronsUpDown } from "@lucide/vue";
 import { computed } from "vue";
 
 const { suppressHover, onPointerEnter } = usePopoutTriggerHover(
@@ -64,3 +73,15 @@ function togglePlayersMenu() {
   store.showPlayersMenu = !store.showPlayersMenu;
 }
 </script>
+
+<style scoped>
+.player-select-affordance {
+  position: absolute;
+  right: -6px;
+  bottom: -3px;
+  padding: 1px;
+  border-radius: 999px;
+  background: var(--background);
+  color: color-mix(in srgb, var(--foreground) 70%, transparent);
+}
+</style>
