@@ -11,6 +11,7 @@
       'ed-card--round': round,
     }"
     @click="onClick"
+    @dblclick="onDoubleClick"
     @keydown.enter.self="onClick"
     @keydown.space.self.prevent="onClick"
     @contextmenu.prevent="onMenu"
@@ -236,6 +237,23 @@ const onClick = (e: MouseEvent | KeyboardEvent) => {
   const x = "clientX" in e ? e.clientX : 0;
   const y = "clientY" in e ? e.clientY : 0;
   handleMediaItemClick(props.item, x, y, props.parentItem);
+};
+// double-clicking an artist/album card plays it instead of navigating
+const onDoubleClick = (e: MouseEvent) => {
+  if (props.disabled || props.showCheckboxes || props.disablePlayButton) return;
+  if (
+    props.item.media_type != MediaType.ARTIST &&
+    props.item.media_type != MediaType.ALBUM
+  )
+    return;
+  handlePlayBtnClick(
+    props.item,
+    e.clientX,
+    e.clientY,
+    props.parentItem,
+    undefined,
+    props.sortBy,
+  );
 };
 // Long-press on touch devices: open the same context menu as right-click.
 const onHold = (e: TouchEvent) => {
