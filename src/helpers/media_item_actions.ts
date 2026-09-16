@@ -19,6 +19,10 @@ import { $t } from "@/plugins/i18n";
 import router from "@/plugins/router";
 import { store } from "@/plugins/store";
 import { toast } from "vue-sonner";
+import {
+  forceAutoplayIfConfigured,
+  WHOLE_COLLECTION_TYPES,
+} from "@/helpers/autoplay_on_bulk_play";
 
 // Click behaviour is configured on the queue controller so every client resolves it
 // the same way; these are the values that differ from the (server) default.
@@ -84,6 +88,9 @@ export const handlePlayBtnClick = async function (
       }
     }
     // else: play the item directly
+    if (WHOLE_COLLECTION_TYPES.has(item.media_type)) {
+      forceAutoplayIfConfigured();
+    }
     api.playMedia(item).catch(onPlayError);
     return;
   }

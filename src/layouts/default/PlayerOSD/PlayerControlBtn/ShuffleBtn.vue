@@ -10,6 +10,7 @@
     :data-dynamic="isDynamic || undefined"
     variant="button"
     @click="toggleShuffle"
+    @contextmenu="onContextMenu"
   >
     <ShuffleIcon
       :size="size"
@@ -26,9 +27,11 @@ import ShuffleIcon from "@/layouts/default/PlayerOSD/PlayerControlBtn/ShuffleIco
 import { getValueFromSources } from "@/helpers/utils";
 import { useExternalSource } from "@/composables/externalSource";
 import { resolveActiveSourceId } from "@/composables/activeSource";
+import { forceAutoplayIfConfigured } from "@/helpers/autoplay_on_bulk_play";
 import api from "@/plugins/api";
 import { isQueueInfiniteStream } from "@/plugins/api/helpers";
-import { Player, PlayerQueue } from "@/plugins/api/interfaces";
+import { MediaType, Player, PlayerQueue } from "@/plugins/api/interfaces";
+import { eventbus } from "@/plugins/eventbus";
 import { $t } from "@/plugins/i18n";
 import { computed, toRef } from "vue";
 
@@ -121,6 +124,37 @@ function toggleShuffle() {
     !shuffleActive.value,
     resolveActiveSourceId(compProps.player),
   );
+}
+
+// Right-click: shuffle one of the queue's own sources (the artist/album/
+// playlist it's playing from) instead of just toggling the shuffle flag on
+// whatever's already queued.
+const shuffleSources = computed(() =>
+  (compProps.playerQueue?.sources ?? []).filter((source) =>
+    [MediaType.ARTIST, MediaType.ALBUM, MediaType.PLAYLIST].includes(
+      source.media_type,
+    ),
+  ),
+);
+
+function onContextMenu(event: MouseEvent) {
+  if (!compProps.player || shuffleSources.value.length === 0) return;
+  event.preventDefault();
+  const queueId = compProps.playerQueue?.queue_id;
+  eventbus.emit("contextmenu", {
+    posX: event.clientX,
+    posY: event.clientY,
+    items: shuffleSources.value.map((source) => ({
+      label: $t("shuffle_this", [source.name]),
+      action: () => {
+        forceAutoplayIfConfigured();
+        api.playMedia(source.uri, undefined, {
+          shuffle: true,
+          queue_id: queueId,
+        });
+      },
+    })),
+  });
 }
 </script>
 

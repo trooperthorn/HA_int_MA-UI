@@ -147,6 +147,10 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  forceAutoplayIfConfigured,
+  WHOLE_COLLECTION_TYPES,
+} from "@/helpers/autoplay_on_bulk_play";
 import { getLucideIcon, PLAYER_ICON_FALLBACK } from "@/helpers/icon";
 import api from "@/plugins/api";
 import { ContextMenuDialogEvent, eventbus } from "@/plugins/eventbus";
@@ -461,6 +465,7 @@ export const showPlayMenuForMediaItem = async function (
       label: "play_shuffled",
       labelArgs: [],
       action: () => {
+        forceAutoplayIfConfigured();
         api.playMedia(
           playableItems.map((x) => x.uri),
           QueueOption.REPLACE,
@@ -1473,6 +1478,13 @@ const buildEnqueueMenuItems = function (
   ].map((option) => ({
     label: $t(`queue_option.${option}`),
     action: () => {
+      if (
+        (option === QueueOption.PLAY || option === QueueOption.REPLACE) &&
+        (items.length > 1 ||
+          (items[0] && WHOLE_COLLECTION_TYPES.has(items[0].media_type)))
+      ) {
+        forceAutoplayIfConfigured();
+      }
       api.playMedia(
         items.map((x) => x.uri),
         option,

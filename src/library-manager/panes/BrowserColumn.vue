@@ -76,6 +76,8 @@
           }"
           :style="{ transform: `translateY(${vRow.start}px)` }"
           @click="onRowClick($event, vRow.index)"
+          @dblclick="onRowDoubleClick($event, vRow.index)"
+          @contextmenu="onRowContextMenu($event, vRow.index)"
         >
           <span v-if="vRow.item" class="truncate">{{ vRow.item.name }}</span>
           <span v-else class="browser-column__skeleton"></span>
@@ -90,6 +92,8 @@ import { Search, X } from "@lucide/vue";
 import { useVirtualizer } from "@tanstack/vue-virtual";
 import { computed, ref, watch } from "vue";
 import { Spinner } from "@/components/ui/spinner";
+import { useQueuePlaybackPreferences } from "@/composables/useQueuePlaybackPreferences";
+import { handlePlayBtnClick } from "@/helpers/media_item_actions";
 import type { GridItem } from "../columns";
 
 const ROW_HEIGHT = 24;
@@ -200,6 +204,24 @@ function select(index: number, additive: boolean) {
 function onRowClick(event: MouseEvent, index: number) {
   scrollRef.value?.focus({ preventScroll: true });
   select(index, event.ctrlKey || event.metaKey);
+}
+
+const { flag: playbackFlag } = useQueuePlaybackPreferences();
+
+function onRowDoubleClick(event: MouseEvent, index: number) {
+  if (!playbackFlag("playOnBrowserClick")) return;
+  const item = props.items[index];
+  if (!item) return;
+  void handlePlayBtnClick(item, event.clientX, event.clientY, undefined, false);
+}
+
+function onRowContextMenu(event: MouseEvent, index: number) {
+  if (!playbackFlag("playOnBrowserClick")) return;
+  const item = props.items[index];
+  if (!item) return;
+  event.preventDefault();
+  select(index, false);
+  void handlePlayBtnClick(item, event.clientX, event.clientY, undefined, true);
 }
 
 function onKeydown(event: KeyboardEvent) {

@@ -1178,6 +1178,7 @@
   },
   "shuffle_disable": "Disable shuffle",
   "shuffle_enable": "Enable shuffle",
+  "shuffle_this": "Shuffle {0}",
   "open_dsp_settings": "Open DSP settings",
   "audiobook": "Audiobook",
   "audiobooks": "Audiobooks",
