@@ -225,6 +225,12 @@ const nodes = computed<SettingsTreeNode[]>(() =>
           icon: "mdi-keyboard",
           route: { name: "frontendkeyboard" },
         },
+        {
+          id: "frontendplayermenu",
+          label: t("settings.player_menu"),
+          icon: "mdi-format-list-bulleted",
+          route: { name: "frontendplayermenu" },
+        },
       ];
     }
     return node;

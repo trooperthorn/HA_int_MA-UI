@@ -24,35 +24,37 @@
       :title="$t('tracks')"
       :refresh-on-parent-update="true"
     />
-    <br />
-    <ItemsListing
-      v-if="itemDetails"
-      itemtype="albumversions"
-      :parent-item="itemDetails"
-      :show-provider="true"
-      :show-favorites-only-filter="false"
-      :show-refresh-button="false"
-      :load-items="loadAlbumVersions"
-      :sort-keys="['provider', 'name', 'year']"
-      :title="$t('other_versions')"
-      :hide-on-empty="true"
-      :refresh-on-parent-update="true"
-    />
-    <br />
-    <!-- media images -->
-    <MediaItemImages
-      v-if="
-        itemDetails?.provider == 'library' &&
-        itemDetails?.metadata?.images &&
-        authManager.hasScope(Scope.LIBRARY_MANAGE)
-      "
-      v-model="itemDetails.metadata.images"
-      @update:model-value="UpdateItemInDb"
-    />
-    <br />
-    <!-- provider mapping details -->
-    <ProviderDetails v-if="itemDetails" :item-details="itemDetails" />
-    <br />
+    <template v-if="!isPhoneSizedScreen()">
+      <br />
+      <ItemsListing
+        v-if="itemDetails"
+        itemtype="albumversions"
+        :parent-item="itemDetails"
+        :show-provider="true"
+        :show-favorites-only-filter="false"
+        :show-refresh-button="false"
+        :load-items="loadAlbumVersions"
+        :sort-keys="['provider', 'name', 'year']"
+        :title="$t('other_versions')"
+        :hide-on-empty="true"
+        :refresh-on-parent-update="true"
+      />
+      <br />
+      <!-- media images -->
+      <MediaItemImages
+        v-if="
+          itemDetails?.provider == 'library' &&
+          itemDetails?.metadata?.images &&
+          authManager.hasScope(Scope.LIBRARY_MANAGE)
+        "
+        v-model="itemDetails.metadata.images"
+        @update:model-value="UpdateItemInDb"
+      />
+      <br />
+      <!-- provider mapping details -->
+      <ProviderDetails v-if="itemDetails" :item-details="itemDetails" />
+      <br />
+    </template>
   </section>
 </template>
 
@@ -71,6 +73,7 @@ import {
   type Album,
 } from "@/plugins/api/interfaces";
 import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { isPhoneSizedScreen } from "@/plugins/breakpoint";
 
 export interface Props {
   itemId: string;

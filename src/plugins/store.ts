@@ -29,6 +29,10 @@ interface Store {
   // open the picker from there is to change the group, so its members show
   expandActivePlayerGroup: boolean;
   showFullscreenPlayer: boolean;
+  // one-shot request read (and cleared) by PlayerFullscreen when it opens, so
+  // a compact-bar shortcut can land straight on the lyrics panel instead of
+  // just the plain now-playing view
+  openFullscreenPlayerPanel?: "lyrics";
   frameless: boolean;
   showQueueItems: boolean;
   apiInitialized: boolean;

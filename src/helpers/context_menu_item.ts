@@ -9,6 +9,11 @@ export interface ContextMenuItem {
   label: string;
   // positional for a `{0}` message, named for a `{name}` one
   labelArgs?: Array<string | number> | Record<string, string | number>;
+  // Stable identity for a menu entry across its dynamic label variants (e.g.
+  // "power_off_player"/"power_on_player" share the id "power"), used by
+  // per-user menu order/visibility preferences. Only set where such a
+  // preference applies (currently the player/queue overflow menu).
+  menuId?: string;
   action?: () => void;
   icon?: string | Component;
   disabled?: boolean;

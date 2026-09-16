@@ -1,5 +1,9 @@
 <template>
-  <div class="w-auto" :class="hasWaveform ? 'h-8 md:h-10 lg:h-12' : 'h-6'">
+  <div
+    class="w-auto"
+    :class="hasWaveform ? 'h-8 md:h-10 lg:h-12' : 'h-6'"
+    @contextmenu.prevent="onTimelineContextMenu"
+  >
     <div v-if="store.activePlayer">
       <SliderRoot
         v-model="wrappedCurTimeValue"
@@ -33,7 +37,7 @@
           ></div>
           <WaveformTrack
             v-else
-            :data="waveform!"
+            :data="effectiveWaveform!"
             :color="color"
             :progress-percent="progressPercent"
             :hover-percent="hoverPercent"
@@ -137,7 +141,13 @@ import {
   type ResolvedChapter,
 } from "@/helpers/chapters";
 import { formatDuration } from "@/helpers/utils";
-import { useUserPreferences } from "@/composables/userPreferences";
+import {
+  useUserPreferences,
+  setUserPreference,
+} from "@/composables/userPreferences";
+import { useActiveTrackWaveform } from "@/composables/useActiveTrackWaveform";
+import { eventbus } from "@/plugins/eventbus";
+import { $t } from "@/plugins/i18n";
 import { ref, computed, watch, toRef, onUnmounted } from "vue";
 import {
   resolveActiveElapsedTime,
@@ -168,6 +178,28 @@ const { activeAudioSource } = useActiveAudioSource(
 );
 const { getPreference } = useUserPreferences();
 const showChapterProgress = getPreference("audiobook_chapter_progress", true);
+const showWaveformPref = getPreference("show_waveform", true);
+
+// a caller (the fullscreen player) can pass precomputed bins directly;
+// otherwise this timeline sources the currently playing track's bins itself,
+// so the compact player bar gets a waveform too without every caller wiring it
+const { waveformBins } = useActiveTrackWaveform();
+const effectiveWaveform = computed(() => props.waveform ?? waveformBins.value);
+
+function onTimelineContextMenu(evt: MouseEvent) {
+  eventbus.emit("contextmenu", {
+    posX: evt.clientX,
+    posY: evt.clientY,
+    items: [
+      {
+        label: $t("settings.show_waveform.label", "Waveform progress bar"),
+        selected: showWaveformPref.value,
+        action: () =>
+          void setUserPreference("show_waveform", !showWaveformPref.value),
+      },
+    ],
+  });
+}
 
 // local refs
 const showRemainingTime = ref(false);
@@ -364,7 +396,10 @@ const chapterTicks = computed(() => {
 // Waveform bins cover the full audiobook, so they no longer line up with the
 // slider when chapter-relative progress is enabled.
 const hasWaveform = computed(
-  () => !!props.waveform?.length && !currentChapter.value,
+  () =>
+    !!effectiveWaveform.value?.length &&
+    !currentChapter.value &&
+    showWaveformPref.value,
 );
 // Older Cast and Android TV runtimes need an opacity layer instead of color-mix().
 const trackBackgroundStyle = computed(() => ({

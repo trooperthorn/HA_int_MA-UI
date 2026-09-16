@@ -91,6 +91,7 @@ import {
   unsubscribeFromHAProperties,
 } from "./plugins/homeassistant";
 import { DEFAULT_PAGE_TITLE, getPageTitle } from "@/helpers/pageTitle";
+import { installBackNavigationGuard } from "@/helpers/playback_continuity";
 import type { User } from "./plugins/api/interfaces";
 import { remoteConnectionManager } from "./plugins/remote";
 import { httpProxyBridge } from "./plugins/remote/http-proxy";
@@ -505,6 +506,7 @@ const completeInitialization = async () => {
 
 onMounted(async () => {
   initGlobalShortcutsSync();
+  installBackNavigationGuard(router);
 
   // TODO: Remove localStorage fallback once migration period is over (language moved to user preferences)
   const langPref =

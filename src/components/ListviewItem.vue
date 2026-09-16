@@ -10,6 +10,7 @@
       'album-track-row': albumTrackView,
     }"
     @click.stop="onClick"
+    @dblclick.stop="onDoubleClick"
     @menu.stop="onMenu"
   >
     <template #prepend>
@@ -461,6 +462,27 @@ const onClick = function (evt: Event) {
     mouseEvt.clientX,
     mouseEvt.clientY,
     compProps.parentItem,
+  );
+};
+
+// double-clicking an artist/album navigates by default (single click); play
+// it instead, the same as clicking its play button
+const onDoubleClick = function (evt: Event) {
+  if (compProps.showCheckboxes) return;
+  if (
+    compProps.item.media_type != MediaType.ARTIST &&
+    compProps.item.media_type != MediaType.ALBUM
+  )
+    return;
+  if (!compProps.item.is_playable) return;
+  const mouseEvt = evt as MouseEvent;
+  handlePlayBtnClick(
+    compProps.item,
+    mouseEvt.clientX,
+    mouseEvt.clientY,
+    compProps.parentItem,
+    undefined,
+    compProps.sortBy,
   );
 };
 

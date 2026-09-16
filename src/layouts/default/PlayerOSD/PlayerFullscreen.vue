@@ -752,6 +752,17 @@ watch(
   },
 );
 
+// a compact-bar shortcut can ask for a panel to be open the moment the
+// fullscreen player opens; one-shot, cleared right after it's read
+watch(
+  () => store.showFullscreenPlayer,
+  (open) => {
+    if (!open || !store.openFullscreenPlayerPanel) return;
+    if (store.openFullscreenPlayerPanel === "lyrics") showLyrics.value = true;
+    store.openFullscreenPlayerPanel = undefined;
+  },
+);
+
 // Whether the right-hand column (queue list or lyrics) is visible. Used to
 // collapse the media details column on small/narrow screens.
 const showRightColumn = computed(

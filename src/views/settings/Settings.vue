@@ -780,6 +780,9 @@ const breadcrumbItems = computed(() => {
     .with("frontendkeyboard", () => {
       items.push({ title: t("settings.keyboard.title"), disabled: true });
     })
+    .with("frontendplayermenu", () => {
+      items.push({ title: t("settings.player_menu"), disabled: true });
+    })
     .with("backgroundtasks", () => {
       items.push({
         title: t("background_tasks.title"),
