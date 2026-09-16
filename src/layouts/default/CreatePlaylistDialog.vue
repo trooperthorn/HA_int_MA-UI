@@ -5,7 +5,7 @@
 -->
 <template>
   <Dialog :key="dialogKey" v-model:open="showDialog">
-    <DialogContent class="sm:max-w-[500px]">
+    <DialogContent class="w-fit min-w-[320px] sm:max-w-[500px]">
       <DialogHeader>
         <DialogTitle class="mb-2">
           {{ $t(queueId ? "save_queue_as_playlist" : "new_playlist") }}
