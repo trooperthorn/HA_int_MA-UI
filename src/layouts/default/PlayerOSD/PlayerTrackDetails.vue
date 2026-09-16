@@ -95,18 +95,37 @@
         </div>
       </div>
     </template>
-    <!-- append chip(s): quality -->
+    <!-- append chip(s): lyrics, crossfade, quality -->
     <template #append>
-      <!-- format -->
       <div
-        v-if="
-          hasActiveAudioPath &&
-          !getBreakpointValue({ breakpoint: 'phone' }) &&
-          showQualityDetailsBtn
-        "
-        class="pl-4"
+        v-if="!getBreakpointValue({ breakpoint: 'phone' })"
+        class="d-flex align-center pl-2"
+        style="gap: 4px"
       >
-        <QualityDetailsBtn />
+        <button
+          v-if="lyricsAvailable"
+          type="button"
+          class="player-track-append-btn"
+          :aria-label="$t('lyrics')"
+          :title="$t('lyrics')"
+          @click.stop="openLyrics"
+        >
+          <MicVocal :size="16" />
+        </button>
+        <button
+          v-if="showCrossfade"
+          type="button"
+          class="player-track-append-btn"
+          :class="{ 'player-track-append-btn--active': crossfadeEnabled }"
+          :aria-label="$t('crossfade')"
+          :title="$t('crossfade')"
+          @click.stop="toggleCrossfade"
+        >
+          <CrossfadeIcon :size="16" :smart="smartCrossfadeActive" />
+        </button>
+        <div v-if="hasActiveAudioPath && showQualityDetailsBtn" class="pl-2">
+          <QualityDetailsBtn />
+        </div>
       </div>
     </template>
     <!-- subtitle: off state or artist(s) + album, led by the active source -->
@@ -199,13 +218,21 @@ import { resolveActiveElapsedTime } from "@/helpers/activeElapsedTime";
 import { resolveCurrentChapter } from "@/helpers/chapters";
 import { nowPlayingImageUrl } from "@/helpers/now_playing_image";
 import { ImageColorPalette } from "@/helpers/utils";
+import api from "@/plugins/api";
+import {
+  isQueueInfiniteStream,
+  queueSourceCrossfadeProvider,
+} from "@/plugins/api/helpers";
 import { MediaType, PlaybackState, PlayerType } from "@/plugins/api/interfaces";
 import { getBreakpointValue } from "@/plugins/breakpoint";
+import { $t } from "@/plugins/i18n";
 import { store } from "@/plugins/store";
 import { computed, onUnmounted, ref, watch } from "vue";
 import { useUserPreferences } from "@/composables/userPreferences";
 import { useActiveAudioPath } from "@/composables/useActiveAudioPath";
 import { useNowPlayingSource } from "@/composables/nowPlayingSource";
+import { MicVocal } from "@lucide/vue";
+import CrossfadeIcon from "@/layouts/default/PlayerOSD/PlayerControlBtn/CrossfadeIcon.vue";
 import NowPlayingSourceBadge from "./NowPlayingSourceBadge.vue";
 import PlayerFullscreen from "./PlayerFullscreen.vue";
 
@@ -315,6 +342,44 @@ function onTitleClick() {
 const nowPlayingArt = computed(() =>
   nowPlayingImageUrl(store.activePlayer, store.curQueueItem, 512),
 );
+
+// --- lyrics shortcut: opens the fullscreen player straight to its lyrics
+// panel; availability there is what decides whether lyrics actually show
+// (falls back to the plain now-playing view when the track has none), so
+// this only needs to know it's a track worth trying, not fetch lyrics itself
+const lyricsAvailable = computed(
+  () => store.curQueueItem?.media_item?.media_type === MediaType.TRACK,
+);
+function openLyrics() {
+  store.openFullscreenPlayerPanel = "lyrics";
+  store.showFullscreenPlayer = true;
+}
+
+// --- crossfade: same direct toggle as the fullscreen header, mirrored here
+// so it's reachable without opening the fullscreen player
+const crossfadeEnabled = computed(
+  () => store.activePlayerQueue?.crossfade_enabled === true,
+);
+const smartFadesActive = computed(
+  () => store.activePlayerQueue?.smart_fades_active === true,
+);
+const smartCrossfadeActive = computed(
+  () =>
+    crossfadeEnabled.value &&
+    smartFadesActive.value &&
+    !queueSourceCrossfadeProvider(store.activePlayerQueue),
+);
+const showCrossfade = computed(() => {
+  const q = store.activePlayerQueue;
+  if (!q || !q.active) return false;
+  if (isQueueInfiniteStream(q)) return false;
+  return "crossfade_enabled" in q;
+});
+function toggleCrossfade() {
+  const q = store.activePlayerQueue;
+  if (!q) return;
+  api.queueCommandCrossfade(q.queue_id, !q.crossfade_enabled);
+}
 </script>
 
 <style scoped>
@@ -380,6 +445,29 @@ const nowPlayingArt = computed(() =>
   letter-spacing: 0.1em;
   border-radius: 2px;
   margin-right: 30px;
+}
+
+.player-track-append-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  opacity: 0.75;
+}
+
+.player-track-append-btn:hover {
+  opacity: 1;
+  background: rgba(var(--v-theme-fg, 0, 0, 0), 0.08);
+}
+
+.player-track-append-btn--active {
+  opacity: 1;
+  color: rgb(var(--v-theme-primary));
 }
 
 .icon-thumb {
