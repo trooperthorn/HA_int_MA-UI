@@ -21,8 +21,13 @@
             :key="playlist.item_id"
             type="button"
             class="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-accent"
-            @click="addToPlaylist(playlist)"
+            @click="toggleSelected(playlist)"
           >
+            <Checkbox
+              :model-value="selectedPlaylistIds.has(playlist.item_id)"
+              class="shrink-0"
+              @click.stop="toggleSelected(playlist)"
+            />
             <div class="shrink-0">
               <MediaItemThumb :item="playlist" :size="50" />
             </div>
@@ -74,6 +79,16 @@
           </button>
         </div>
       </ScrollArea>
+
+      <div
+        v-if="selectedPlaylistIds.size"
+        class="flex items-center justify-between gap-3 border-t px-4 py-3"
+      >
+        <span class="text-sm text-muted-foreground">
+          {{ $t("playlist_selected_count", [selectedPlaylistIds.size]) }}
+        </span>
+        <Button @click="confirmAddToPlaylists">{{ $t("done") }}</Button>
+      </div>
     </SheetContent>
   </Sheet>
 
@@ -120,6 +135,7 @@
 import MediaItemThumb from "@/components/MediaItemThumb.vue";
 import ProviderIcon from "@/components/ProviderIcon.vue";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -158,6 +174,7 @@ const playlists = ref<Playlist[]>([]);
 const createPlaylistProviders = ref<string[]>([]);
 const parentItem = ref<MediaItemType>();
 const selectedItems = ref<MediaItemTypeOrItemMapping[]>([]);
+const selectedPlaylistIds = ref<Set<string>>(new Set());
 const showNameDialog = ref(false);
 const newPlaylistName = ref("");
 const newPlaylistProvider = ref<ProviderInstance>();
@@ -171,6 +188,7 @@ onMounted(() => {
     show.value = true;
     selectedItems.value = evt.items;
     parentItem.value = evt.parentItem;
+    selectedPlaylistIds.value = new Set();
     await fetchPlaylists();
   });
   onBeforeUnmount(() => {
@@ -300,11 +318,26 @@ const fetchPlaylists = async function () {
   }
 };
 const addToPlaylist = async function (value: MediaItemType) {
-  // add item(s) to playlist
-  api.addPlaylistTracks(
+  // add item(s) to a single playlist
+  await api.addPlaylistTracks(
     value.item_id,
     selectedItems.value.map((x) => x.uri),
   );
+};
+const toggleSelected = function (playlist: Playlist) {
+  const ids = new Set(selectedPlaylistIds.value);
+  if (ids.has(playlist.item_id)) {
+    ids.delete(playlist.item_id);
+  } else {
+    ids.add(playlist.item_id);
+  }
+  selectedPlaylistIds.value = ids;
+};
+const confirmAddToPlaylists = async function () {
+  const targets = playlists.value.filter((p) =>
+    selectedPlaylistIds.value.has(p.item_id),
+  );
+  await Promise.all(targets.map((playlist) => addToPlaylist(playlist)));
   close();
 };
 const newPlaylist = function (provId: string) {
@@ -374,7 +407,8 @@ async function createNamedPlaylist(name: string, provider: ProviderInstance) {
     provider.instance_id,
     supportedMediaTypes,
   );
-  addToPlaylist(playlist);
+  await addToPlaylist(playlist);
+  close();
 }
 </script>
 
