@@ -603,6 +603,15 @@ export const routes: RouteRecordRaw[] = [
             props: true,
           },
           {
+            path: "frontend/player-menu",
+            name: "frontendplayermenu",
+            component: () =>
+              import(
+                /* webpackChunkName: "frontendplayermenu" */ "@/views/settings/PlayMenuSettings.vue"
+              ),
+            props: true,
+          },
+          {
             path: "users",
             name: "usersettings",
             component: () =>

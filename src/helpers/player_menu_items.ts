@@ -35,6 +35,7 @@ import { getPlayerSetupLabel } from "@/helpers/player_config";
 import { togglePlayerPower } from "@/helpers/player_group_playback";
 import { errorMessage } from "@/helpers/ai_radio";
 import { canUseQueueDj } from "@/helpers/ai_radio_access";
+import { applyPlayerMenuPreference } from "@/helpers/player_menu_preferences";
 import { toast } from "vue-sonner";
 
 export const getPlayerSetupMenuItem = (
@@ -83,6 +84,7 @@ export const getPlayerMenuItems = (
   // power off/on (player menu only)
   if (isPlayer && player?.power_control != PLAYER_CONTROL_NONE) {
     menuItems.push({
+      menuId: "power",
       label: player.powered ? "power_off_player" : "power_on_player",
       labelArgs: [],
       action: () => {
@@ -98,6 +100,7 @@ export const getPlayerMenuItems = (
     player?.playback_state == "paused"
   ) {
     menuItems.push({
+      menuId: "stop",
       label: "stop_playback",
       labelArgs: [],
       action: () => {
@@ -113,7 +116,7 @@ export const getPlayerMenuItems = (
     player?.playback_state == "paused" ||
     sleepTimerActive(player)
   ) {
-    menuItems.push(getSleepTimerMenuItem(player));
+    menuItems.push({ menuId: "sleep_timer", ...getSleepTimerMenuItem(player) });
   }
 
   const isDynamic = playerQueue?.is_dynamic === true;
@@ -136,6 +139,7 @@ export const getPlayerMenuItems = (
       ? shuffleSource.shuffle_enabled === true
       : orderableQueue!.shuffle_enabled;
     menuItems.push({
+      menuId: "shuffle",
       label: shuffleEnabled ? "shuffle_disable" : "shuffle_enable",
       labelArgs: [],
       action: () => {
@@ -158,6 +162,7 @@ export const getPlayerMenuItems = (
       ? (repeatSource.repeat_mode ?? RepeatMode.OFF)
       : orderableQueue!.repeat_mode;
     menuItems.push({
+      menuId: "repeat",
       label: "select_repeat_mode",
       labelArgs: [],
       // keys spelled out so they stay greppable for the translation sync
@@ -185,6 +190,7 @@ export const getPlayerMenuItems = (
   const { overlayAvailable, openOverlayDialog } = useAudioOverlay();
   if (isQueue && playerQueue && overlayAvailable.value) {
     menuItems.push({
+      menuId: "audio_overlay",
       label: "audio_overlay",
       labelArgs: [],
       action: () => {
@@ -201,6 +207,7 @@ export const getPlayerMenuItems = (
     const { announcementAvailable, openAnnouncementDialog } = useAnnouncement();
     if (announcementAvailable.value) {
       menuItems.push({
+        menuId: "announce",
         label: "play_announcement",
         labelArgs: [],
         action: () => {
@@ -214,6 +221,7 @@ export const getPlayerMenuItems = (
   // transfer queue (both menus; only when the queue is the active source)
   if (playerQueue?.active && playerQueue.items > 0) {
     menuItems.push({
+      menuId: "transfer",
       label: "transfer_queue",
       icon: "mdi-swap-horizontal",
       subItems: Object.values(api.players)
@@ -244,6 +252,7 @@ export const getPlayerMenuItems = (
   // clear queue (both menus; only when the queue has items)
   if (playerQueue?.items && playerQueue.items > 0) {
     menuItems.push({
+      menuId: "clear_queue",
       label: "queue_clear",
       labelArgs: [],
       action: () => {
@@ -261,6 +270,7 @@ export const getPlayerMenuItems = (
     authManager.hasScope(Scope.LIBRARY_WRITE)
   ) {
     menuItems.push({
+      menuId: "save_as_playlist",
       label: "save_queue_as_playlist",
       labelArgs: [],
       action: () => {
@@ -276,6 +286,7 @@ export const getPlayerMenuItems = (
   );
   if (!player.synced_to && selectableSources.length > 1) {
     menuItems.push({
+      menuId: "select_source",
       label: "select_source",
       labelArgs: [],
       icon: "mdi-import",
@@ -321,6 +332,7 @@ export const getPlayerMenuItems = (
         ? hosts.value.find((h) => h.id === show.host_id)
         : undefined;
       menuItems.push({
+        menuId: "ai_dj",
         label: host ? "ai_dj_show_on_air" : "ai_dj_show_on_air_unknown",
         labelArgs: host ? [host.name] : [],
         icon: markRaw(Sparkles),
@@ -329,6 +341,7 @@ export const getPlayerMenuItems = (
     } else {
       const activeHostId = queueDjStatus.value[queueId];
       menuItems.push({
+        menuId: "ai_dj",
         label: "ai_dj",
         labelArgs: [],
         icon: markRaw(Sparkles),
@@ -361,6 +374,7 @@ export const getPlayerMenuItems = (
   );
   if (isPlayer && selectableSoundModes.length > 1) {
     menuItems.push({
+      menuId: "sound_mode",
       label: "select_sound_mode",
       labelArgs: [],
       icon: "mdi-music-note-eighth",
@@ -387,6 +401,7 @@ export const getPlayerMenuItems = (
   // enabled preference is reactive store state)
   if (visualizerProviderAvailable()) {
     menuItems.push({
+      menuId: "milkdrop",
       label: "settings.visualizer_enabled.label",
       icon: markRaw(() =>
         h(Droplet, {
@@ -410,6 +425,7 @@ export const getPlayerMenuItems = (
     supportsSyncAdjust(player)
   ) {
     menuItems.push({
+      menuId: "audio_delay",
       label: "player_select.sync_adjust",
       labelArgs: [],
       icon: markRaw(Timer),
@@ -423,6 +439,7 @@ export const getPlayerMenuItems = (
   if (isPlayer && store.currentUser) {
     const hidden = isHiddenPlayer(player.player_id);
     menuItems.push({
+      menuId: "hide_player",
       label: hidden
         ? "player_select.unhide_player"
         : "player_select.hide_player",
@@ -442,6 +459,7 @@ export const getPlayerMenuItems = (
     if (isPlayer) {
       // the player settings page links on to the other sections from there
       menuItems.push({
+        menuId: "settings",
         label: "open_settings",
         labelArgs: [],
         action: openSettings(`/settings/editplayer/${player.player_id}`),
@@ -469,6 +487,7 @@ export const getPlayerMenuItems = (
         });
       }
       menuItems.push({
+        menuId: "settings",
         label: "open_settings",
         labelArgs: [],
         icon: "mdi-cog-outline",
@@ -477,7 +496,7 @@ export const getPlayerMenuItems = (
     }
   }
 
-  return menuItems;
+  return applyPlayerMenuPreference(menuItems);
 };
 
 /** Assigns (or clears) a queue's AI DJ host, reporting a failed command to the user. */
