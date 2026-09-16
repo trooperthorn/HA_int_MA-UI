@@ -5,7 +5,7 @@
 // whatever queued finishes. Kept standalone (not in media_item_actions.ts or
 // ItemContextMenu.vue) since those two already import from each other.
 import { useQueuePlaybackPreferences } from "@/composables/useQueuePlaybackPreferences";
-import api from "@/plugins/api";
+import { api } from "@/plugins/api";
 import { MediaType } from "@/plugins/api/interfaces";
 import { store } from "@/plugins/store";
 

@@ -342,13 +342,16 @@ onBeforeUnmount(() => {
 @media (max-width: 600px) {
   .ed-shelf {
     --ed-gutter: 16px;
-    margin-bottom: 16px;
+    margin-bottom: 10px;
   }
   .ed-shelf__head {
     margin-bottom: 0;
   }
   .ed-shelf__title {
-    font-size: 19px;
+    font-size: 17px;
+  }
+  .ed-shelf__subtitle {
+    font-size: 12px;
   }
   .ed-shelf__nav {
     display: none;

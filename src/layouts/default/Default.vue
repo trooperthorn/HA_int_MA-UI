@@ -16,9 +16,10 @@ import { store } from "@/plugins/store";
 import { watch } from "vue";
 import api from "@/plugins/api";
 import { isSelectablePlayer } from "@/helpers/players";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 
 const route = useRoute();
+const router = useRouter();
 watch(
   // make sure it's retriggered when players array is populated
   [() => route.query.player, () => Object.keys(api.players).length],
@@ -46,6 +47,35 @@ watch(
     store.showFullscreenPlayer = !!showFullscreenPlayer;
   },
   { immediate: true },
+);
+// Mobile only: the fullscreen player is a Vuetify dialog, not a routed page,
+// so opening it left no history entry - the OS back button fell straight
+// through to whatever's behind the app (exiting the panel) instead of just
+// closing the dialog. Push a history entry while it's open so back closes it
+// first; `guarding` breaks the loop with the read-side watcher above, since
+// that one reacts to the same query param this one writes.
+let guardingFullscreenPlayerNav = false;
+watch(
+  () => store.showFullscreenPlayer,
+  (open) => {
+    if (!store.mobileLayout || guardingFullscreenPlayerNav) return;
+    const hasQueryFlag = !!route.query.showFullscreenPlayer;
+    if (open === hasQueryFlag) return;
+    guardingFullscreenPlayerNav = true;
+    const done = () => {
+      guardingFullscreenPlayerNav = false;
+    };
+    if (open) {
+      router
+        .push({ query: { ...route.query, showFullscreenPlayer: "1" } })
+        .then(done, done);
+    } else if (hasQueryFlag) {
+      router.back();
+      done();
+    } else {
+      done();
+    }
+  },
 );
 watch(
   () => route.query.frameless,

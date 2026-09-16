@@ -96,6 +96,10 @@
             :visible-components="{
               repeat: { isVisible: false },
               shuffle: { isVisible: false },
+              previous: {
+                isVisible: true,
+                icon: { staticWidth: '28px', staticHeight: '28px' },
+              },
               play: {
                 isVisible: true,
                 icon: {
@@ -104,8 +108,10 @@
                 },
                 size: 18,
               },
-              previous: { isVisible: false },
-              next: { isVisible: false },
+              next: {
+                isVisible: true,
+                icon: { staticWidth: '28px', staticHeight: '28px' },
+              },
             }"
           />
         </div>
