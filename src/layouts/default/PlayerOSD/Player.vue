@@ -36,8 +36,14 @@
                     staticHeight: '48px',
                   },
                 },
-                previous: { isVisible: getBreakpointValue('bp3') },
-                next: { isVisible: getBreakpointValue('bp3') },
+                previous: {
+                  isVisible: getBreakpointValue('bp3'),
+                  icon: { staticWidth: '48px', staticHeight: '48px' },
+                },
+                next: {
+                  isVisible: getBreakpointValue('bp3'),
+                  icon: { staticWidth: '48px', staticHeight: '48px' },
+                },
               }"
             />
 
@@ -96,6 +102,10 @@
             :visible-components="{
               repeat: { isVisible: false },
               shuffle: { isVisible: false },
+              previous: {
+                isVisible: true,
+                icon: { staticWidth: '28px', staticHeight: '28px' },
+              },
               play: {
                 isVisible: true,
                 icon: {
@@ -104,8 +114,10 @@
                 },
                 size: 18,
               },
-              previous: { isVisible: false },
-              next: { isVisible: false },
+              next: {
+                isVisible: true,
+                icon: { staticWidth: '28px', staticHeight: '28px' },
+              },
             }"
           />
         </div>

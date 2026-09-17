@@ -147,6 +147,10 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  forceAutoplayIfConfigured,
+  WHOLE_COLLECTION_TYPES,
+} from "@/helpers/autoplay_on_bulk_play";
 import { getLucideIcon, PLAYER_ICON_FALLBACK } from "@/helpers/icon";
 import api from "@/plugins/api";
 import { ContextMenuDialogEvent, eventbus } from "@/plugins/eventbus";
@@ -461,6 +465,7 @@ export const showPlayMenuForMediaItem = async function (
       label: "play_shuffled",
       labelArgs: [],
       action: () => {
+        forceAutoplayIfConfigured();
         api.playMedia(
           playableItems.map((x) => x.uri),
           QueueOption.REPLACE,
@@ -537,6 +542,30 @@ export const getContextMenuItems = async function (
         });
       },
       icon: Info,
+    });
+  }
+
+  // artist: jump straight to its Top Tracks + Albums, same destination
+  // "Show info" opens - a distinctly-labelled shortcut since users browsing
+  // by right-click don't necessarily read "info" as "the tracks and albums".
+  if (
+    items.length === 1 &&
+    firstItem.media_type === MediaType.ARTIST &&
+    itemIsAvailable(firstItem)
+  ) {
+    contextMenuItems.push({
+      label: "artist_top_tracks_and_albums",
+      labelArgs: [],
+      action: () => {
+        router.push({
+          name: firstItem.media_type,
+          params: {
+            itemId: firstItem.item_id,
+            provider: firstItem.provider,
+          },
+        });
+      },
+      icon: ListMusic,
     });
   }
 
@@ -1473,6 +1502,13 @@ const buildEnqueueMenuItems = function (
   ].map((option) => ({
     label: $t(`queue_option.${option}`),
     action: () => {
+      if (
+        (option === QueueOption.PLAY || option === QueueOption.REPLACE) &&
+        (items.length > 1 ||
+          (items[0] && WHOLE_COLLECTION_TYPES.has(items[0].media_type)))
+      ) {
+        forceAutoplayIfConfigured();
+      }
       api.playMedia(
         items.map((x) => x.uri),
         option,

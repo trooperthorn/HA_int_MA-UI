@@ -1374,12 +1374,16 @@ onBeforeUnmount(() => {
 
 @media (max-width: 600px) {
   .ed-section {
-    margin-bottom: 16px;
+    margin-bottom: 10px;
   }
   .ed-hero-row,
   .ed-genres {
     padding-left: 16px;
     padding-right: 16px;
+  }
+  .ed-hero-row__head,
+  .ed-genres__head {
+    margin-bottom: 8px;
   }
   .ed-hero-grid {
     margin-inline: -16px;
@@ -1388,10 +1392,16 @@ onBeforeUnmount(() => {
   }
   .ed-hero-row .ed-hero-grid :deep(.ed-hero) {
     flex: 0 0 82%;
-    height: 200px;
+    height: 100px;
+  }
+  .ed-hero-row .ed-hero-grid :deep(.ed-hero--large .ed-hero__title) {
+    font-size: 15px;
+  }
+  .ed-hero-row .ed-hero-grid :deep(.ed-hero--large .ed-hero__content) {
+    padding: 10px;
   }
   .ed-hero-row__title {
-    font-size: 22px;
+    font-size: 19px;
   }
   .ed-hero-nav {
     display: none;

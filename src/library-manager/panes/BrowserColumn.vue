@@ -49,20 +49,20 @@
       </div>
     </div>
     <div
+      class="browser-column__row browser-column__row--all"
+      role="option"
+      :aria-selected="selectedIds.length === 0"
+      :class="{ 'browser-column__row--selected': selectedIds.length === 0 }"
+      @click="emit('update:selectedIds', [])"
+    >
+      <span class="truncate">{{ allLabel }}</span>
+    </div>
+    <div
       ref="scrollRef"
       class="browser-column__scroll"
       tabindex="0"
       @keydown="onKeydown"
     >
-      <div
-        class="browser-column__row browser-column__row--all"
-        role="option"
-        :aria-selected="selectedIds.length === 0"
-        :class="{ 'browser-column__row--selected': selectedIds.length === 0 }"
-        @click="emit('update:selectedIds', [])"
-      >
-        <span class="truncate">{{ allLabel }}</span>
-      </div>
       <div class="browser-column__body" :style="{ height: `${totalSize}px` }">
         <div
           v-for="vRow in virtualRows"
@@ -76,6 +76,8 @@
           }"
           :style="{ transform: `translateY(${vRow.start}px)` }"
           @click="onRowClick($event, vRow.index)"
+          @dblclick="onRowDoubleClick($event, vRow.index)"
+          @contextmenu="onRowContextMenu($event, vRow.index)"
         >
           <span v-if="vRow.item" class="truncate">{{ vRow.item.name }}</span>
           <span v-else class="browser-column__skeleton"></span>
@@ -90,6 +92,8 @@ import { Search, X } from "@lucide/vue";
 import { useVirtualizer } from "@tanstack/vue-virtual";
 import { computed, ref, watch } from "vue";
 import { Spinner } from "@/components/ui/spinner";
+import { useQueuePlaybackPreferences } from "@/composables/useQueuePlaybackPreferences";
+import { handlePlayBtnClick } from "@/helpers/media_item_actions";
 import type { GridItem } from "../columns";
 
 const ROW_HEIGHT = 24;
@@ -151,8 +155,6 @@ const virtualizer = useVirtualizer(
     getScrollElement: () => scrollRef.value,
     estimateSize: () => ROW_HEIGHT,
     overscan: 8,
-    // the "All" row sits above the virtual list
-    paddingStart: ROW_HEIGHT,
   })),
 );
 
@@ -166,7 +168,7 @@ const virtualRows = computed(() =>
     return {
       key: String(vItem.key),
       index: vItem.index,
-      start: vItem.start - ROW_HEIGHT,
+      start: vItem.start,
       item,
       selected: !!item && selectedSet.value.has(item.item_id),
     };
@@ -202,6 +204,24 @@ function select(index: number, additive: boolean) {
 function onRowClick(event: MouseEvent, index: number) {
   scrollRef.value?.focus({ preventScroll: true });
   select(index, event.ctrlKey || event.metaKey);
+}
+
+const { flag: playbackFlag } = useQueuePlaybackPreferences();
+
+function onRowDoubleClick(event: MouseEvent, index: number) {
+  if (!playbackFlag("playOnBrowserClick")) return;
+  const item = props.items[index];
+  if (!item) return;
+  void handlePlayBtnClick(item, event.clientX, event.clientY, undefined, false);
+}
+
+function onRowContextMenu(event: MouseEvent, index: number) {
+  if (!playbackFlag("playOnBrowserClick")) return;
+  const item = props.items[index];
+  if (!item) return;
+  event.preventDefault();
+  select(index, false);
+  void handlePlayBtnClick(item, event.clientX, event.clientY, undefined, true);
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -414,12 +434,11 @@ defineExpose({
 }
 
 .browser-column__row--all {
-  position: sticky;
-  top: 0;
-  z-index: 1;
+  flex: none;
   background: rgb(var(--v-theme-panel));
   color: rgb(var(--v-theme-fg));
   font-weight: 500;
+  border-bottom: 1px solid rgba(var(--v-theme-fg), 0.08);
 }
 
 .browser-column__row:hover {

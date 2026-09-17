@@ -24,6 +24,63 @@
       </Button>
     </div>
 
+    <!-- client-side preferences, not server queue config - applies to every
+         queue/device, kept here per how the user actually thinks about it -->
+    <section class="playback-behavior">
+      <h3 class="playback-behavior__heading">
+        {{ $t("settings.playback_behavior.title") }}
+      </h3>
+      <p class="playback-behavior__description">
+        {{ $t("settings.playback_behavior.description") }}
+      </p>
+      <label class="playback-behavior__check">
+        <Switch
+          :model-value="flag('playOnBrowserClick')"
+          @update:model-value="setFlag('playOnBrowserClick', !!$event)"
+        />
+        <span>
+          <span class="playback-behavior__label">{{
+            $t("settings.playback_behavior.play_on_browser_click")
+          }}</span>
+          <span class="playback-behavior__hint">{{
+            $t("settings.playback_behavior.play_on_browser_click_description")
+          }}</span>
+        </span>
+      </label>
+      <label class="playback-behavior__check">
+        <Switch
+          :model-value="flag('albumOrderOverridesSort')"
+          @update:model-value="setFlag('albumOrderOverridesSort', !!$event)"
+        />
+        <span>
+          <span class="playback-behavior__label">{{
+            $t("settings.playback_behavior.album_order_overrides_sort")
+          }}</span>
+          <span class="playback-behavior__hint">{{
+            $t(
+              "settings.playback_behavior.album_order_overrides_sort_description",
+            )
+          }}</span>
+        </span>
+      </label>
+      <label class="playback-behavior__check">
+        <Switch
+          :model-value="flag('autoplayOnShuffleOrBulkPlay')"
+          @update:model-value="setFlag('autoplayOnShuffleOrBulkPlay', !!$event)"
+        />
+        <span>
+          <span class="playback-behavior__label">{{
+            $t("settings.playback_behavior.autoplay_on_shuffle_or_bulk_play")
+          }}</span>
+          <span class="playback-behavior__hint">{{
+            $t(
+              "settings.playback_behavior.autoplay_on_shuffle_or_bulk_play_description",
+            )
+          }}</span>
+        </span>
+      </label>
+    </section>
+
     <edit-config
       v-if="config"
       ref="editConfig"
@@ -50,6 +107,8 @@ import { api } from "@/plugins/api";
 import { ConfigValueType, PlayerQueueConfig } from "@/plugins/api/interfaces";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
+import { useQueuePlaybackPreferences } from "@/composables/useQueuePlaybackPreferences";
 import { hasAdvancedEntries } from "@/helpers/config_entry_ui";
 import { goBack } from "@/helpers/navigation";
 import { Info, SlidersHorizontal } from "@lucide/vue";
@@ -65,6 +124,7 @@ const config = ref<PlayerQueueConfig>();
 const editConfig = ref<InstanceType<typeof EditConfig>>();
 const loading = ref(false);
 const showAdvancedSettings = ref(false);
+const { flag, setFlag } = useQueuePlaybackPreferences();
 
 // props
 const props = defineProps<{
@@ -129,3 +189,49 @@ const onImmediateApply = async function (
     });
 };
 </script>
+
+<style scoped>
+.playback-behavior {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border: 1px solid rgba(var(--v-theme-fg), 0.1);
+  border-radius: 12px;
+}
+
+.playback-behavior__heading {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: rgba(var(--v-theme-fg), 0.65);
+}
+
+.playback-behavior__description {
+  margin: -8px 0 0;
+  font-size: 12px;
+  color: rgba(var(--v-theme-fg), 0.5);
+}
+
+.playback-behavior__check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.playback-behavior__label {
+  display: block;
+  font-size: 14px;
+}
+
+.playback-behavior__hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: rgba(var(--v-theme-fg), 0.5);
+}
+</style>

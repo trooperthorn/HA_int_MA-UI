@@ -279,7 +279,19 @@ describe("TrackGrid", () => {
 
     await rowAt(wrapper, 4).find(".track-grid__menu").trigger("click");
     expect(handleMenuBtnClick).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(handleMenuBtnClick).mock.calls[1][5]).toBe("name");
+    // sorted by Title (not Track #), and albumOrderOverridesSort defaults to
+    // on, so no explicit sort is forwarded - playback falls back to album
+    // order rather than the display sort order
+    expect(vi.mocked(handleMenuBtnClick).mock.calls[1][5]).toBeUndefined();
+  });
+
+  it("forwards the display sort to playback only when sorted by Track #", async () => {
+    const wrapper = mountGrid({ sortBy: "local:track_number" });
+    await rowAt(wrapper, 0).trigger("dblclick");
+    await flushPromises();
+    expect(vi.mocked(handlePlayBtnClick).mock.calls[0][5]).toBe(
+      "local:track_number",
+    );
   });
 
   it("hands the owner's menu entries along with the row menu", async () => {

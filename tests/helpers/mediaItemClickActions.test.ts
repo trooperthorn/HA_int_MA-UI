@@ -8,13 +8,17 @@
 import type { MusicAssistantApi } from "@/plugins/api";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
-const { mockPlayMedia, mockGetCoreConfigValue, mockRouterPush } = vi.hoisted(
-  () => ({
-    mockPlayMedia: vi.fn<MusicAssistantApi["playMedia"]>(),
-    mockGetCoreConfigValue: vi.fn(),
-    mockRouterPush: vi.fn(),
-  }),
-);
+const {
+  mockPlayMedia,
+  mockGetCoreConfigValue,
+  mockRouterPush,
+  mockQueueCommandAutoplay,
+} = vi.hoisted(() => ({
+  mockPlayMedia: vi.fn<MusicAssistantApi["playMedia"]>(),
+  mockGetCoreConfigValue: vi.fn(),
+  mockRouterPush: vi.fn(),
+  mockQueueCommandAutoplay: vi.fn(),
+}));
 
 vi.mock("@/plugins/api", () => ({
   api: {
@@ -22,6 +26,7 @@ vi.mock("@/plugins/api", () => ({
     players: {},
     playMedia: mockPlayMedia,
     getCoreConfigValue: mockGetCoreConfigValue,
+    queueCommandAutoplay: mockQueueCommandAutoplay,
   },
 }));
 
