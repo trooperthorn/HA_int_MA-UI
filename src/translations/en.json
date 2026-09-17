@@ -714,6 +714,16 @@
     },
     "queue_global_settings_hint": "These settings apply to this queue only. You can also configure the defaults that apply to all player queues.",
     "queue_global_settings_link": "Open global queue settings",
+    "playback_behavior": {
+      "title": "Playback behavior",
+      "description": "Applies everywhere you browse or play, on this device's account - not just this queue.",
+      "play_on_browser_click": "Double-click/right-click plays it now",
+      "play_on_browser_click_description": "In the Music Library browser's Artist/Album/Playlist columns, double-clicking or right-clicking an entry plays it immediately.",
+      "album_order_overrides_sort": "Play in album order",
+      "album_order_overrides_sort_description": "When sorted by anything other than Track #, still play tracks in their album track-number order instead of the current sort order.",
+      "autoplay_on_shuffle_or_bulk_play": "Autoplay on shuffle and bulk play",
+      "autoplay_on_shuffle_or_bulk_play_description": "Turn on Autoplay automatically when you shuffle an artist/album/playlist, play a multi-track selection, or play a whole album/playlist/artist."
+    },
     "protocol_provider_unavailable": "The player provider for this output protocol is currently unavailable.",
     "protocol_multi_info": "This player supports multiple output protocols. Music Assistant combines them into a single player. Select a protocol below to configure how it is used.",
     "protocol_configure_title": "Configure {name}",
