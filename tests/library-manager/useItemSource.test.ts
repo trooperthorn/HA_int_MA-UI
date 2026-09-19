@@ -23,6 +23,7 @@ const {
   mockBrowse,
   mockGetPlaylistTracks,
   mockGetArtistTracks,
+  mockGetArtistTopTracks,
   mockGetAlbumTracks,
   mockGetTrack,
   mockSubscribe,
@@ -30,6 +31,7 @@ const {
 } = vi.hoisted(() => ({
   mockGetPlaylistTracks: vi.fn<MusicAssistantApi["getPlaylistTracks"]>(),
   mockGetArtistTracks: vi.fn<MusicAssistantApi["getArtistTracks"]>(),
+  mockGetArtistTopTracks: vi.fn<MusicAssistantApi["getArtistTopTracks"]>(),
   mockGetAlbumTracks: vi.fn<MusicAssistantApi["getAlbumTracks"]>(),
   mockGetTrack: vi.fn<MusicAssistantApi["getTrack"]>(),
   mockGetLibraryTracks: vi.fn<MusicAssistantApi["getLibraryTracks"]>(),
@@ -52,6 +54,7 @@ vi.mock("@/plugins/api", () => {
     browse: mockBrowse,
     getPlaylistTracks: mockGetPlaylistTracks,
     getArtistTracks: mockGetArtistTracks,
+    getArtistTopTracks: mockGetArtistTopTracks,
     getAlbumTracks: mockGetAlbumTracks,
     getTrack: mockGetTrack,
     subscribe: mockSubscribe,
@@ -446,6 +449,40 @@ describe("useItemSource", () => {
       "Mango",
       "Zebra",
     ]);
+  });
+
+  it("falls back to top tracks when an artist has no in-library tracks", async () => {
+    mockGetArtistTracks.mockResolvedValue([]);
+    mockGetArtistTopTracks.mockResolvedValue([
+      track({ item_id: "t1", name: "Iris" }),
+    ]);
+    filter.value = {
+      ...filter.value,
+      mediaType: MediaType.TRACK,
+      artist: { item_id: "a1", provider: "library", name: "Goo Goo Dolls" },
+    };
+    const source = scope.run(() => useItemSource(filter))!;
+    await flushPromises();
+
+    expect(mockGetArtistTracks).toHaveBeenCalledWith("a1", "library");
+    expect(mockGetArtistTopTracks).toHaveBeenCalledWith("a1", "library");
+    expect(source.rows.value.map((row) => row.item_id)).toEqual(["t1"]);
+  });
+
+  it("does not call top tracks when the artist already has in-library tracks", async () => {
+    mockGetArtistTracks.mockResolvedValue([
+      track({ item_id: "t1", name: "Iris" }),
+    ]);
+    filter.value = {
+      ...filter.value,
+      mediaType: MediaType.TRACK,
+      artist: { item_id: "a1", provider: "library", name: "Goo Goo Dolls" },
+    };
+    const source = scope.run(() => useItemSource(filter))!;
+    await flushPromises();
+
+    expect(mockGetArtistTopTracks).not.toHaveBeenCalled();
+    expect(source.rows.value.map((row) => row.item_id)).toEqual(["t1"]);
   });
 
   it("keeps an artist's browse-scope tracks in track-number order when not sorting by title", async () => {
