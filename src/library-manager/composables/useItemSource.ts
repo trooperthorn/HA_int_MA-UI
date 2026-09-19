@@ -244,8 +244,18 @@ export function useItemSource(
         .then((items) => sortBrowseTracksLocally(current, items));
     }
     if (current.mediaType === MediaType.TRACK && current.artist) {
+      const { item_id, provider } = current.artist;
       return api
-        .getArtistTracks(current.artist.item_id, current.artist.provider)
+        .getArtistTracks(item_id, provider)
+        .then((items) =>
+          // A library-scoped artist only returns tracks already in the
+          // library (server-side, by design: music/artists/artist_tracks
+          // does not fall back to the provider catalog). When that's empty
+          // fall back to the cross-provider top-tracks listing so artists
+          // whose albums are library items but whose individual tracks
+          // aren't don't appear to have no songs at all.
+          items.length ? items : api.getArtistTopTracks(item_id, provider),
+        )
         .then((items) => sortBrowseTracksLocally(current, items));
     }
     if (current.mediaType === MediaType.ALBUM && current.artist) {
