@@ -53,6 +53,18 @@
           />
 
           <Button
+            v-if="showEqualizerButton"
+            variant="ghost-outline"
+            size="icon-xs"
+            class="ml-2 size-7"
+            :aria-label="$t('tooltip.equalizer')"
+            :tooltip="$t('tooltip.equalizer')"
+            @click.stop="openEqualizer"
+          >
+            <SlidersHorizontalIcon :size="16" />
+          </Button>
+
+          <Button
             variant="ghost-outline"
             size="icon-xs"
             class="ml-2 size-7"
@@ -559,15 +571,22 @@ import {
   PlaybackState,
   PlayerType,
   QueueItem,
+  Scope,
   Track,
 } from "@/plugins/api/interfaces";
 import { getBreakpointValue } from "@/plugins/breakpoint";
 import { eventbus } from "@/plugins/eventbus";
 import { $t } from "@/plugins/i18n";
+import { authManager } from "@/plugins/auth";
 import router from "@/plugins/router";
 import { store } from "@/plugins/store";
 import vuetify from "@/plugins/vuetify";
-import { ChevronDownIcon, EllipsisVerticalIcon, ListX } from "@lucide/vue";
+import {
+  ChevronDownIcon,
+  EllipsisVerticalIcon,
+  ListX,
+  SlidersHorizontalIcon,
+} from "@lucide/vue";
 import Color from "color";
 import {
   computed,
@@ -1197,6 +1216,22 @@ watch(
 const speedSupported = computed(() =>
   playbackSpeedSupported(store.curQueueItem),
 );
+
+// Quick access to the player's DSP/EQ editor. Same gating as the "settings.category.dsp"
+// entry in the overflow menu's settings submenu (getPlayerMenuItems): requires
+// player-config write and is meaningless for a group player.
+const showEqualizerButton = computed(
+  () =>
+    !!store.activePlayer &&
+    store.activePlayer.type !== PlayerType.GROUP &&
+    authManager.hasScope(Scope.CONFIG_PLAYERS_WRITE),
+);
+
+const openEqualizer = function () {
+  if (!store.activePlayer) return;
+  store.showFullscreenPlayer = false;
+  router.push(`/settings/editplayer/${store.activePlayer.player_id}/dsp`);
+};
 
 const openQueueMenu = function (evt: Event) {
   if (!store.activePlayer) return;

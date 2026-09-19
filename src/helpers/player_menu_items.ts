@@ -449,6 +449,27 @@ export const getPlayerMenuItems = (
     });
   }
 
+  // equalizer/DSP quick link (queue menu only; a dedicated button covers this
+  // in the fullscreen player's header, but the item stays here too for
+  // discoverability and for any surface that reuses this menu without that
+  // button). Same gating as the settings > DSP subitem below.
+  if (
+    isQueue &&
+    player.type !== PlayerType.GROUP &&
+    authManager.hasScope(Scope.CONFIG_PLAYERS_WRITE)
+  ) {
+    menuItems.push({
+      menuId: "equalizer",
+      label: "tooltip.equalizer",
+      labelArgs: [],
+      action: () => {
+        store.showFullscreenPlayer = false;
+        router.push(`/settings/editplayer/${player.player_id}/dsp`);
+      },
+      icon: "mdi-tune",
+    });
+  }
+
   // open the settings (both menus, for a role that changes player settings)
   if (authManager.hasScope(Scope.CONFIG_PLAYERS_WRITE)) {
     const openSettings = (path: string) => () => {

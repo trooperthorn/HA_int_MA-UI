@@ -469,6 +469,79 @@ describe("PlayerFullscreen player select button", () => {
   });
 });
 
+describe("PlayerFullscreen equalizer button", () => {
+  async function mountWithScope(
+    hasScope: boolean,
+  ): Promise<{ fullscreen: VueWrapper; routerPush: ReturnType<typeof vi.fn> }> {
+    const { store } = await import("@/plugins/store");
+    const { authManager } = await import("@/plugins/auth");
+    const router = (await import("@/plugins/router")).default as unknown as {
+      push: ReturnType<typeof vi.fn>;
+    };
+    (authManager.hasScope as ReturnType<typeof vi.fn>).mockImplementation(
+      () => hasScope,
+    );
+    const testStore = store as unknown as TestStore;
+    testStore.activePlayer = { player_id: "p1", group_members: [] };
+    testStore.showFullscreenPlayer = true;
+
+    wrapper = shallowMount(PlayerFullscreen, {
+      props: { colorPalette: EMPTY_COLOR_PALETTE },
+      global: {
+        mocks: { $vuetify: { display: { height: 900, mdAndUp: true } } },
+        stubs: {
+          "v-dialog": { template: "<div><slot /></div>" },
+          "v-card": { template: "<div><slot /></div>" },
+          "v-toolbar": { template: "<div><slot name='append' /></div>" },
+        },
+      },
+    });
+    await nextTick();
+    return { fullscreen: wrapper, routerPush: router.push };
+  }
+
+  afterEach(async () => {
+    const { authManager } = await import("@/plugins/auth");
+    const { BUILTIN_ROLE_SCOPES, scopeChecker } =
+      await import("../fixtures/scopes");
+    (authManager.hasScope as ReturnType<typeof vi.fn>).mockImplementation(
+      scopeChecker(BUILTIN_ROLE_SCOPES.user),
+    );
+  });
+
+  it("navigates to the active player's DSP editor and closes the fullscreen player", async () => {
+    const { store } = await import("@/plugins/store");
+    const testStore = store as unknown as TestStore;
+    const { fullscreen, routerPush } = await mountWithScope(true);
+
+    const button = fullscreen.get('[aria-label="tooltip.equalizer"]');
+    await button.trigger("click");
+
+    expect(routerPush).toHaveBeenCalledWith("/settings/editplayer/p1/dsp");
+    expect(testStore.showFullscreenPlayer).toBe(false);
+  });
+
+  it("hides the button for a role without player-config write access", async () => {
+    const { fullscreen } = await mountWithScope(false);
+
+    expect(fullscreen.find('[aria-label="tooltip.equalizer"]').exists()).toBe(
+      false,
+    );
+  });
+
+  it("hides the button when there is no active player", async () => {
+    const { store } = await import("@/plugins/store");
+    const testStore = store as unknown as TestStore;
+    const { fullscreen } = await mountWithScope(true);
+    testStore.activePlayer = undefined;
+    await nextTick();
+
+    expect(fullscreen.find('[aria-label="tooltip.equalizer"]').exists()).toBe(
+      false,
+    );
+  });
+});
+
 describe("PlayerFullscreen overflow menu", () => {
   async function openOverflowMenu(mediaType: MediaType) {
     const { store } = await import("@/plugins/store");
