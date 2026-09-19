@@ -7,7 +7,7 @@
     <div
       data-slot="command-input-wrapper"
       class="flex h-14 shrink-0 items-center gap-3 border-b px-4"
-      @keydown.enter.capture="dismissKeyboardOnTouch"
+      @keydown.enter.capture="onEnterKeydown"
     >
       <Search class="size-5 shrink-0 opacity-50" />
       <ListboxFilter
@@ -18,8 +18,11 @@
         enterkeyhint="done"
         :placeholder="$t('type_to_search')"
         class="placeholder:text-muted-foreground flex h-12 w-full rounded-md bg-transparent py-3 text-base outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
+        @blur="onInputBlur"
       />
-      <Spinner v-if="loading && queryActive" class="size-4 shrink-0" />
+      <!-- the debounce counts as searching here: it is the only feedback
+           while it runs, and it runs for seconds -->
+      <Spinner v-if="isSearching" class="size-4 shrink-0" />
       <button
         v-if="query"
         type="button"
@@ -134,8 +137,11 @@
         </CommandItem>
       </CommandGroup>
 
+      <!-- only a fetch actually in flight replaces the list; the debounce has
+           the spinner beside the input, so it no longer blanks the list for
+           the whole of its (long) wait -->
       <div
-        v-if="isSearching && !hasMediaResults"
+        v-if="isFetching && !hasMediaResults"
         class="flex items-center justify-center py-14"
       >
         <Spinner class="text-muted-foreground size-6" />
@@ -146,10 +152,13 @@
         :key="section.mediaType"
         :heading="section.title"
       >
+        <!-- results fetched for an older query are shown greyed out and are
+             not selectable until the ones for the current query land -->
         <CommandItem
           v-for="item in section.items"
           :key="item.uri"
           :value="item.uri"
+          :disabled="resultsStale"
           class="gap-3 py-2"
           @select="onMediaSelect(item)"
         >
@@ -346,14 +355,20 @@ let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 // provider (the composable drops ids of providers that no longer exist)
 const savedSources = getPreference<string[]>(SOURCES_PREF_KEY, []);
 
-const { loading, search, filteredItems, providerTargets, selectedProviders } =
-  useProgressiveSearch({
-    mediaTypes: selectedMediaTypes,
-    providers: computed(() =>
-      Array.isArray(savedSources.value) ? savedSources.value : [],
-    ),
-    limits: { single: FETCH_SINGLE_TYPE, multi: FETCH_PER_TYPE },
-  });
+const {
+  activeSearchTerm,
+  loading,
+  search,
+  filteredItems,
+  providerTargets,
+  selectedProviders,
+} = useProgressiveSearch({
+  mediaTypes: selectedMediaTypes,
+  providers: computed(() =>
+    Array.isArray(savedSources.value) ? savedSources.value : [],
+  ),
+  limits: { single: FETCH_SINGLE_TYPE, multi: FETCH_PER_TYPE },
+});
 
 const queryActive = computed(
   () => query.value.trim().length >= MIN_QUERY_LENGTH,
@@ -361,6 +376,18 @@ const queryActive = computed(
 
 const isSearching = computed(
   () => queryActive.value && (debouncePending.value || loading.value),
+);
+
+// A fetch is actually on its way, as opposed to the (deliberately long)
+// debounce still counting down: only this one earns the full-height spinner in
+// place of the list, the debounce gets the small one beside the input.
+const isFetching = computed(() => queryActive.value && loading.value);
+
+// The results on screen were fetched for an older query - the debounce has not
+// fired yet, or the user kept typing. They must not be actionable: an Enter
+// hitting the top row would open the previous query's first hit.
+const resultsStale = computed(
+  () => queryActive.value && activeSearchTerm.value !== query.value.trim(),
 );
 
 const singleType = computed(() =>
@@ -452,6 +479,26 @@ const dismissKeyboardOnTouch = function (event: KeyboardEvent) {
   (filterRef.value?.$el as HTMLElement | undefined)?.blur();
 };
 
+// Enter has to act on what is typed *now*. While the debounce is still running
+// (or its results have not arrived) the rows on screen belong to an older
+// query, so this enter starts the search instead of reaching reka, which would
+// open the top hit of that older query.
+const onEnterKeydown = function (event: KeyboardEvent) {
+  if (event.isComposing || event.keyCode === 229) return;
+  const flushed = flushSearch();
+  if (flushed || resultsStale.value) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
+  dismissKeyboardOnTouch(event);
+};
+
+// leaving the input is the other unmistakable "I am done typing"
+const onInputBlur = function () {
+  flushSearch();
+};
+
 const dedupeKey = (item: MediaItemTypeOrItemMapping): string | null => {
   if (!item.name || item.media_type === MediaType.PLAYLIST) return null;
   const artist =
@@ -532,6 +579,8 @@ const itemSubtitle = function (item: MediaItemTypeOrItemMapping) {
 };
 
 const onMediaSelect = function (item: MediaItemTypeOrItemMapping) {
+  // a row belonging to an older query is not the user's choice
+  if (resultsStale.value) return;
   recordRecentSearch();
   close();
   router.push({
@@ -544,6 +593,7 @@ const onPlayClick = function (
   item: MediaItemTypeOrItemMapping,
   event: MouseEvent,
 ) {
+  if (resultsStale.value) return;
   recordRecentSearch();
   close();
   handlePlayBtnClick(item, event.clientX, event.clientY);
@@ -669,6 +719,9 @@ watch(isOpen, (opened) => {
     pagesOnly.value = false;
     selectedMediaTypes.value = [...initialMediaTypes.value];
     query.value = initialQuery.value;
+    // a query handed to us was not typed, so there is no typist to wait for:
+    // search it as soon as the debounce watcher has registered it
+    void nextTick(() => flushSearch());
     return;
   }
   clearTimeout(debounceTimer);
@@ -708,16 +761,36 @@ watch([query, pagesOnly], () => {
   }, DEBOUNCE_MS);
 });
 
+// Run the pending search now instead of waiting the debounce out. The debounce
+// is long on purpose (it keeps a typist from firing a search per keystroke
+// across every provider), but the moments the user has clearly finished -
+// pressing enter, leaving the input, an opening query that was not typed at
+// all - are not the ones to sit through it. Answers whether there was
+// anything to flush.
+const flushSearch = function (): boolean {
+  if (!debouncePending.value) return false;
+  clearTimeout(debounceTimer);
+  debouncePending.value = false;
+  const trimmed = query.value.trim();
+  search(pagesOnly.value || trimmed.length < MIN_QUERY_LENGTH ? "" : trimmed);
+  return true;
+};
+
 // highlight the first row as results land so a desktop enter opens the top
 // hit; on the mobile sheet on a touch screen the on-screen keyboard drives
 // the interaction — there is no enter contract there and the phantom
 // highlight would read as a selection nobody made
+// staleness is part of the key: rows for an older query are not highlighted,
+// and the set that replaces them is, even when its top hit is the same item
 watch(
   () =>
-    mediaSections.value.map((section) => section.items[0]?.uri ?? "").join("|"),
+    [
+      resultsStale.value,
+      ...mediaSections.value.map((section) => section.items[0]?.uri ?? ""),
+    ].join("|"),
   async () => {
     if (store.isTouchscreen && store.mobileLayout) return;
-    if (!isOpen.value || !queryActive.value) return;
+    if (!isOpen.value || !queryActive.value || resultsStale.value) return;
     await nextTick();
     const listEl = listRef.value?.$el as HTMLElement | undefined;
     const inputEl = filterRef.value?.$el as HTMLElement | undefined;

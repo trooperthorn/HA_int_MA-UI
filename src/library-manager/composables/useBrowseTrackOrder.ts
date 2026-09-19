@@ -1,4 +1,4 @@
-import { shallowRef } from "vue";
+import { onScopeDispose, shallowRef } from "vue";
 import type { GridItem } from "../columns";
 import type { ItemRef } from "./useLibraryFilter";
 
@@ -17,3 +17,14 @@ export interface BrowseTrackContext {
 export const browseTrackContext = shallowRef<BrowseTrackContext | undefined>(
   undefined,
 );
+
+/**
+ * Called by the publishing view: this is a module-level singleton, so without
+ * it the context (and with it the view's entire row array) stays referenced
+ * for as long as the tab lives after the view has gone.
+ */
+export function releaseBrowseTrackContextOnDispose(): void {
+  onScopeDispose(() => {
+    browseTrackContext.value = undefined;
+  });
+}

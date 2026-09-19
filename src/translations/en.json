@@ -2871,6 +2871,7 @@
     "clear_filters": "Clear filters",
     "replace_up_next": "Replace up next",
     "replace_up_next_hint": "Clear up next and queue these tracks, in the order shown",
+    "replace_up_next_partial": "Queued the {0} tracks loaded so far",
     "loading_all": "Loading {0} of {1} to sort",
     "tree": {
       "library": "Library",

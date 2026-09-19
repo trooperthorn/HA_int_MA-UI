@@ -53,7 +53,18 @@ watch(
   (showFullscreenPlayer) => {
     const isFirst = firstFullscreenQueryCheck;
     firstFullscreenQueryCheck = false;
-    if (isFirst && showFullscreenPlayer) return;
+    if (isFirst && showFullscreenPlayer) {
+      // Not honouring it, so take it out of the URL as well: left in place it
+      // would say the player is open while the store says it is closed, and
+      // the history guard below (which does nothing while the two already
+      // agree) would then never push an entry when the player does open - the
+      // very thing it exists to do - and would call router.back() against the
+      // entry the session started on when it closes.
+      void router.replace({
+        query: { ...route.query, showFullscreenPlayer: undefined },
+      });
+      return;
+    }
     store.showFullscreenPlayer = !!showFullscreenPlayer;
   },
   { immediate: true },

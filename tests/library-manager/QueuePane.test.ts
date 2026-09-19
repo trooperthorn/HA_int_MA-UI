@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   queueCommandPlayIndex: vi.fn(),
   queueCommandDelete: vi.fn(),
+  sendCommand: vi.fn(async () => {}),
   queueCommandClear: vi.fn(),
   getPlayerQueueItems: vi.fn(async () => [{ queue_item_id: "i2" }]),
   playMedia: vi.fn(async () => {}),
@@ -17,6 +18,7 @@ vi.mock("@/plugins/api", () => {
   const api = {
     queueCommandPlayIndex: mocks.queueCommandPlayIndex,
     queueCommandDelete: mocks.queueCommandDelete,
+    sendCommand: mocks.sendCommand,
     queueCommandClear: mocks.queueCommandClear,
     getPlayerQueueItems: mocks.getPlayerQueueItems,
     playMedia: mocks.playMedia,
@@ -174,7 +176,14 @@ describe("QueuePane", () => {
     await flushPromises();
     // everything after the current track (index 1): one item, from index 2
     expect(mocks.getPlayerQueueItems).toHaveBeenCalledWith("q1", 1, 2);
-    expect(mocks.queueCommandDelete).toHaveBeenCalledWith("q1", "i2");
+    // the delete goes out awaitably, so the caller can queue after it
+    expect(mocks.sendCommand).toHaveBeenCalledWith(
+      "player_queues/delete_item",
+      {
+        queue_id: "q1",
+        item_id_or_index: "i2",
+      },
+    );
     expect(mocks.queueCommandClear).not.toHaveBeenCalled();
 
     await wrapper

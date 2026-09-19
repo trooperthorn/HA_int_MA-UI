@@ -93,9 +93,13 @@ import { useVirtualizer } from "@tanstack/vue-virtual";
 import { computed, ref, watch } from "vue";
 import { Spinner } from "@/components/ui/spinner";
 import { useQueuePlaybackPreferences } from "@/composables/useQueuePlaybackPreferences";
+import { toast } from "vue-sonner";
+import { forceAutoplayIfConfigured } from "@/helpers/autoplay_on_bulk_play";
 import { handlePlayBtnClick } from "@/helpers/media_item_actions";
 import { api } from "@/plugins/api";
 import { MediaType, QueueOption } from "@/plugins/api/interfaces";
+import { $t } from "@/plugins/i18n";
+import { store } from "@/plugins/store";
 import { browseTrackContext } from "../composables/useBrowseTrackOrder";
 import type { GridItem } from "../columns";
 
@@ -220,6 +224,10 @@ function orderedTracksFor(item: GridItem): GridItem[] | undefined {
   const context = browseTrackContext.value;
   if (!context || !context.rows.length) return undefined;
   if (item.media_type === MediaType.ARTIST) {
+    // an album picked beside the artist narrows the table to that album's
+    // tracks, so those rows are not this artist's listing: fall through and
+    // let the server play the artist
+    if (context.album) return undefined;
     const artist = context.artist;
     return artist &&
       artist.item_id === item.item_id &&
@@ -238,13 +246,37 @@ function orderedTracksFor(item: GridItem): GridItem[] | undefined {
   return undefined;
 }
 
+// Same contract as handlePlayBtnClick, only with the rows from the table
+// below in place of the item itself: with no usable player the shared helper
+// opens the player menu (rather than the double-click doing nothing at all),
+// the autoplay preference is applied for a whole collection, and a failed
+// play is reported instead of being swallowed.
+async function playOrderedTracks(
+  item: GridItem,
+  ordered: GridItem[],
+  posX: number,
+  posY: number,
+) {
+  if (!store.activePlayer?.available) {
+    await handlePlayBtnClick(item, posX, posY, undefined, false);
+    return;
+  }
+  forceAutoplayIfConfigured();
+  try {
+    await api.playMedia(ordered, QueueOption.PLAY);
+  } catch (error) {
+    console.error("Play action failed:", error);
+    toast.error($t("play_failed"));
+  }
+}
+
 function onRowDoubleClick(event: MouseEvent, index: number) {
   if (!playbackFlag("playOnBrowserClick")) return;
   const item = props.items[index];
   if (!item) return;
   const ordered = orderedTracksFor(item);
   if (ordered) {
-    void api.playMedia(ordered, QueueOption.PLAY);
+    void playOrderedTracks(item, ordered, event.clientX, event.clientY);
     return;
   }
   void handlePlayBtnClick(item, event.clientX, event.clientY, undefined, false);

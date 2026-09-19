@@ -138,6 +138,7 @@ const FILTER_KEYS = [
   "filesToEdit",
   "browsePath",
   "sortOverride",
+  "sortExplicit",
   "issueType",
 ] as const;
 
@@ -193,6 +194,18 @@ export function useItemSource(
       !!filter.value.album ||
       !!filter.value.playlist,
   );
+
+  // Whether a filter names a listing the server returns whole (the same set
+  // of cases oneShotRequest answers for). Kept as its own predicate because
+  // oneShotRequest *performs* the request: calling it to ask the question
+  // fires the fetch as a side effect.
+  function isOneShot(current: ItemFilter): boolean {
+    if (current.scope === "issues" || current.scope === "browse") return true;
+    if (current.mediaType === MediaType.TRACK) {
+      return !!(current.playlist || current.album || current.artist);
+    }
+    return current.mediaType === MediaType.ALBUM && !!current.artist;
+  }
 
   // listings the server returns whole rather than paged
   function oneShotRequest(current: ItemFilter): Promise<GridItem[]> | null {
@@ -267,13 +280,18 @@ export function useItemSource(
     return null;
   }
 
-  // artist/album browse-scope track listings come back in the provider's own
-  // (usually track-number) order; a title sort is the one server sort that
-  // still makes sense to honour locally here, matching Library-scope sorting
+  // An artist's or album's track listing comes back in the provider's own
+  // (usually disc/track-number) order, which is the right order for it. A
+  // title sort is the one server sort still worth honouring locally here,
+  // matching Library-scope sorting - but only when the user actually picked
+  // it: the toolbar's *default* sort is by name, so gating on the value alone
+  // would alphabetize every album listing out of the box (see sortExplicit on
+  // LibraryFilter).
   function sortBrowseTracksLocally(
     current: ItemFilter,
     items: GridItem[],
   ): GridItem[] {
+    if (!current.sortExplicit) return items;
     const gridSort = sortByToGridSort(current.sortBy, TRACK_COLUMNS);
     if (!gridSort || gridSort.columnId !== "title") return items;
     return sortItemsLocally(items, gridSort, TRACK_COLUMNS);
@@ -547,7 +565,7 @@ export function useItemSource(
   async function loadAll(): Promise<void> {
     if (allLoaded.value || loadingAll.value) return;
     const current = filter.value;
-    if (oneShotRequest(current) || current.filesToEdit) return;
+    if (isOneShot(current) || current.filesToEdit) return;
     const forGeneration = generation;
     loadingAll.value = true;
     loading.value = true;

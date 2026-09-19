@@ -51,6 +51,11 @@ export interface BrowserPicks {
 export interface LibraryFilter extends NodeFilter {
   search: string;
   sortBy: string;
+  // whether sortBy is a sort the user explicitly picked (the sort control or a
+  // grid header) rather than the untouched default. A listing the provider
+  // already returns in a meaningful order (an album's tracks, by disc and
+  // track number) keeps that order until the user asks for something else
+  sortExplicit?: boolean;
   favoritesOnly: boolean;
   genreIds?: number[];
   // narrow tracks (and albums) to one artist, or tracks to one album or

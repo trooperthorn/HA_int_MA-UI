@@ -21,6 +21,7 @@ const state = vi.hoisted(() => ({
   routerPush: vi.fn(),
   playBtnSpy: vi.fn(),
   loading: { value: false },
+  activeSearchTerm: undefined as Ref<string> | undefined,
   storeMock: {
     isTouchscreen: false,
     dialogActive: false,
@@ -60,11 +61,19 @@ vi.mock("@/composables/useProgressiveSearch", async (importOriginal) => {
   };
   const providerTargets = ref<SearchTarget[]>([]);
   state.providerTargets = providerTargets;
+  // the real composable records the term it is searching for; the palette
+  // reads it to tell results apart from the query on screen
+  const activeSearchTerm = ref("");
+  state.activeSearchTerm = activeSearchTerm;
+  state.searchSpy.mockImplementation((term?: string) => {
+    activeSearchTerm.value = term?.trim() ?? "";
+  });
   return {
     ...actual,
     useProgressiveSearch: (options: { providers?: Ref<string[]> }) => {
       state.providersRef = options.providers;
       return {
+        activeSearchTerm,
         loading: computed(() => state.loading.value),
         search: state.searchSpy,
         providerTargets,
@@ -196,10 +205,10 @@ const ListboxFilterStub = {
     @input="$emit('update:modelValue', $event.target.value)" />`,
 };
 const CommandItemStub = {
-  props: ["value"],
+  props: ["value", "disabled"],
   emits: ["select"],
-  template:
-    '<button data-testid="palette-item" @click="$emit(\'select\')"><slot /></button>',
+  template: `<button data-testid="palette-item" :disabled="disabled || undefined"
+    @click="$emit('select')"><slot /></button>`,
 };
 
 // reka renders the sources menu into a portal; these stubs keep it inline and
@@ -338,6 +347,7 @@ beforeEach(() => {
   state.players = [];
   state.prefs = {};
   state.loading.value = false;
+  if (state.activeSearchTerm) state.activeSearchTerm.value = "";
   state.storeMock.dialogActive = false;
   state.storeMock.activePlayerId = undefined;
   state.storeMock.mobileLayout = false;
@@ -589,21 +599,102 @@ describe("CommandCenter", () => {
     await wrapper.get('[data-testid="palette-input"]').setValue("bo");
     expect(wrapper.find('[data-testid="palette-spinner"]').exists()).toBe(true);
 
-    // results land; the next keystroke keeps them visible (no spinner)
+    // results land; the next keystroke keeps them visible, with the spinner
+    // beside the field saying a search for the new text is on its way
     state.resultsByType[MediaType.TRACK] = [
       makeTrack("t1", "Bohemian Rhapsody"),
     ];
     state.bumpResults();
     vi.advanceTimersByTime(2500);
-    await wrapper.get('[data-testid="palette-input"]').setValue("boh");
+    await flushPromises();
     expect(wrapper.find('[data-testid="palette-spinner"]').exists()).toBe(
       false,
     );
+
+    await wrapper.get('[data-testid="palette-input"]').setValue("boh");
+    expect(wrapper.find('[data-testid="palette-spinner"]').exists()).toBe(true);
     expect(wrapper.text()).toContain("Bohemian Rhapsody");
 
     vi.advanceTimersByTime(2500);
     await flushPromises();
     expect(state.searchSpy).toHaveBeenLastCalledWith("boh");
+    expect(wrapper.find('[data-testid="palette-spinner"]').exists()).toBe(
+      false,
+    );
+
+    wrapper.unmount();
+  });
+
+  it("marks results fetched for an older query as stale and refuses to act on them", async () => {
+    state.resultsByType[MediaType.TRACK] = [
+      makeTrack("t1", "Bohemian Rhapsody"),
+    ];
+    const wrapper = mountPalette();
+    useCommandCenter().open();
+    await flushPromises();
+
+    await typeQuery(wrapper, "bohem");
+    const row = itemByText(wrapper, "Bohemian Rhapsody");
+    expect(row.attributes("disabled")).toBeUndefined();
+
+    // the query moved on; the rows on screen still belong to "bohem"
+    await wrapper.get('[data-testid="palette-input"]').setValue("bohemian r");
+    expect(
+      itemByText(wrapper, "Bohemian Rhapsody").attributes("disabled"),
+    ).toBeDefined();
+
+    await itemByText(wrapper, "Bohemian Rhapsody").trigger("click");
+    expect(state.routerPush).not.toHaveBeenCalled();
+
+    wrapper.unmount();
+  });
+
+  it("runs the pending search on enter instead of opening the previous query's top hit", async () => {
+    state.resultsByType[MediaType.TRACK] = [
+      makeTrack("t1", "Bohemian Rhapsody"),
+    ];
+    const wrapper = mountPalette();
+    useCommandCenter().open();
+    await flushPromises();
+
+    await typeQuery(wrapper, "bohem");
+    expect(state.searchSpy).toHaveBeenLastCalledWith("bohem");
+
+    const input = wrapper.get('[data-testid="palette-input"]');
+    await input.setValue("bohemian rhapsody");
+    await input.trigger("keydown", { key: "Enter" });
+    await flushPromises();
+
+    // the 2.5s debounce is deliberate, but enter does not wait it out
+    expect(state.searchSpy).toHaveBeenLastCalledWith("bohemian rhapsody");
+    expect(state.routerPush).not.toHaveBeenCalled();
+
+    wrapper.unmount();
+  });
+
+  it("runs the pending search when the field loses focus", async () => {
+    const wrapper = mountPalette();
+    useCommandCenter().open();
+    await flushPromises();
+
+    const input = wrapper.get('[data-testid="palette-input"]');
+    await input.setValue("bohemian");
+    expect(state.searchSpy).not.toHaveBeenCalledWith("bohemian");
+
+    await input.trigger("blur");
+    await flushPromises();
+    expect(state.searchSpy).toHaveBeenLastCalledWith("bohemian");
+
+    wrapper.unmount();
+  });
+
+  it("searches a handed-over term without waiting out the debounce", async () => {
+    const wrapper = mountPalette();
+    useCommandCenter().open({ query: "bohemian" });
+    await flushPromises();
+
+    // nothing was typed, so there is no typist to wait for
+    expect(state.searchSpy).toHaveBeenLastCalledWith("bohemian");
 
     wrapper.unmount();
   });
