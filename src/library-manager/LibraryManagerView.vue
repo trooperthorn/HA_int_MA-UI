@@ -6,6 +6,7 @@
         size="icon"
         class="size-8"
         :aria-label="$t('library_manager.toggle_tree')"
+        :tooltip="$t('library_manager.toggle_tree')"
         @click="setShowTree(!showTree)"
       >
         <PanelLeft :size="16" />
@@ -15,6 +16,7 @@
         size="icon"
         class="size-8"
         :aria-label="$t('library_manager.toggle_strip')"
+        :tooltip="$t('library_manager.toggle_strip')"
         :disabled="node.scope !== 'library'"
         @click="setShowStrip(!showStrip)"
       >
@@ -25,6 +27,7 @@
         size="icon"
         class="size-8"
         :aria-label="$t('library_manager.toggle_queue')"
+        :tooltip="$t('library_manager.toggle_queue')"
         @click="setShowQueue(!showQueue)"
       >
         <PanelRight :size="16" />
@@ -34,6 +37,7 @@
         size="icon"
         class="size-8"
         :aria-label="$t('library_manager.toggle_selected')"
+        :tooltip="$t('library_manager.toggle_selected')"
         @click="setShowSelected(!showSelected)"
       >
         <PanelBottom :size="16" />
@@ -238,6 +242,20 @@
                   <X :size="11" />
                 </button>
               </div>
+              <Button
+                v-if="
+                  node.scope === 'library' && node.mediaType === MediaType.TRACK
+                "
+                variant="outline"
+                size="sm"
+                class="h-7 ml-2"
+                :disabled="!displayRows.length"
+                :tooltip="$t('library_manager.replace_up_next_hint')"
+                @click="replaceUpNext"
+              >
+                <ListVideo :size="14" class="mr-1.5" />
+                {{ $t("library_manager.replace_up_next") }}
+              </Button>
             </div>
             <TrackGrid
               ref="grid"
@@ -317,6 +335,7 @@
 <script setup lang="ts">
 import {
   Disc3,
+  ListVideo,
   PanelBottom,
   PanelLeft,
   PanelRight,
@@ -349,7 +368,7 @@ import {
 } from "@/composables/userPreferences";
 import { useBackgroundTasks } from "@/composables/background-tasks/useBackgroundTasks";
 import { eventbus } from "@/plugins/eventbus";
-import { togglePlayerQueue } from "@/helpers/player_queue";
+import { clearUpNext, togglePlayerQueue } from "@/helpers/player_queue";
 import { api } from "@/plugins/api";
 import {
   MediaType,
@@ -367,12 +386,14 @@ import {
   type GridColumn,
   type GridItem,
 } from "./columns";
+import { browseTrackContext } from "./composables/useBrowseTrackOrder";
 import { useGridColumns } from "./composables/useGridColumns";
 import { useItemSource } from "./composables/useItemSource";
 import { useKeymap } from "./composables/useKeymap";
 import {
   LIBRARY_NODES,
   useLibraryFilter,
+  type ItemRef,
   type LibraryFilter,
   type NodeFilter,
 } from "./composables/useLibraryFilter";
@@ -573,6 +594,22 @@ async function filterByGenreName(name: string) {
   setGenres([{ id: Number(genre.item_id), name: genre.name }]);
 }
 
+// browsing to an artist/album leaves whatever text was in the search box
+// applied to the *previous* listing; a stale filter can then hide everything
+// in the newly selected artist/album, so browsing clears it the same way
+// selectFromTree already does when switching nodes
+function browseToArtist(artist: ItemRef) {
+  clearSearch();
+  toolbar.search = "";
+  setArtist(artist);
+}
+
+function browseToAlbum(album: ItemRef) {
+  clearSearch();
+  toolbar.search = "";
+  setAlbum(album);
+}
+
 function filterMenuItems(targets: GridItem[]): ContextMenuItem[] {
   if (!canFilterByRow.value || targets.length === 0) return [];
   const track = targets[0] as Track;
@@ -582,7 +619,7 @@ function filterMenuItems(targets: GridItem[]): ContextMenuItem[] {
     items.push({
       label: "library_manager.filter_by_artist",
       icon: Users,
-      action: () => setArtist(artists[0]),
+      action: () => browseToArtist(artists[0]),
     });
   } else if (artists.length > 1) {
     items.push({
@@ -590,7 +627,7 @@ function filterMenuItems(targets: GridItem[]): ContextMenuItem[] {
       icon: Users,
       subItems: artists.map((artist) => ({
         label: artist.name,
-        action: () => setArtist(artist),
+        action: () => browseToArtist(artist),
       })),
     });
   }
@@ -599,7 +636,7 @@ function filterMenuItems(targets: GridItem[]): ContextMenuItem[] {
     items.push({
       label: "library_manager.filter_by_album",
       icon: Disc3,
-      action: () => setAlbum(album),
+      action: () => browseToAlbum(album),
     });
   }
   const genres = track.metadata?.genres ?? [];
@@ -673,6 +710,45 @@ const displayRows = computed<GridItem[]>(() => {
   const instance = pinnedSource.value;
   return instance ? pinRowsToSource(rows, instance) : rows;
 });
+
+// published so a double-click on an artist/album in the browser strip above
+// can play the tracks in the order shown in the table below (see
+// useBrowseTrackOrder.ts)
+watch(
+  () => [
+    node.scope,
+    node.mediaType,
+    browser.artist,
+    browser.album,
+    displayRows.value,
+  ],
+  () => {
+    browseTrackContext.value =
+      node.scope === "library" &&
+      node.mediaType === MediaType.TRACK &&
+      (browser.artist || browser.album)
+        ? {
+            artist: browser.artist,
+            album: browser.album,
+            rows: displayRows.value,
+          }
+        : undefined;
+  },
+  { immediate: true },
+);
+
+// single control intentionally covering two originally-separate asks
+// ("Replace Up Next" and "Use as Up Next") that turned out to describe the
+// same behaviour once product merged them: drop everything after the
+// current track and queue the currently visible (filtered + sorted) rows
+// after it, in the order shown, without requiring playback to already be
+// coming from this listing
+async function replaceUpNext() {
+  const items = displayRows.value;
+  if (!items.length || !(await ensurePlayer())) return;
+  await clearUpNext();
+  await api.playMedia(items, QueueOption.ADD);
+}
 
 // a refresh reloads the same listing; the grid returns to where it was
 // once the first page is back

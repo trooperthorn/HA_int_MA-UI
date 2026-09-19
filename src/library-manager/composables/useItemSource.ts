@@ -16,7 +16,12 @@ import {
 } from "@/plugins/api/interfaces";
 import { store } from "@/plugins/store";
 import { onLibrarySyncCompleted } from "@/composables/useLibrarySync";
-import type { GridItem } from "../columns";
+import {
+  sortByToGridSort,
+  sortItemsLocally,
+  TRACK_COLUMNS,
+  type GridItem,
+} from "../columns";
 import {
   collectSyncIssues,
   loadSyncIssueRows,
@@ -234,13 +239,14 @@ export function useItemSource(
         );
     }
     if (current.mediaType === MediaType.TRACK && current.album) {
-      return api.getAlbumTracks(current.album.item_id, current.album.provider);
+      return api
+        .getAlbumTracks(current.album.item_id, current.album.provider)
+        .then((items) => sortBrowseTracksLocally(current, items));
     }
     if (current.mediaType === MediaType.TRACK && current.artist) {
-      return api.getArtistTracks(
-        current.artist.item_id,
-        current.artist.provider,
-      );
+      return api
+        .getArtistTracks(current.artist.item_id, current.artist.provider)
+        .then((items) => sortBrowseTracksLocally(current, items));
     }
     if (current.mediaType === MediaType.ALBUM && current.artist) {
       return api.getArtistAlbums(
@@ -249,6 +255,18 @@ export function useItemSource(
       );
     }
     return null;
+  }
+
+  // artist/album browse-scope track listings come back in the provider's own
+  // (usually track-number) order; a title sort is the one server sort that
+  // still makes sense to honour locally here, matching Library-scope sorting
+  function sortBrowseTracksLocally(
+    current: ItemFilter,
+    items: GridItem[],
+  ): GridItem[] {
+    const gridSort = sortByToGridSort(current.sortBy, TRACK_COLUMNS);
+    if (!gridSort || gridSort.columnId !== "title") return items;
+    return sortItemsLocally(items, gridSort, TRACK_COLUMNS);
   }
 
   // one-shot lists honour the toolbar's search and favorites filter locally

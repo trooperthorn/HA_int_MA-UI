@@ -314,7 +314,7 @@ import { useRouter } from "vue-router";
 import { getMenuItems, type MenuItem } from "./navigation/utils/getMenuItems";
 
 const MIN_QUERY_LENGTH = 2;
-const DEBOUNCE_MS = 250;
+const DEBOUNCE_MS = 2500;
 const RESULTS_PER_TYPE = 5;
 const RESULTS_SINGLE_PAGE = 20;
 const FETCH_PER_TYPE = 15;

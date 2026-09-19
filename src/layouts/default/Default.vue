@@ -41,9 +41,19 @@ watch(
   },
   { immediate: true },
 );
+// a restored/bookmarked/shared URL can carry a stale ?showFullscreenPlayer=1
+// from a previous session; honouring it on the very first (immediate) run
+// would pop the fullscreen player open before the user did anything. Only
+// the "close" direction is safe to apply on that first run - real in-session
+// navigation to the query (the history-guard watcher below, or any other
+// future route push) still opens it normally on every later run.
+let firstFullscreenQueryCheck = true;
 watch(
   () => route.query.showFullscreenPlayer,
   (showFullscreenPlayer) => {
+    const isFirst = firstFullscreenQueryCheck;
+    firstFullscreenQueryCheck = false;
+    if (isFirst && showFullscreenPlayer) return;
     store.showFullscreenPlayer = !!showFullscreenPlayer;
   },
   { immediate: true },

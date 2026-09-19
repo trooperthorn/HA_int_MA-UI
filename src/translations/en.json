@@ -2868,6 +2868,8 @@
     "toggle_tree": "Show or hide the source tree",
     "toggle_strip": "Show or hide the genre, artist and album browser",
     "clear_filters": "Clear filters",
+    "replace_up_next": "Replace up next",
+    "replace_up_next_hint": "Clear up next and queue these tracks, in the order shown",
     "loading_all": "Loading {0} of {1} to sort",
     "tree": {
       "library": "Library",

@@ -22,11 +22,15 @@ const {
   mockGetLibraryArtistsCount,
   mockBrowse,
   mockGetPlaylistTracks,
+  mockGetArtistTracks,
+  mockGetAlbumTracks,
   mockGetTrack,
   mockSubscribe,
   syncListeners,
 } = vi.hoisted(() => ({
   mockGetPlaylistTracks: vi.fn<MusicAssistantApi["getPlaylistTracks"]>(),
+  mockGetArtistTracks: vi.fn<MusicAssistantApi["getArtistTracks"]>(),
+  mockGetAlbumTracks: vi.fn<MusicAssistantApi["getAlbumTracks"]>(),
   mockGetTrack: vi.fn<MusicAssistantApi["getTrack"]>(),
   mockGetLibraryTracks: vi.fn<MusicAssistantApi["getLibraryTracks"]>(),
   mockGetLibraryTracksCount:
@@ -47,6 +51,8 @@ vi.mock("@/plugins/api", () => {
     getLibraryArtistsCount: mockGetLibraryArtistsCount,
     browse: mockBrowse,
     getPlaylistTracks: mockGetPlaylistTracks,
+    getArtistTracks: mockGetArtistTracks,
+    getAlbumTracks: mockGetAlbumTracks,
     getTrack: mockGetTrack,
     subscribe: mockSubscribe,
   };
@@ -417,6 +423,51 @@ describe("useItemSource", () => {
     expect(source.rows.value.map((row) => row.item_id)).toEqual(["t1"]);
     expect(source.allLoaded.value).toBe(true);
     expect(mockGetLibraryTracks).not.toHaveBeenCalled();
+  });
+
+  it("sorts an artist's browse-scope tracks locally by title when asked", async () => {
+    mockGetArtistTracks.mockResolvedValue([
+      track({ item_id: "t1", name: "Zebra", track_number: 1 }),
+      track({ item_id: "t2", name: "Apple", track_number: 2 }),
+      track({ item_id: "t3", name: "Mango", track_number: 3 }),
+    ]);
+    filter.value = {
+      ...filter.value,
+      mediaType: MediaType.TRACK,
+      sortBy: "name",
+      artist: { item_id: "a1", provider: "library", name: "Muse" },
+    };
+    const source = scope.run(() => useItemSource(filter))!;
+    await flushPromises();
+
+    expect(mockGetArtistTracks).toHaveBeenCalledWith("a1", "library");
+    expect(source.rows.value.map((row) => row.name)).toEqual([
+      "Apple",
+      "Mango",
+      "Zebra",
+    ]);
+  });
+
+  it("keeps an artist's browse-scope tracks in track-number order when not sorting by title", async () => {
+    mockGetArtistTracks.mockResolvedValue([
+      track({ item_id: "t1", name: "Zebra", track_number: 3 }),
+      track({ item_id: "t2", name: "Apple", track_number: 1 }),
+      track({ item_id: "t3", name: "Mango", track_number: 2 }),
+    ]);
+    filter.value = {
+      ...filter.value,
+      mediaType: MediaType.TRACK,
+      sortBy: "last_played",
+      artist: { item_id: "a1", provider: "library", name: "Muse" },
+    };
+    const source = scope.run(() => useItemSource(filter))!;
+    await flushPromises();
+
+    expect(source.rows.value.map((row) => row.name)).toEqual([
+      "Zebra",
+      "Apple",
+      "Mango",
+    ]);
   });
 
   it("lists the sync issues from the tasks and flags a changed log", async () => {

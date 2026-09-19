@@ -270,7 +270,7 @@ async function typeQuery(
   text: string,
 ) {
   await wrapper.get('[data-testid="palette-input"]').setValue(text);
-  vi.advanceTimersByTime(300);
+  vi.advanceTimersByTime(2500);
   await flushPromises();
 }
 
@@ -594,14 +594,14 @@ describe("CommandCenter", () => {
       makeTrack("t1", "Bohemian Rhapsody"),
     ];
     state.bumpResults();
-    vi.advanceTimersByTime(300);
+    vi.advanceTimersByTime(2500);
     await wrapper.get('[data-testid="palette-input"]').setValue("boh");
     expect(wrapper.find('[data-testid="palette-spinner"]').exists()).toBe(
       false,
     );
     expect(wrapper.text()).toContain("Bohemian Rhapsody");
 
-    vi.advanceTimersByTime(300);
+    vi.advanceTimersByTime(2500);
     await flushPromises();
     expect(state.searchSpy).toHaveBeenLastCalledWith("boh");
 
@@ -647,7 +647,7 @@ describe("CommandCenter", () => {
       wrapper.get('[data-testid="palette-input"]').attributes("value"),
     ).toBe("bohemian");
 
-    vi.advanceTimersByTime(300);
+    vi.advanceTimersByTime(2500);
     await flushPromises();
     expect(state.searchSpy).toHaveBeenLastCalledWith("bohemian");
     expect(wrapper.text()).toContain("Bohemian Rhapsody");

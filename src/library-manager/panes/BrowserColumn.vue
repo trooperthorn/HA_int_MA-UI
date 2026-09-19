@@ -94,6 +94,9 @@ import { computed, ref, watch } from "vue";
 import { Spinner } from "@/components/ui/spinner";
 import { useQueuePlaybackPreferences } from "@/composables/useQueuePlaybackPreferences";
 import { handlePlayBtnClick } from "@/helpers/media_item_actions";
+import { api } from "@/plugins/api";
+import { MediaType, QueueOption } from "@/plugins/api/interfaces";
+import { browseTrackContext } from "../composables/useBrowseTrackOrder";
 import type { GridItem } from "../columns";
 
 const ROW_HEIGHT = 24;
@@ -208,10 +211,42 @@ function onRowClick(event: MouseEvent, index: number) {
 
 const { flag: playbackFlag } = useQueuePlaybackPreferences();
 
+// an artist/album double-click plays first from the table below it, when
+// that table is already loaded for this exact item, so playback starts at
+// the first track shown there rather than an order the server invents
+// (asking the server directly for an artist's tracks hits a known backend
+// ordering bug, out of scope to fix here)
+function orderedTracksFor(item: GridItem): GridItem[] | undefined {
+  const context = browseTrackContext.value;
+  if (!context || !context.rows.length) return undefined;
+  if (item.media_type === MediaType.ARTIST) {
+    const artist = context.artist;
+    return artist &&
+      artist.item_id === item.item_id &&
+      artist.provider === item.provider
+      ? context.rows
+      : undefined;
+  }
+  if (item.media_type === MediaType.ALBUM) {
+    const album = context.album;
+    return album &&
+      album.item_id === item.item_id &&
+      album.provider === item.provider
+      ? context.rows
+      : undefined;
+  }
+  return undefined;
+}
+
 function onRowDoubleClick(event: MouseEvent, index: number) {
   if (!playbackFlag("playOnBrowserClick")) return;
   const item = props.items[index];
   if (!item) return;
+  const ordered = orderedTracksFor(item);
+  if (ordered) {
+    void api.playMedia(ordered, QueueOption.PLAY);
+    return;
+  }
   void handlePlayBtnClick(item, event.clientX, event.clientY, undefined, false);
 }
 
