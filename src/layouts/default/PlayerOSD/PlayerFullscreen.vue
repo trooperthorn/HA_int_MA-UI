@@ -252,6 +252,30 @@
                     {{ upNextCount }}
                   </span>
                   <span class="queue-divider__line"></span>
+                  <TooltipProvider
+                    v-if="row.divider === 'up_next'"
+                    :delay-duration="300"
+                  >
+                    <Tooltip>
+                      <TooltipTrigger as-child>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          class="queue-divider__button"
+                          :disabled="!upNextCount"
+                          :aria-label="
+                            $t('library_manager.queue.clear_up_next')
+                          "
+                          @click="clearUpNext"
+                        >
+                          <ListX :size="14" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        {{ $t("library_manager.queue.clear_up_next") }}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
                 <!-- queue mode banner (radio mix / autoplay state) under Up next -->
                 <QueueModeBanner v-if="row.divider === 'up_next'" />
@@ -487,6 +511,12 @@ import PanelDragHandle from "@/components/PanelDragHandle.vue";
 import PlayerIcon from "@/components/PlayerIcon.vue";
 import VisualizerCanvas from "@/components/VisualizerCanvas.vue";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useLyricsElapsedTime } from "@/composables/lyrics/useLyricsElapsedTime";
 import { useLyricsOffset } from "@/composables/lyrics/useLyricsOffset";
 import { useActiveTrackWaveform } from "@/composables/useActiveTrackWaveform";
@@ -497,6 +527,7 @@ import { useVisualizer } from "@/composables/visualizer/useVisualizer";
 import { playbackSpeedSupported } from "@/helpers/elapsed";
 import { MarqueeTextSync } from "@/helpers/marquee_text_sync";
 import { openCurrentTrackDetails } from "@/helpers/now_playing";
+import { clearUpNext } from "@/helpers/player_queue";
 import { getPlayerMenuItems } from "@/helpers/player_menu_items";
 import {
   ImageColorPalette,
@@ -536,7 +567,7 @@ import { $t } from "@/plugins/i18n";
 import router from "@/plugins/router";
 import { store } from "@/plugins/store";
 import vuetify from "@/plugins/vuetify";
-import { ChevronDownIcon, EllipsisVerticalIcon } from "@lucide/vue";
+import { ChevronDownIcon, EllipsisVerticalIcon, ListX } from "@lucide/vue";
 import Color from "color";
 import {
   computed,
@@ -1478,6 +1509,12 @@ const nowPlayingArt = computed(() =>
     var(--text-color, currentColor) 18%,
     transparent
   );
+}
+
+.queue-divider__button {
+  flex: 0 0 auto;
+  color: var(--text-color, currentColor);
+  opacity: 0.65;
 }
 
 /* Audiobook chapters under the current item. */

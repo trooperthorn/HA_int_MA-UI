@@ -167,6 +167,7 @@ import QueueListItem from "@/layouts/default/PlayerOSD/QueueListItem.vue";
 import QueueModeBanner from "@/layouts/default/PlayerOSD/QueueModeBanner.vue";
 import { useFullscreenQueue } from "@/layouts/default/PlayerOSD/useFullscreenQueue";
 import { useUserPreferences } from "@/composables/userPreferences";
+import { clearUpNext } from "@/helpers/player_queue";
 import { currentQueueIndex } from "@/helpers/queue_position";
 import { api } from "@/plugins/api";
 import { QueueOption } from "@/plugins/api/interfaces";
@@ -231,20 +232,6 @@ function locate() {
 function clearQueue() {
   const queue = store.activePlayerQueue;
   if (queue) api.queueCommandClear(queue.queue_id);
-}
-
-// drops everything after the current track; the server keeps whatever it
-// has already handed to the stream buffer, so those rows stay
-async function clearUpNext() {
-  const queue = store.activePlayerQueue;
-  if (!queue) return;
-  const first = currentQueueIndex(queue) + 1;
-  const count = (queue.items ?? 0) - first;
-  if (count <= 0) return;
-  const items = await api.getPlayerQueueItems(queue.queue_id, count, first);
-  for (const item of items) {
-    api.queueCommandDelete(queue.queue_id, item.queue_item_id);
-  }
 }
 
 async function addSelection() {
