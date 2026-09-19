@@ -990,8 +990,15 @@ export class MusicAssistantApi {
     match_policy: PlaylistMatchPolicy,
     name?: string,
   ): Promise<BackgroundTask> {
+    // Backed by the fork's own playlist_bridge plugin provider, not a
+    // core server command: music/playlists/migrate_playlist traces to an
+    // upstream PR (music-assistant/server#5926) that was closed unmerged
+    // with unresolved authorization and false-success bugs. See
+    // ha_app_music_assistant's docs/decisions.md for why this fork ships
+    // a plugin instead of porting that PR. match_policy is accepted for
+    // request-shape compatibility but not yet actionable server-side.
     return this.sendCommand<BackgroundTask>(
-      "music/playlists/migrate_playlist",
+      "playlist_bridge/migrate_playlist",
       {
         db_playlist_id,
         destination_provider,
