@@ -428,7 +428,7 @@ describe("useItemSource", () => {
     expect(mockGetLibraryTracks).not.toHaveBeenCalled();
   });
 
-  it("sorts an artist's browse-scope tracks locally by title when asked", async () => {
+  it("sorts an artist's browse-scope tracks locally by title when the user picked that sort", async () => {
     mockGetArtistTracks.mockResolvedValue([
       track({ item_id: "t1", name: "Zebra", track_number: 1 }),
       track({ item_id: "t2", name: "Apple", track_number: 2 }),
@@ -438,6 +438,7 @@ describe("useItemSource", () => {
       ...filter.value,
       mediaType: MediaType.TRACK,
       sortBy: "name",
+      sortExplicit: true,
       artist: { item_id: "a1", provider: "library", name: "Muse" },
     };
     const source = scope.run(() => useItemSource(filter))!;
@@ -495,6 +496,7 @@ describe("useItemSource", () => {
       ...filter.value,
       mediaType: MediaType.TRACK,
       sortBy: "last_played",
+      sortExplicit: true,
       artist: { item_id: "a1", provider: "library", name: "Muse" },
     };
     const source = scope.run(() => useItemSource(filter))!;
@@ -505,6 +507,100 @@ describe("useItemSource", () => {
       "Apple",
       "Mango",
     ]);
+  });
+
+  it("keeps an album's tracks in the provider's order under the default sort", async () => {
+    mockGetAlbumTracks.mockResolvedValue([
+      track({ item_id: "t1", name: "Zebra", track_number: 1 }),
+      track({ item_id: "t2", name: "Apple", track_number: 2 }),
+      track({ item_id: "t3", name: "Mango", track_number: 3 }),
+    ]);
+    // the untouched toolbar default: sortBy is "name" but nobody picked it
+    filter.value = {
+      ...filter.value,
+      mediaType: MediaType.TRACK,
+      sortBy: "name",
+      album: { item_id: "b1", provider: "library", name: "Origin of Symmetry" },
+    };
+    const source = scope.run(() => useItemSource(filter))!;
+    await flushPromises();
+
+    expect(mockGetAlbumTracks).toHaveBeenCalledWith("b1", "library");
+    expect(source.rows.value.map((row) => row.name)).toEqual([
+      "Zebra",
+      "Apple",
+      "Mango",
+    ]);
+  });
+
+  it("sorts an album's tracks by title once the user picks that sort", async () => {
+    mockGetAlbumTracks.mockResolvedValue([
+      track({ item_id: "t1", name: "Zebra", track_number: 1 }),
+      track({ item_id: "t2", name: "Apple", track_number: 2 }),
+      track({ item_id: "t3", name: "Mango", track_number: 3 }),
+    ]);
+    filter.value = {
+      ...filter.value,
+      mediaType: MediaType.TRACK,
+      sortBy: "name",
+      sortExplicit: true,
+      album: { item_id: "b1", provider: "library", name: "Origin of Symmetry" },
+    };
+    const source = scope.run(() => useItemSource(filter))!;
+    await flushPromises();
+
+    expect(source.rows.value.map((row) => row.name)).toEqual([
+      "Apple",
+      "Mango",
+      "Zebra",
+    ]);
+  });
+
+  it("re-sorts when the same sort value becomes an explicit pick", async () => {
+    mockGetAlbumTracks.mockResolvedValue([
+      track({ item_id: "t1", name: "Zebra", track_number: 1 }),
+      track({ item_id: "t2", name: "Apple", track_number: 2 }),
+    ]);
+    filter.value = {
+      ...filter.value,
+      mediaType: MediaType.TRACK,
+      sortBy: "name",
+      album: { item_id: "b1", provider: "library", name: "Origin of Symmetry" },
+    };
+    const source = scope.run(() => useItemSource(filter))!;
+    await flushPromises();
+    expect(source.rows.value.map((row) => row.name)).toEqual([
+      "Zebra",
+      "Apple",
+    ]);
+
+    filter.value = { ...filter.value, sortExplicit: true };
+    await flushPromises();
+    expect(source.rows.value.map((row) => row.name)).toEqual([
+      "Apple",
+      "Zebra",
+    ]);
+  });
+
+  it("does not re-run a one-shot request when a local sort asks for everything", async () => {
+    mockGetArtistTracks.mockResolvedValue([
+      track({ item_id: "t1", name: "Iris" }),
+    ]);
+    filter.value = {
+      ...filter.value,
+      mediaType: MediaType.TRACK,
+      artist: { item_id: "a1", provider: "library", name: "Goo Goo Dolls" },
+    };
+    const source = scope.run(() => useItemSource(filter))!;
+    await flushPromises();
+    expect(mockGetArtistTracks).toHaveBeenCalledTimes(1);
+
+    await source.loadAll();
+    await flushPromises();
+    // loadAll has nothing to do for a listing that arrived whole; asking the
+    // fetch function whether it is one must not fire the fetch again
+    expect(mockGetArtistTracks).toHaveBeenCalledTimes(1);
+    expect(mockGetLibraryTracks).not.toHaveBeenCalled();
   });
 
   it("lists the sync issues from the tasks and flags a changed log", async () => {

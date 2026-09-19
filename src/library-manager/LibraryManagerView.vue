@@ -185,7 +185,7 @@
               :picks="browser"
               :provider="node.provider"
               :lead-facet="node.leadFacet"
-              @update:picks="setPicks"
+              @update:picks="applyPicks"
             />
           </SplitterPanel>
           <SplitterResizeHandle
@@ -249,7 +249,7 @@
                 variant="outline"
                 size="sm"
                 class="h-7 ml-2"
-                :disabled="!displayRows.length"
+                :disabled="!hasLoadedRows"
                 :tooltip="$t('library_manager.replace_up_next_hint')"
                 @click="replaceUpNext"
               >
@@ -268,7 +268,7 @@
               :visibility="visibility"
               :local-sortable="localSortable"
               :menu-items="filterMenuItems"
-              @update:sort-by="toolbar.sortBy = $event"
+              @update:sort-by="setSortBy($event)"
               @update:selection="selection = $event"
               @ensure-loaded="source.ensureLoaded"
               @toggle-column="setColumnVisible"
@@ -346,6 +346,7 @@ import {
   Users,
   X,
 } from "@lucide/vue";
+import { toast } from "vue-sonner";
 import type { ContextMenuItem } from "@/helpers/context_menu_item";
 import { SplitterGroup, SplitterPanel, SplitterResizeHandle } from "reka-ui";
 import {
@@ -386,13 +387,17 @@ import {
   type GridColumn,
   type GridItem,
 } from "./columns";
-import { browseTrackContext } from "./composables/useBrowseTrackOrder";
+import {
+  browseTrackContext,
+  releaseBrowseTrackContextOnDispose,
+} from "./composables/useBrowseTrackOrder";
 import { useGridColumns } from "./composables/useGridColumns";
 import { useItemSource } from "./composables/useItemSource";
 import { useKeymap } from "./composables/useKeymap";
 import {
   LIBRARY_NODES,
   useLibraryFilter,
+  type BrowserPicks,
   type ItemRef,
   type LibraryFilter,
   type NodeFilter,
@@ -539,6 +544,21 @@ function selectFromTree(next: NodeFilter) {
 // the grid's sort is remembered per user; the toolbar object is what the
 // filter reads, so the preference feeds it and the grid writes it back
 const storedSort = getPreference<string>(SORT_PREFERENCE_KEY, DEFAULT_SORT);
+// "the user picked this sort" versus "nobody touched the default": the stored
+// preference only exists once a sort has been picked, and a pick made in this
+// session says so directly. Listings that arrive in a meaningful order of
+// their own (an album's tracks) only get re-sorted when the answer is yes -
+// see sortExplicit on LibraryFilter.
+const storedSortRaw = getPreference<string>(SORT_PREFERENCE_KEY);
+const sortPicked = ref(false);
+const sortExplicit = computed(
+  () => sortPicked.value || storedSortRaw.value !== undefined,
+);
+
+function setSortBy(value: string) {
+  sortPicked.value = true;
+  toolbar.sortBy = value;
+}
 watch(
   storedSort,
   (value) => {
@@ -594,20 +614,36 @@ async function filterByGenreName(name: string) {
   setGenres([{ id: Number(genre.item_id), name: genre.name }]);
 }
 
-// browsing to an artist/album leaves whatever text was in the search box
-// applied to the *previous* listing; a stale filter can then hide everything
-// in the newly selected artist/album, so browsing clears it the same way
-// selectFromTree already does when switching nodes
-function browseToArtist(artist: ItemRef) {
-  clearSearch();
+// Narrowing the listing to an artist/album leaves whatever text was in the
+// search box applied to the *previous* listing; a stale filter can then hide
+// everything in the newly selected artist/album ("I select something and it
+// looks like I have no Albums"), so every path that changes the picks clears
+// it the same way selectFromTree already does when switching nodes - the
+// browser strip's own clicks included, which is the one users actually take.
+// The pending debounce is cancelled too, or it would write the old text back
+// 250ms later.
+function applyPicks(picks: BrowserPicks) {
+  clearTimeout(searchTimer);
+  searchInput.value = "";
   toolbar.search = "";
-  setArtist(artist);
+  setPicks(picks);
+}
+
+const currentPicks = (): BrowserPicks => ({
+  genres: browser.genres,
+  artist: browser.artist,
+  album: browser.album,
+  playlist: browser.playlist,
+});
+
+function browseToArtist(artist: ItemRef) {
+  applyPicks({ ...currentPicks(), artist });
+  grid.value?.focus();
 }
 
 function browseToAlbum(album: ItemRef) {
-  clearSearch();
-  toolbar.search = "";
-  setAlbum(album);
+  applyPicks({ ...currentPicks(), album });
+  grid.value?.focus();
 }
 
 function filterMenuItems(targets: GridItem[]): ContextMenuItem[] {
@@ -665,6 +701,7 @@ const filter = computed<LibraryFilter>(() => ({
   sortBy:
     sortByForColumns(rawFilter.value.sortBy, columns.value) ??
     rawFilter.value.sortBy,
+  sortExplicit: sortExplicit.value,
 }));
 
 // the sync tasks' logs feed the Sync issues listing
@@ -711,6 +748,11 @@ const displayRows = computed<GridItem[]>(() => {
   return instance ? pinRowsToSource(rows, instance) : rows;
 });
 
+// a paged listing's rows array is sparse, so its length is the listing's total
+// and not what is loaded: "has something to queue" has to look for a row that
+// is actually there (some() skips the holes and stops at the first one)
+const hasLoadedRows = computed(() => displayRows.value.some((row) => !!row));
+
 // published so a double-click on an artist/album in the browser strip above
 // can play the tracks in the order shown in the table below (see
 // useBrowseTrackOrder.ts)
@@ -736,6 +778,7 @@ watch(
   },
   { immediate: true },
 );
+releaseBrowseTrackContextOnDispose();
 
 // single control intentionally covering two originally-separate asks
 // ("Replace Up Next" and "Use as Up Next") that turned out to describe the
@@ -744,10 +787,33 @@ watch(
 // after it, in the order shown, without requiring playback to already be
 // coming from this listing
 async function replaceUpNext() {
-  const items = displayRows.value;
+  // The user means "queue the list I am looking at", so the whole listing has
+  // to be here first: while scrolling a paged library listing, rows is sparse
+  // by page (commitPage only fills the pages that loaded) and its holes would
+  // go over the wire as nulls. Load the rest, then drop any hole that is
+  // still there - the sequential files-to-edit walk cannot be loaded in one
+  // go - and say so rather than silently queueing a different set than the
+  // one on screen.
+  if (!source.allLoaded.value) await source.loadAll();
+  const shown = displayRows.value;
+  const items = shown.filter((row): row is GridItem => !!row);
   if (!items.length || !(await ensurePlayer())) return;
-  await clearUpNext();
-  await api.playMedia(items, QueueOption.ADD);
+  if (items.length < shown.length || !source.allLoaded.value) {
+    toast.info(
+      t("library_manager.replace_up_next_partial", [
+        items.length.toLocaleString(),
+      ]),
+    );
+  }
+  try {
+    await clearUpNext();
+    await api.playMedia(items, QueueOption.ADD);
+  } catch (error) {
+    // clearUpNext now waits for its deletes, so a queue the server refused
+    // ends up here instead of being lost
+    console.error("Replace up next failed:", error);
+    toast.error(t("play_failed"));
+  }
 }
 
 // a refresh reloads the same listing; the grid returns to where it was

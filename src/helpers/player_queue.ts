@@ -29,7 +29,17 @@ export async function clearUpNext(): Promise<void> {
   const count = (queue.items ?? 0) - first;
   if (count <= 0) return;
   const items = await api.getPlayerQueueItems(queue.queue_id, count, first);
-  for (const item of items) {
-    api.queueCommandDelete(queue.queue_id, item.queue_item_id);
-  }
+  // Awaited together: a caller that queues something straight afterwards
+  // (Replace up next) must not have the deletes land on top of what it added,
+  // and a delete the server refused has to reach the caller. The command goes
+  // out through sendCommand rather than api.queueCommandDelete because that
+  // one fires and forgets, so there is nothing to wait for or to fail on.
+  await Promise.all(
+    items.map((item) =>
+      api.sendCommand("player_queues/delete_item", {
+        queue_id: queue.queue_id,
+        item_id_or_index: item.queue_item_id,
+      }),
+    ),
+  );
 }
