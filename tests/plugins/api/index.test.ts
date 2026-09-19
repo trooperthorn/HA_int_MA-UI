@@ -663,7 +663,7 @@ describe("MusicAssistantApi error handling", () => {
     );
 
     expect(transport.lastCommand.command).toBe(
-      "music/playlists/migrate_playlist",
+      "playlist_bridge/migrate_playlist",
     );
     expect(transport.lastCommand.args).toEqual({
       db_playlist_id: "1",
