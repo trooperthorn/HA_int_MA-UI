@@ -5,6 +5,7 @@ export interface ArchiveCapabilities {
   source_listing?: boolean;
   preview_preconditions?: boolean;
   version_listing?: boolean;
+  archive_apply?: boolean;
   max_items: number;
 }
 
@@ -68,4 +69,42 @@ export interface ArchiveVersion {
   snapshot_id: string;
   total: number;
   created_at: string;
+}
+
+export interface ArchiveDestination {
+  item_id: string;
+  provider_instance: string;
+  uri: string;
+  name: string;
+}
+
+export interface ArchiveApplyPreview {
+  version_id: string;
+  name: string;
+  source_count: number;
+  projected_count: number;
+  omitted: { position: number; state: string }[];
+  projection_digest: string;
+  requires_partial_consent: boolean;
+  already_applied: boolean;
+  destination?: ArchiveDestination | null;
+}
+
+export interface ArchiveApplyStatus {
+  state:
+    | "not_applied"
+    | "pending"
+    | "prepared"
+    | "applying"
+    | "applied"
+    | "partial"
+    | "failed"
+    | "uncertain"
+    | "conflict";
+  source_count?: number;
+  projected_count?: number;
+  omitted_count?: number;
+  retryable?: boolean;
+  destination?: ArchiveDestination | null;
+  error?: string | null;
 }

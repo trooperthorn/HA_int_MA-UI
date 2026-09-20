@@ -240,6 +240,19 @@
                 : $t("settings.archives.not_committed")
             }}
           </p>
+          <ArchivePlaylistApply
+            v-if="
+              capabilities.archive_apply && subscription.committed_version_id
+            "
+            :key="subscription.committed_version_id"
+            :version-id="subscription.committed_version_id"
+          />
+          <p
+            v-else-if="subscription.committed_version_id"
+            class="mt-2 text-muted-foreground"
+          >
+            {{ $t("settings.archives.apply_unavailable") }}
+          </p>
           <Button
             v-if="capabilities.version_listing"
             variant="outline"
@@ -327,6 +340,7 @@ import { api } from "@/plugins/api";
 import { Scope } from "@/plugins/api/interfaces";
 import { authManager } from "@/plugins/auth";
 import { $t } from "@/plugins/i18n";
+import ArchivePlaylistApply from "./ArchivePlaylistApply.vue";
 import type {
   ArchiveCapabilities,
   ArchiveJob,
