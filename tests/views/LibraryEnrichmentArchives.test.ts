@@ -449,6 +449,62 @@ describe("Library Enrichment archive controls", () => {
     },
   );
 
+  it.each([
+    [
+      {
+        provenance_read: true,
+        provenance_api_version: 1,
+        max_provenance_page: 200,
+        raw_payload_inline: false,
+      },
+      true,
+    ],
+    [
+      {
+        provenance_read: false,
+        provenance_api_version: 1,
+        max_provenance_page: 200,
+        raw_payload_inline: false,
+      },
+      false,
+    ],
+    [
+      {
+        provenance_read: true,
+        provenance_api_version: 2,
+        max_provenance_page: 200,
+        raw_payload_inline: false,
+      },
+      false,
+    ],
+    [
+      {
+        provenance_read: true,
+        provenance_api_version: 1,
+        max_provenance_page: 200,
+        raw_payload_inline: true,
+      },
+      false,
+    ],
+  ])(
+    "gates lazy provenance controls on the exact safe contract",
+    async (extra, expected) => {
+      persisted = structuredClone(pending);
+      mocks.sendCommand.mockResolvedValueOnce({ ...cap, ...extra });
+      const wrapper = mountPage();
+      await flushPromises();
+      await wrapper
+        .findAll("button")
+        .find((button) => button.text() === "settings.archives.versions")!
+        .trigger("click");
+      await flushPromises();
+      expect(
+        wrapper.find('[data-testid="archive-provenance-open"]').exists(),
+      ).toBe(expected);
+      expect(calls("provenance")).toHaveLength(0);
+    },
+  );
+
   it("deduplicates imported candidates across live pagination", async () => {
     const wrapper = mountPage();
     await flushPromises();

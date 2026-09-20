@@ -4,6 +4,7 @@
 
 ### Features
 
+- **Archive metadata provenance**: each retained playlist version can lazily load a bounded, paginated view of normalized field values, sources, parser versions, observations, and overrides. The viewer is restricted to provider administrators and never renders source raw payload references.
 - **Library manager** at `/library`: source tree, genre / artist / album browser strip with per-column facet dropdowns, dense virtualized sortable track grid with server-backed type-ahead, Now Playing queue and selected-item panel, every pane resizable and remembered per user. See `docs/LIBRARY-MANAGER.md`.
 - **Sync issues** in the source tree: every file the sync tasks could not import cleanly (missing album artist tag, CUE sheet without audio, skipped CUE tracks, invalid MusicBrainz ids, import failures), one folder per kind of failure, listed with the failure and the file path so it can be fixed.
 - **Grid**: sorting by Album (or Album artist) keeps album order — disc, then track number — within each album; selecting another tree node (the library, a source, a folder) clears the search, favorites and browser picks; Sources carries the library icon.

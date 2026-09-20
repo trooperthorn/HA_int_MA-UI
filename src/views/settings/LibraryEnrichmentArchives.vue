@@ -289,15 +289,22 @@
             <p v-if="versionError" role="alert" class="text-destructive">
               {{ versionError }}
             </p>
-            <p v-for="version in versions" :key="version.id">
-              {{
-                $t("settings.archives.version", {
-                  snapshot: version.snapshot_id,
-                  count: version.total,
-                  at: version.created_at,
-                })
-              }}
-            </p>
+            <div v-for="version in versions" :key="version.id">
+              <p>
+                {{
+                  $t("settings.archives.version", {
+                    snapshot: version.snapshot_id,
+                    count: version.total,
+                    at: version.created_at,
+                  })
+                }}
+              </p>
+              <ArchiveVersionProvenance
+                v-if="provenancePageSize"
+                :version-id="version.id"
+                :page-size="provenancePageSize"
+              />
+            </div>
             <Button
               v-if="moreVersions"
               variant="outline"
@@ -364,6 +371,7 @@ import ArchivePlaylistApply from "./ArchivePlaylistApply.vue";
 import ArchiveMatchReview from "./ArchiveMatchReview.vue";
 import ArchivePlaybackPolicy from "./ArchivePlaybackPolicy.vue";
 import ArchiveSyncPolicy from "./ArchiveSyncPolicy.vue";
+import ArchiveVersionProvenance from "./ArchiveVersionProvenance.vue";
 import type {
   ArchiveCapabilities,
   ArchiveJob,
@@ -403,6 +411,16 @@ const matchPageSize = computed(() => {
     Number.isInteger(caps.max_match_review_page) &&
     Number(caps.max_match_review_page) > 0
     ? Math.min(100, Number(caps.max_match_review_page))
+    : 0;
+});
+const provenancePageSize = computed(() => {
+  const caps = capabilities.value;
+  return caps?.provenance_read === true &&
+    caps.provenance_api_version === 1 &&
+    caps.raw_payload_inline === false &&
+    Number.isInteger(caps.max_provenance_page) &&
+    Number(caps.max_provenance_page) > 0
+    ? Math.min(100, Number(caps.max_provenance_page))
     : 0;
 });
 const playbackModes = computed(() => {
