@@ -12,7 +12,84 @@ export interface ArchiveCapabilities {
   local_matching?: boolean;
   match_review_api_version?: number;
   max_match_review_page?: number;
+  playback_policy?: boolean;
+  playback_policy_api_version?: number;
+  playback_policy_modes?: ArchivePlaybackPolicyMode[];
+  playback_strict_signal?: string;
   max_items: number;
+}
+
+export type ArchivePlaybackPolicyMode =
+  | "prefer_local"
+  | "local_only"
+  | "prefer_spotify";
+
+export interface ArchivePlaybackPolicy {
+  subscription_id: string;
+  mode: ArchivePlaybackPolicyMode;
+  revision: number;
+  actor_id?: string | null;
+  updated_at?: string | null;
+}
+
+export interface ArchivePlaybackPreviewRow {
+  position: number;
+  selected_source: "local" | "spotify";
+  uri: string;
+  fallback: "spotify" | "local" | null;
+  strict_provider: string | null;
+}
+
+export interface ArchivePlaybackPreviewGap {
+  position: number;
+  reason: "missing" | "ambiguous" | "rejected" | "unsupported" | string;
+  omitted: boolean;
+  fallback: "spotify" | "local" | null;
+}
+
+export interface ArchivePlaybackPreview {
+  subscription_id: string;
+  version_id: string;
+  mode: ArchivePlaybackPolicyMode;
+  name: string;
+  policy_revision: number;
+  source_count: number;
+  projected_count: number;
+  omitted_count: number;
+  rows: ArchivePlaybackPreviewRow[];
+  gaps: ArchivePlaybackPreviewGap[];
+  projection_digest: string;
+  requires_partial_consent: boolean;
+  destination:
+    | (ArchiveDestination & { builtin_provider_instance?: string })
+    | null;
+}
+
+export interface ArchivePlaybackStatus {
+  policy: ArchivePlaybackPolicy;
+  projection: ArchivePlaybackProjectionStatus;
+}
+
+export interface ArchivePlaybackProjectionStatus {
+  state:
+    | "not_applied"
+    | "pending"
+    | "applying"
+    | "applied"
+    | "failed"
+    | "uncertain"
+    | "conflict";
+  mode?: ArchivePlaybackPolicyMode;
+  policy_revision?: number;
+  source_count?: number;
+  projected_count?: number;
+  omitted_count?: number;
+  projection_digest?: string;
+  version_id?: string;
+  gaps?: ArchivePlaybackPreviewGap[];
+  destination?: ArchiveDestination | null;
+  retryable?: boolean;
+  error?: string | null;
 }
 
 export interface ArchiveSelection {
