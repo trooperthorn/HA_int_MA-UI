@@ -288,6 +288,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { hasHomeAssistantIngressPath } from "@/helpers/ingress";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -406,6 +407,17 @@ function selectZipFile(event: Event) {
   selectedZip.value = input.files?.[0];
   invalidateInspection();
 }
+function uploadEndpoint(): string {
+  const serverBase = api.baseUrl?.replace(/\/+$/, "");
+  if (serverBase) return `${serverBase}/library-enrichment/itunes-upload`;
+  const pathBase = hasHomeAssistantIngressPath()
+    ? window.location.pathname.replace(/\/?$/, "/")
+    : "/";
+  return new URL(
+    `${pathBase}library-enrichment/itunes-upload`,
+    window.location.origin,
+  ).toString();
+}
 async function uploadZip() {
   const file = selectedZip.value;
   if (!file || !canUpload.value) return;
@@ -415,19 +427,29 @@ async function uploadZip() {
   try {
     const authToken = authManager.getToken();
     if (!authToken) throw new Error($t("settings.itunes_import.upload_failed"));
-    const response = await fetch(
-      `${api.baseUrl || ""}/library-enrichment/itunes-upload`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          "X-Filename": file.name,
-        },
-        body: file,
+    const response = await fetch(uploadEndpoint(), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        "X-Filename": file.name,
       },
-    );
-    if (!response.ok)
-      throw new Error($t("settings.itunes_import.upload_failed"));
+      body: file,
+    });
+    if (!response.ok) {
+      const failure = (await response.json().catch(() => null)) as {
+        detail?: unknown;
+        error?: unknown;
+      } | null;
+      const detail =
+        typeof failure?.detail === "string"
+          ? failure.detail
+          : typeof failure?.error === "string"
+            ? failure.error
+            : "";
+      throw new Error(
+        `${$t("settings.itunes_import.upload_failed")}${detail ? ` ${detail}` : ""}`,
+      );
+    }
     const result = (await response.json()) as { library_path?: unknown };
     if (!alive || token !== generation || selectedZip.value !== file) return;
     if (
