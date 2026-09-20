@@ -46,6 +46,18 @@
   "goto_artist": "View artist {0}",
   "items_selected": "{0} item(s) selected",
   "items_total": "{0} total item(s)",
+  "item_provenance": {
+    "last_verified": "Last verified {date}",
+    "playlist_source": "Playlist source",
+    "source": "Source",
+    "states": {
+      "capture_failed": "Capture failed",
+      "capture_pending": "Capture pending",
+      "current": "Current",
+      "source_changed": "Source changed",
+      "unknown": "Status unknown"
+    }
+  },
   "library": "Library",
   "loading": "Data is being retrieved from the server.",
   "mass": "Music Assistant",

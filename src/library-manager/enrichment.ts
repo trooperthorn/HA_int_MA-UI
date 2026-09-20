@@ -16,7 +16,56 @@ export interface ArchiveCapabilities {
   playback_policy_api_version?: number;
   playback_policy_modes?: ArchivePlaybackPolicyMode[];
   playback_strict_signal?: string;
+  item_provenance?: boolean;
+  item_provenance_api_version?: number;
   max_items: number;
+}
+
+export type ItemProvenanceState =
+  | "current"
+  | "source_changed"
+  | "capture_pending"
+  | "capture_failed"
+  | "unknown";
+
+/** Version 1 of the read-only provenance summary for a library item. */
+export interface ItemProvenance {
+  api_version: number;
+  linked: boolean;
+  media_type: "playlist";
+  library_item_id: string;
+  state: ItemProvenanceState;
+  destination: {
+    kind: "archive" | "playback";
+    item_id: string;
+    provider_instance_id: string;
+    version_id: string | null;
+    updated_at: string | null;
+  } | null;
+  subscription: {
+    id: string;
+    provider_domain: string;
+    account_id: string;
+    source_playlist_id: string;
+    name: string;
+  } | null;
+  snapshots: {
+    observed: { id: string; at: string | null } | null;
+    attempted: { id: string; at: string | null } | null;
+    committed: {
+      id: string;
+      at: string | null;
+      version_id: string | null;
+    } | null;
+  } | null;
+  check: {
+    state: string;
+    last_check_at: string | null;
+    last_success_at: string | null;
+    next_check_at: string | null;
+    access_state: string | null;
+    error_code: string | null;
+  } | null;
 }
 
 export type ArchivePlaybackPolicyMode =
