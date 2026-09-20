@@ -6,9 +6,15 @@ const mocks = vi.hoisted(() => ({
   sendCommand: vi.fn(),
   hasScope: vi.fn(),
   getToken: vi.fn(),
+  baseUrl: "https://music.test",
 }));
 vi.mock("@/plugins/api", () => ({
-  api: { sendCommand: mocks.sendCommand, baseUrl: "https://music.test" },
+  api: {
+    sendCommand: mocks.sendCommand,
+    get baseUrl() {
+      return mocks.baseUrl;
+    },
+  },
 }));
 vi.mock("@/plugins/auth", () => ({
   authManager: { hasScope: mocks.hasScope, getToken: mocks.getToken },
@@ -101,6 +107,7 @@ describe("legacy iTunes XML import", () => {
     vi.clearAllMocks();
     mocks.hasScope.mockReturnValue(true);
     mocks.getToken.mockReturnValue("token-1");
+    mocks.baseUrl = "https://music.test";
     mocks.sendCommand.mockImplementation(async (command: string) => {
       if (command === "library_enrichment/capabilities") return capabilities;
       if (command === "library_enrichment/itunes_inspect")
@@ -311,6 +318,32 @@ describe("legacy iTunes XML import", () => {
     expect(wrapper.get('[data-testid="itunes-inspection"]').text()).toContain(
       "iTunes Library.xml",
     );
+  });
+
+  it("preserves the Home Assistant Ingress prefix for ZIP uploads", async () => {
+    mocks.baseUrl = "";
+    window.history.replaceState({}, "", "/hassio_ingress/server/#/settings");
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({ detail: "ZIP has no iTunes XML" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const wrapper = mountPage();
+    await flushPromises();
+    const file = new File(["zip-content"], "iTunes Library.zip", {
+      type: "application/zip",
+    });
+    const input = wrapper.get('[data-testid="itunes-zip-file"]');
+    Object.defineProperty(input.element, "files", { value: [file] });
+    await input.trigger("change");
+    await wrapper.get('[data-testid="itunes-zip-upload"]').trigger("click");
+    await flushPromises();
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      `${window.location.origin}/hassio_ingress/server/library-enrichment/itunes-upload`,
+    );
+    expect(wrapper.text()).toContain("ZIP has no iTunes XML");
+    window.history.replaceState({}, "", "/");
   });
 
   it("blocks oversized ZIP uploads in the browser", async () => {
