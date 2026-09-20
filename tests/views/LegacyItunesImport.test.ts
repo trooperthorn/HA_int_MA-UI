@@ -81,6 +81,30 @@ const preview = {
   ambiguous: 1,
   unsupported: 0,
 };
+const applyCapabilities = {
+  ...capabilities,
+  itunes_apply: true,
+  itunes_apply_api_version: 1,
+  max_itunes_apply_occurrences: 10000,
+};
+const applicablePreview = {
+  ...preview,
+  revision: 3,
+  projection_digest: "projection-1",
+  matched: 20,
+  unresolved: 0,
+  ambiguous: 0,
+};
+const appliedStatus = {
+  api_version: 1,
+  inspection_id: "inspection-preview-1",
+  state: "applied",
+  source_count: 20,
+  destination: {
+    item_id: "playlist-1",
+    provider_instance_id: "builtin",
+  },
+};
 const mountPage = () =>
   mount(Import, {
     global: {
@@ -100,6 +124,9 @@ async function inspect(wrapper: ReturnType<typeof mountPage>) {
     .setValue("/imports/iTunes Library.xml");
   await wrapper.get('[data-testid="itunes-inspect"]').trigger("click");
   await flushPromises();
+  await wrapper
+    .get('[data-testid="itunes-provider-instance"]')
+    .setValue("filesystem-a");
 }
 
 describe("legacy iTunes XML import", () => {
@@ -380,6 +407,7 @@ describe("legacy iTunes XML import", () => {
         {
           source_root: "file://localhost/F:/Music/",
           target_root: "/media/music",
+          provider_instance_id: "filesystem-a",
         },
       ],
       playlist_ids: ["p1"],
@@ -421,6 +449,131 @@ describe("legacy iTunes XML import", () => {
     expect(
       wrapper.get('[data-testid="itunes-preview"]').attributes("disabled"),
     ).toBeDefined();
+  });
+
+  it("applies one fully resolved preview only after explicit confirmation and refreshes status", async () => {
+    mocks.sendCommand.mockImplementation(async (command: string) => {
+      if (command === "library_enrichment/capabilities")
+        return applyCapabilities;
+      if (command === "library_enrichment/itunes_inspect")
+        return structuredClone(inspection);
+      if (command === "library_enrichment/itunes_preview")
+        return structuredClone(applicablePreview);
+      if (command === "library_enrichment/itunes_apply")
+        return structuredClone({ ...appliedStatus, state: "creating" });
+      if (command === "library_enrichment/itunes_apply_status")
+        return structuredClone(appliedStatus);
+      throw new Error(`Unexpected command ${command}`);
+    });
+    const wrapper = mountPage();
+    await flushPromises();
+    await inspect(wrapper);
+    await wrapper.get('[data-testid="itunes-playlist"]').setValue(true);
+    await wrapper.get('[data-testid="itunes-preview"]').trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("settings.itunes_import.preview_resolved");
+    expect(
+      wrapper.get('[data-testid="itunes-apply"]').attributes("disabled"),
+    ).toBeDefined();
+    await wrapper.get('[data-testid="itunes-apply-confirm"]').setValue(true);
+    await wrapper.get('[data-testid="itunes-apply"]').trigger("click");
+    await flushPromises();
+
+    expect(calls("itunes_apply")[0][1]).toEqual({
+      inspection_id: "inspection-preview-1",
+      revision: 3,
+      source_digest: "digest-1",
+      preview_digest: "preview-1",
+      playlist_id: "p1",
+      allow_partial: false,
+    });
+    expect(calls("itunes_apply_status")).toHaveLength(1);
+    expect(wrapper.get('[data-testid="itunes-apply-status"]').text()).toContain(
+      "applied",
+    );
+  });
+
+  it("requires explicit partial consent when some occurrences did not resolve", async () => {
+    mocks.sendCommand.mockImplementation(async (command: string) => {
+      if (command === "library_enrichment/capabilities")
+        return applyCapabilities;
+      if (command === "library_enrichment/itunes_inspect")
+        return structuredClone(inspection);
+      if (command === "library_enrichment/itunes_preview")
+        return structuredClone({ ...applicablePreview, unresolved: 1 });
+      if (command === "library_enrichment/itunes_apply")
+        return structuredClone({ ...appliedStatus, source_count: 20 });
+      if (command === "library_enrichment/itunes_apply_status")
+        return structuredClone(appliedStatus);
+      throw new Error(`Unexpected command ${command}`);
+    });
+    const wrapper = mountPage();
+    await flushPromises();
+    await inspect(wrapper);
+    await wrapper.get('[data-testid="itunes-playlist"]').setValue(true);
+    await wrapper.get('[data-testid="itunes-preview"]').trigger("click");
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="itunes-apply-partial"]').exists()).toBe(
+      true,
+    );
+    await wrapper.get('[data-testid="itunes-apply-confirm"]').setValue(true);
+    expect(
+      wrapper.get('[data-testid="itunes-apply"]').attributes("disabled"),
+    ).toBeDefined();
+    await wrapper.get('[data-testid="itunes-apply-partial"]').setValue(true);
+    await wrapper.get('[data-testid="itunes-apply"]').trigger("click");
+    await flushPromises();
+    expect(calls("itunes_apply")[0][1]).toMatchObject({ allow_partial: true });
+  });
+
+  it("never previews an unbound media path mapping", async () => {
+    const wrapper = mountPage();
+    await flushPromises();
+    await wrapper
+      .get('[data-testid="itunes-library-path"]')
+      .setValue("/imports/iTunes Library.xml");
+    await wrapper.get('[data-testid="itunes-inspect"]').trigger("click");
+    await flushPromises();
+    await wrapper.get('[data-testid="itunes-playlist"]').setValue(true);
+
+    expect(
+      wrapper.get('[data-testid="itunes-preview"]').attributes("disabled"),
+    ).toBeDefined();
+    await wrapper.get('[data-testid="itunes-preview"]').trigger("click");
+    expect(calls("itunes_preview")).toHaveLength(0);
+  });
+
+  it("refreshes and distinguishes uncertain status after an apply error", async () => {
+    mocks.sendCommand.mockImplementation(async (command: string) => {
+      if (command === "library_enrichment/capabilities")
+        return applyCapabilities;
+      if (command === "library_enrichment/itunes_inspect")
+        return structuredClone(inspection);
+      if (command === "library_enrichment/itunes_preview")
+        return structuredClone(applicablePreview);
+      if (command === "library_enrichment/itunes_apply")
+        throw new Error("Creation outcome uncertain");
+      if (command === "library_enrichment/itunes_apply_status")
+        return structuredClone({ ...appliedStatus, state: "uncertain" });
+      throw new Error(`Unexpected command ${command}`);
+    });
+    const wrapper = mountPage();
+    await flushPromises();
+    await inspect(wrapper);
+    await wrapper.get('[data-testid="itunes-playlist"]').setValue(true);
+    await wrapper.get('[data-testid="itunes-preview"]').trigger("click");
+    await flushPromises();
+    await wrapper.get('[data-testid="itunes-apply-confirm"]').setValue(true);
+    await wrapper.get('[data-testid="itunes-apply"]').trigger("click");
+    await flushPromises();
+
+    expect(calls("itunes_apply_status")).toHaveLength(1);
+    expect(
+      wrapper.find('[data-testid="itunes-apply-uncertain"]').exists(),
+    ).toBe(true);
+    expect(wrapper.text()).toContain("Creation outcome uncertain");
   });
 
   it("uses stacked, full-width mobile controls", async () => {
