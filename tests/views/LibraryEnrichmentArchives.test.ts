@@ -401,6 +401,34 @@ describe("Library Enrichment archive controls", () => {
     },
   );
 
+  it.each([1, 2])(
+    "gates subscription sync controls on compatible version %s",
+    async (sync_policy_api_version) => {
+      persisted = structuredClone(pending);
+      mocks.sendCommand.mockResolvedValueOnce({
+        ...cap,
+        subscription_sync: true,
+        sync_policy_api_version,
+        interval_bounds: { min: 3600, max: 604800 },
+      });
+      const wrapper = mountPage();
+      await flushPromises();
+      expect(wrapper.find('[data-testid="sync-open"]').exists()).toBe(
+        sync_policy_api_version === 1,
+      );
+      expect(calls("sync_policy")).toHaveLength(0);
+      expect(calls("sync_now")).toHaveLength(0);
+      if (sync_policy_api_version === 1) {
+        const previousReads = calls("status").length;
+        wrapper
+          .findComponent({ name: "ArchiveSyncPolicy" })
+          .vm.$emit("committed", "v2");
+        await flushPromises();
+        expect(calls("status")).toHaveLength(previousReads + 1);
+      }
+    },
+  );
+
   it("deduplicates imported candidates across live pagination", async () => {
     const wrapper = mountPage();
     await flushPromises();

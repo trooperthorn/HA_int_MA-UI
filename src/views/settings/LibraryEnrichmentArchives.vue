@@ -223,6 +223,12 @@
             {{ subscription.provider_instance_id }}
           </p>
           <p class="break-all">{{ subscription.source_playlist_id }}</p>
+          <ArchiveSyncPolicy
+            v-if="syncBounds"
+            :subscription-id="subscription.id"
+            :bounds="syncBounds"
+            @committed="refreshStatus(true)"
+          />
           <p>
             {{
               $t("settings.archives.observed", {
@@ -341,6 +347,7 @@ import { Scope } from "@/plugins/api/interfaces";
 import { authManager } from "@/plugins/auth";
 import { $t } from "@/plugins/i18n";
 import ArchivePlaylistApply from "./ArchivePlaylistApply.vue";
+import ArchiveSyncPolicy from "./ArchiveSyncPolicy.vue";
 import type {
   ArchiveCapabilities,
   ArchiveJob,
@@ -360,6 +367,19 @@ const spotifyProviders = computed(() =>
   ),
 );
 const capabilities = ref<ArchiveCapabilities>();
+const syncBounds = computed(() => {
+  const caps = capabilities.value;
+  const bounds = caps?.interval_bounds;
+  return caps?.subscription_sync &&
+    caps.sync_policy_api_version === 1 &&
+    bounds &&
+    Number.isInteger(bounds.min) &&
+    Number.isInteger(bounds.max) &&
+    bounds.min > 0 &&
+    bounds.max >= bounds.min
+    ? bounds
+    : undefined;
+});
 const checking = ref(false);
 const capabilityError = ref("");
 const providerId = ref("");
