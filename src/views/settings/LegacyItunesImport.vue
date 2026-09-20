@@ -17,6 +17,45 @@
         {{ $t("settings.itunes_import.unsupported") }}
       </p>
       <template v-else>
+        <div v-if="uploadSupported" class="space-y-2 rounded-lg border p-3">
+          <label class="block space-y-1 text-sm">
+            <span>{{ $t("settings.itunes_import.upload") }}</span>
+            <input
+              data-testid="itunes-zip-file"
+              class="block w-full text-sm"
+              type="file"
+              accept=".zip,application/zip"
+              :disabled="reading || uploading"
+              @change="selectZipFile"
+            />
+          </label>
+          <p class="text-xs text-muted-foreground">
+            {{
+              $t("settings.itunes_import.upload_help", {
+                maximum: formatBytes(maxUploadBytes),
+              })
+            }}
+          </p>
+          <p v-if="selectedZipTooLarge" role="alert" class="text-destructive">
+            {{ $t("settings.itunes_import.upload_too_large") }}
+          </p>
+          <Button
+            data-testid="itunes-zip-upload"
+            variant="outline"
+            :disabled="!canUpload"
+            @click="uploadZip"
+            >{{
+              $t(
+                uploading
+                  ? "settings.itunes_import.uploading"
+                  : "settings.itunes_import.upload_action",
+              )
+            }}</Button
+          >
+        </div>
+        <p v-if="uploadSupported" class="text-sm text-muted-foreground">
+          {{ $t("settings.itunes_import.path_alternative") }}
+        </p>
         <label class="block space-y-1 text-sm">
           <span>{{ $t("settings.itunes_import.path") }}</span>
           <input
@@ -61,6 +100,86 @@
                   playlists: inspection.playlists_total,
                 })
               }}
+            </p>
+            <p data-testid="itunes-source-kind">
+              {{
+                $t("settings.itunes_import.source_kind", {
+                  kind: $t(
+                    `settings.itunes_import.source_${inspection.source_kind}`,
+                  ),
+                })
+              }}
+            </p>
+          </div>
+          <div
+            v-if="inspection.package"
+            data-testid="itunes-package-inventory"
+            class="space-y-1 rounded-lg border p-3"
+          >
+            <p class="font-medium">
+              {{ $t("settings.itunes_import.package_inventory") }}
+            </p>
+            <p>
+              {{
+                $t("settings.itunes_import.package_counts", {
+                  entries: inspection.package.entries_total,
+                  files: inspection.package.files_total,
+                  media: inspection.package.media_files_total,
+                  xml: inspection.package.xml_candidates_total,
+                })
+              }}
+            </p>
+            <p>
+              {{
+                $t("settings.itunes_import.package_size", {
+                  compressed: formatBytes(inspection.package.compressed_bytes),
+                  uncompressed: formatBytes(
+                    inspection.package.uncompressed_bytes,
+                  ),
+                })
+              }}
+            </p>
+            <p class="break-words">
+              {{
+                $t("settings.itunes_import.selected_xml", {
+                  path: inspection.package.selected_xml_path,
+                })
+              }}
+            </p>
+            <p
+              v-for="warning in inspection.package.warnings"
+              :key="warning"
+              class="text-muted-foreground"
+            >
+              {{ warning }}
+            </p>
+          </div>
+          <div
+            v-if="inspection.localization"
+            data-testid="itunes-localization-preview"
+            class="space-y-1 rounded-lg border p-3"
+          >
+            <p class="font-medium">
+              {{ $t("settings.itunes_import.localization_preview") }}
+            </p>
+            <p>
+              {{
+                $t("settings.itunes_import.localization_counts", {
+                  files: inspection.localization.files_total,
+                  bytes: formatBytes(inspection.localization.bytes_total),
+                  conflicts: inspection.localization.conflicts,
+                })
+              }}
+            </p>
+            <p class="break-words">
+              {{
+                $t("settings.itunes_import.proposed_root", {
+                  root: inspection.localization.proposed_root,
+                })
+              }}
+            </p>
+            <p class="text-muted-foreground">
+              {{ $t("settings.itunes_import.localization_read_only") }}
             </p>
           </div>
           <div v-if="pathMappings.length" class="space-y-2">
@@ -168,7 +287,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -193,6 +312,10 @@ const allowed = computed(() =>
 );
 const checking = ref(false);
 const supported = ref(false);
+const zipSupported = ref(false);
+const uploadSupported = ref(false);
+const maxUploadBytes = ref(0);
+const selectedZip = ref<File>();
 const libraryPath = ref("");
 const inspection = ref<ItunesImportInspection>();
 const pathMappings = ref<ItunesPathMapping[]>([]);
@@ -200,11 +323,27 @@ const selectedPlaylistIds = ref<string[]>([]);
 const preview = ref<ItunesImportPreview>();
 const reading = ref(false);
 const previewing = ref(false);
+const uploading = ref(false);
 const error = ref("");
 let generation = 0;
 let alive = true;
 
-const validPath = computed(() => /\.xml$/i.test(libraryPath.value));
+const validPath = computed(
+  () =>
+    /\.xml$/i.test(libraryPath.value) ||
+    (zipSupported.value && /\.zip$/i.test(libraryPath.value)),
+);
+const selectedZipTooLarge = computed(
+  () => !!selectedZip.value && selectedZip.value.size > maxUploadBytes.value,
+);
+const canUpload = computed(
+  () =>
+    uploadSupported.value &&
+    !!selectedZip.value &&
+    !selectedZipTooLarge.value &&
+    !reading.value &&
+    !uploading.value,
+);
 const selectablePlaylists = computed(
   () => inspection.value?.playlists.filter((item) => item.selectable) ?? [],
 );
@@ -220,9 +359,23 @@ function validInspection(value: ItunesImportInspection): boolean {
     value?.api_version === 1 &&
     !!value.inspection_id &&
     !!value.source_digest &&
+    (value.source_kind === "xml" || value.source_kind === "zip") &&
     Array.isArray(value.roots) &&
-    Array.isArray(value.playlists)
+    Array.isArray(value.playlists) &&
+    (value.source_kind !== "zip" ||
+      (!!value.package && value.localization?.state === "preview_only"))
   );
+}
+function formatBytes(value: number): string {
+  if (!Number.isFinite(value) || value < 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let amount = value;
+  let unit = 0;
+  while (amount >= 1024 && unit < units.length - 1) {
+    amount /= 1024;
+    unit++;
+  }
+  return `${amount.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${units[unit]}`;
 }
 function validPreview(
   value: ItunesImportPreview,
@@ -248,20 +401,67 @@ function invalidatePreview() {
   preview.value = undefined;
   error.value = "";
 }
+function selectZipFile(event: Event) {
+  const input = event.target as HTMLInputElement;
+  selectedZip.value = input.files?.[0];
+  invalidateInspection();
+}
+async function uploadZip() {
+  const file = selectedZip.value;
+  if (!file || !canUpload.value) return;
+  const token = ++generation;
+  uploading.value = true;
+  error.value = "";
+  try {
+    const authToken = authManager.getToken();
+    if (!authToken) throw new Error($t("settings.itunes_import.upload_failed"));
+    const response = await fetch(
+      `${api.baseUrl || ""}/library-enrichment/itunes-upload`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          "X-Filename": file.name,
+        },
+        body: file,
+      },
+    );
+    if (!response.ok)
+      throw new Error($t("settings.itunes_import.upload_failed"));
+    const result = (await response.json()) as { library_path?: unknown };
+    if (!alive || token !== generation || selectedZip.value !== file) return;
+    if (
+      typeof result.library_path !== "string" ||
+      !/\.zip$/i.test(result.library_path)
+    )
+      throw new Error($t("settings.itunes_import.invalid_response"));
+    libraryPath.value = result.library_path;
+    await nextTick();
+    await inspectLibrary();
+  } catch (value) {
+    if (alive && token === generation)
+      error.value = value instanceof Error ? value.message : String(value);
+  } finally {
+    if (alive && (token === generation || libraryPath.value))
+      uploading.value = false;
+  }
+}
 async function inspectLibrary() {
   if (!allowed.value || !supported.value || !validPath.value || reading.value)
     return;
   const token = ++generation;
+  const sourcePath = libraryPath.value;
   reading.value = true;
   error.value = "";
   preview.value = undefined;
   try {
     const result = await api.sendCommand<ItunesImportInspection>(
       "library_enrichment/itunes_inspect",
-      { library_path: libraryPath.value },
+      { library_path: sourcePath },
       { suppressGlobalError: true },
     );
-    if (!alive || token !== generation) return;
+    if (!alive || token !== generation || libraryPath.value !== sourcePath)
+      return;
     if (!validInspection(result))
       throw new Error($t("settings.itunes_import.invalid_response"));
     inspection.value = result;
@@ -315,11 +515,25 @@ async function initialize() {
       {},
       { suppressGlobalError: true },
     );
-    if (alive && token === generation)
+    if (alive && token === generation) {
       supported.value =
         result.api_version === 1 &&
         result.itunes_import === true &&
         result.itunes_import_api_version === 1;
+      zipSupported.value =
+        supported.value &&
+        result.itunes_zip_packages === true &&
+        result.itunes_zip_api_version === 1;
+      uploadSupported.value =
+        zipSupported.value &&
+        result.itunes_zip_upload === true &&
+        result.itunes_zip_upload_api_version === 1 &&
+        typeof result.max_itunes_zip_upload_bytes === "number" &&
+        result.max_itunes_zip_upload_bytes > 0;
+      maxUploadBytes.value = uploadSupported.value
+        ? result.max_itunes_zip_upload_bytes!
+        : 0;
+    }
   } catch {
     if (alive && token === generation) supported.value = false;
   } finally {
@@ -353,6 +567,7 @@ void initialize();
     grid-template-columns: minmax(0, 1fr);
   }
   [data-testid="itunes-inspect"],
+  [data-testid="itunes-zip-upload"],
   [data-testid="itunes-preview"] {
     width: 100%;
     min-height: 44px;

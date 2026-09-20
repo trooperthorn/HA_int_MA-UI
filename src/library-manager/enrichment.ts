@@ -20,6 +20,11 @@ export interface ArchiveCapabilities {
   item_provenance_api_version?: number;
   itunes_import?: boolean;
   itunes_import_api_version?: number;
+  itunes_zip_packages?: boolean;
+  itunes_zip_api_version?: number;
+  itunes_zip_upload?: boolean;
+  itunes_zip_upload_api_version?: number;
+  max_itunes_zip_upload_bytes?: number;
   max_itunes_preview_page?: number;
   max_items: number;
 }
@@ -43,11 +48,33 @@ export interface ItunesImportInspection {
   inspection_id: string;
   source_digest: string;
   library_path: string;
+  source_kind: "xml" | "zip";
   tracks_total: number;
   playlists_total: number;
   roots: { source_root: string; suggested_target?: string | null }[];
   playlists: ItunesImportPlaylist[];
-  warnings?: string[];
+  package?: ItunesPackageInventory | null;
+  localization?: ItunesLocalizationPreview | null;
+  warnings?: unknown[];
+}
+
+export interface ItunesPackageInventory {
+  entries_total: number;
+  files_total: number;
+  media_files_total: number;
+  xml_candidates_total: number;
+  compressed_bytes: number;
+  uncompressed_bytes: number;
+  selected_xml_path: string;
+  warnings: string[];
+}
+
+export interface ItunesLocalizationPreview {
+  state: "preview_only";
+  proposed_root: string;
+  files_total: number;
+  bytes_total: number;
+  conflicts: number;
 }
 
 export interface ItunesImportPreview {
