@@ -228,6 +228,10 @@
         v-if="config.domain === 'library_enrichment' && config.enabled"
         :key="config.instance_id"
       />
+      <LegacyItunesImport
+        v-if="config.domain === 'library_enrichment' && config.enabled"
+        :key="`itunes:${config.instance_id}`"
+      />
     </div>
 
     <edit-config
@@ -353,6 +357,7 @@ import AdvancedSettingsToggle from "./AdvancedSettingsToggle.vue";
 import AmbientSoundsCustomSounds from "./AmbientSoundsCustomSounds.vue";
 import EditConfig from "./EditConfig.vue";
 import LibraryEnrichmentArchives from "./LibraryEnrichmentArchives.vue";
+import LegacyItunesImport from "./LegacyItunesImport.vue";
 
 // global refs
 const router = useRouter();
