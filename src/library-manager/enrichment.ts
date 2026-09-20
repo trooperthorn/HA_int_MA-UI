@@ -18,7 +18,49 @@ export interface ArchiveCapabilities {
   playback_strict_signal?: string;
   item_provenance?: boolean;
   item_provenance_api_version?: number;
+  itunes_import?: boolean;
+  itunes_import_api_version?: number;
+  max_itunes_preview_page?: number;
   max_items: number;
+}
+
+export interface ItunesPathMapping {
+  source_root: string;
+  target_root: string;
+}
+
+export interface ItunesImportPlaylist {
+  id: string;
+  name: string;
+  track_count: number;
+  kind: string;
+  selectable: boolean;
+  reason?: string | null;
+}
+
+export interface ItunesImportInspection {
+  api_version: number;
+  inspection_id: string;
+  source_digest: string;
+  library_path: string;
+  tracks_total: number;
+  playlists_total: number;
+  roots: { source_root: string; suggested_target?: string | null }[];
+  playlists: ItunesImportPlaylist[];
+  warnings?: string[];
+}
+
+export interface ItunesImportPreview {
+  api_version: number;
+  inspection_id: string;
+  source_digest: string;
+  preview_digest: string;
+  selected_playlists: number;
+  source_tracks: number;
+  matched: number;
+  unresolved: number;
+  ambiguous: number;
+  unsupported: number;
 }
 
 export type ItemProvenanceState =
