@@ -162,6 +162,37 @@ beforeEach(() => {
 });
 
 describe("EditProvider", () => {
+  it.each([true, false])(
+    "shows archive controls only for an enabled enrichment provider (%s)",
+    async (enabled) => {
+      Object.assign(apiMock.providerManifests, {
+        library_enrichment: {
+          ...apiMock.providerManifests.spotify,
+          name: "Library Enrichment",
+          self_service: false,
+        },
+      });
+      apiMock.getProviderConfig.mockResolvedValue({
+        ...spotifyConfig(ProviderStatus.LOADED),
+        domain: "library_enrichment",
+        instance_id: "library_enrichment--test",
+        enabled,
+      });
+      const wrapper = shallowMount(EditProvider, {
+        props: { instanceId: "library_enrichment--test" },
+        global: {
+          mocks: { $t: (key: string) => key },
+          stubs: providerDetailsStubs,
+        },
+      });
+      await flushPromises();
+      expect(
+        wrapper.findComponent({ name: "LibraryEnrichmentArchives" }).exists(),
+      ).toBe(enabled);
+      wrapper.unmount();
+    },
+  );
+
   it("shows provider status and direct support actions", async () => {
     apiMock.getProviderConfig.mockResolvedValue(
       spotifyConfig(ProviderStatus.LOADED),
