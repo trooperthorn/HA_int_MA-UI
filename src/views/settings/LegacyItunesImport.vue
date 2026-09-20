@@ -426,13 +426,14 @@ async function uploadZip() {
   error.value = "";
   try {
     const authToken = authManager.getToken();
-    if (!authToken) throw new Error($t("settings.itunes_import.upload_failed"));
+    const ingress = hasHomeAssistantIngressPath();
+    if (!authToken && !ingress)
+      throw new Error($t("settings.itunes_import.upload_failed"));
+    const headers: Record<string, string> = { "X-Filename": file.name };
+    if (authToken) headers.Authorization = `Bearer ${authToken}`;
     const response = await fetch(uploadEndpoint(), {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${authToken}`,
-        "X-Filename": file.name,
-      },
+      headers,
       body: file,
     });
     if (!response.ok) {

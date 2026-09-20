@@ -322,6 +322,7 @@ describe("legacy iTunes XML import", () => {
 
   it("preserves the Home Assistant Ingress prefix for ZIP uploads", async () => {
     mocks.baseUrl = "";
+    mocks.getToken.mockReturnValue(null);
     window.history.replaceState({}, "", "/hassio_ingress/server/#/settings");
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,
@@ -342,6 +343,9 @@ describe("legacy iTunes XML import", () => {
     expect(fetchMock.mock.calls[0][0]).toBe(
       `${window.location.origin}/hassio_ingress/server/library-enrichment/itunes-upload`,
     );
+    expect(fetchMock.mock.calls[0][1].headers).toEqual({
+      "X-Filename": "iTunes Library.zip",
+    });
     expect(wrapper.text()).toContain("ZIP has no iTunes XML");
     window.history.replaceState({}, "", "/");
   });
