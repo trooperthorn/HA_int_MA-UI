@@ -1,7 +1,7 @@
-// The duplicates report: what the library holds more than once, ranked so
-// the lesser copy is the obvious one to drop. Everything comes from the
+// Candidate copies ranked by format for review, not proof of byte identity.
+// Everything comes from the
 // track listing the server already returns (every copy is a provider
-// mapping with its own audio format and, for files, a checksum) and from
+// mapping with its own audio format) and from
 // the sync task log (orphaned CUE sheets). Nothing here writes; the page
 // does that through the existing library commands.
 import { api } from "@/plugins/api";
@@ -13,7 +13,12 @@ import {
 } from "@/plugins/api/interfaces";
 import { collectSyncIssues, type SyncIssue } from "./syncIssues";
 
-export type GroupKind = "copies" | "checksum" | "probable" | "cue";
+export type GroupKind = "copies" | "probable" | "cue";
+
+/** Library summaries may omit IDs; omission is not an empty full record. */
+export type DiagnosticTrack = Omit<Track, "external_ids"> & {
+  external_ids?: Track["external_ids"] | null;
+};
 
 export interface FormatSummary {
   codec: string;
@@ -41,9 +46,11 @@ export interface CopyRow {
   sourceName: string;
   path: string;
   format: FormatSummary;
-  checksum: string | null;
+  // Reserved CSV field; no byte hashes are supplied by the listing contract.
+  checksum: null;
   tagScore: number;
   tagsMissing: string[];
+  tagsUnknown: string[];
 }
 
 export interface DuplicateGroup {
@@ -125,7 +132,7 @@ export function summarizeFormat(mapping: ProviderMapping): FormatSummary {
   };
 }
 
-function artistNames(track: Track): string {
+function artistNames(track: DiagnosticTrack): string {
   return (track.artists ?? [])
     .map((artist) => artist.name)
     .filter(Boolean)
@@ -133,20 +140,27 @@ function artistNames(track: Track): string {
 }
 
 /** What the listing shows of a track's tags; missing ones by name. */
-export function tagHealth(track: Track): {
+export function tagHealth(track: DiagnosticTrack): {
   score: number;
   missing: string[];
+  unknown: string[];
 } {
   const missing: string[] = [];
+  const unknown: string[] = [];
   if (!track.album) missing.push("album");
   if (!track.track_number) missing.push("track_number");
   if (track.album && !track.album.year) missing.push("year");
-  if (!track.external_ids?.length) missing.push("ids");
+  if (!Array.isArray(track.external_ids)) unknown.push("ids");
+  else if (!track.external_ids.length) missing.push("ids");
   const albumImage =
     track.album && "image" in track.album ? track.album.image : null;
   const hasImage = !!track.metadata?.images?.length || !!albumImage;
   if (!hasImage) missing.push("cover");
-  return { score: TAG_CHECKS - missing.length, missing };
+  return {
+    score: TAG_CHECKS - missing.length - unknown.length,
+    missing,
+    unknown,
+  };
 }
 
 export function isLocalMapping(mapping: ProviderMapping): boolean {
@@ -160,7 +174,7 @@ function sourceName(mapping: ProviderMapping): string {
   );
 }
 
-export function rowsOf(track: Track): CopyRow[] {
+export function rowsOf(track: DiagnosticTrack): CopyRow[] {
   const tags = tagHealth(track);
   return (track.provider_mappings ?? []).map((mapping) => {
     const local = isLocalMapping(mapping);
@@ -178,9 +192,12 @@ export function rowsOf(track: Track): CopyRow[] {
       sourceName: sourceName(mapping),
       path: mapping.item_id,
       format: summarizeFormat(mapping),
-      checksum: local && mapping.details ? String(mapping.details) : null,
+      // Provider details are opaque change tokens (filesystem uses mtime).
+      // Byte hashes need a separate algorithm-qualified backend contract.
+      checksum: null,
       tagScore: tags.score,
       tagsMissing: tags.missing,
+      tagsUnknown: tags.unknown,
     };
   });
 }
@@ -211,7 +228,7 @@ export function normalizeName(name: string): string {
     .trim();
 }
 
-function recordingIds(track: Track): string[] {
+function recordingIds(track: DiagnosticTrack): string[] {
   return (track.external_ids ?? [])
     .filter(
       ([kind]) => kind === ExternalID.ISRC || kind === ExternalID.MB_RECORDING,
@@ -220,27 +237,22 @@ function recordingIds(track: Track): string[] {
 }
 
 /** Group the library's tracks into the kinds the page reports. */
-export function buildGroups(tracks: Track[]): DuplicateGroup[] {
+export function buildGroups(tracks: DiagnosticTrack[]): DuplicateGroup[] {
   const groups: DuplicateGroup[] = [];
   const rowsByTrack = new Map<string, CopyRow[]>();
   for (const track of tracks)
     rowsByTrack.set(String(track.item_id), rowsOf(track));
 
   // A: one track, several local copies
-  const byChecksumInTrack = new Set<string>();
   for (const track of tracks) {
     const rows = rowsByTrack.get(String(track.item_id)) ?? [];
     const local = rows.filter((row) => row.local);
     if (local.length < 2) continue;
-    const checksums = new Set(local.map((row) => row.checksum).filter(Boolean));
-    const identical =
-      checksums.size === 1 && local.every((row) => row.checksum);
-    if (identical) byChecksumInTrack.add(local[0].checksum as string);
     groups.push({
       id: `copies:${track.item_id}`,
       kind: "copies",
       title: `${artistNames(track)} · ${track.name}`,
-      reason: identical ? "same checksum" : "merged at import",
+      reason: "merged at import",
       rows: [
         ...rows.filter((row) => row.local),
         ...rows.filter((row) => !row.local),
@@ -249,42 +261,9 @@ export function buildGroups(tracks: Track[]): DuplicateGroup[] {
     });
   }
 
-  // B: byte-identical files across different tracks
-  const byChecksum = new Map<string, CopyRow[]>();
-  for (const rows of rowsByTrack.values()) {
-    for (const row of rows) {
-      if (row.checksum) {
-        byChecksum.set(row.checksum, [
-          ...(byChecksum.get(row.checksum) ?? []),
-          row,
-        ]);
-      }
-    }
-  }
-  for (const [checksum, rows] of byChecksum) {
-    const trackIds = new Set(rows.map((row) => row.trackId));
-    if (rows.length < 2 || trackIds.size < 2 || byChecksumInTrack.has(checksum))
-      continue;
-    groups.push({
-      id: `checksum:${checksum}`,
-      kind: "checksum",
-      title: `${rows[0].artists} · ${rows[0].trackName}`,
-      reason: "identical file",
-      rows,
-      keep: keepIndex(rows),
-    });
-  }
-
-  // C: the same song filed twice (the import did not merge them); a pair
-  // already reported as identical files is not repeated here
-  const identicalSets = new Set(
-    groups
-      .filter((group) => group.kind === "checksum")
-      .map((group) =>
-        [...new Set(group.rows.map((row) => row.trackId))].sort().join(","),
-      ),
-  );
-  const byKey = new Map<string, Track[]>();
+  // Provider details cannot establish byte identity. Only review candidates
+  // based on names and durations/recording IDs are built across tracks.
+  const byKey = new Map<string, DiagnosticTrack[]>();
   for (const track of tracks) {
     const first = track.artists?.[0]?.name ?? "";
     const key = `${normalizeName(track.name)}|${normalizeName(first)}`;
@@ -294,7 +273,7 @@ export function buildGroups(tracks: Track[]): DuplicateGroup[] {
     if (candidates.length < 2) continue;
     const remaining = [...candidates];
     while (remaining.length > 1) {
-      const seed = remaining.shift() as Track;
+      const seed = remaining.shift() as DiagnosticTrack;
       const seedIds = new Set(recordingIds(seed));
       const cluster = [seed];
       for (const other of remaining.slice()) {
@@ -308,11 +287,6 @@ export function buildGroups(tracks: Track[]): DuplicateGroup[] {
         }
       }
       if (cluster.length < 2) continue;
-      const clusterKey = cluster
-        .map((track) => String(track.item_id))
-        .sort()
-        .join(",");
-      if (identicalSets.has(clusterKey)) continue;
       const rows = cluster.flatMap(
         (track) => rowsByTrack.get(String(track.item_id)) ?? [],
       );
@@ -344,8 +318,8 @@ export function cueRowsFrom(issues: SyncIssue[]): CueRow[] {
 /** Every library track, 500 at a time. */
 export async function scanLibrary(
   onProgress?: (count: number) => void,
-): Promise<Track[]> {
-  const tracks: Track[] = [];
+): Promise<DiagnosticTrack[]> {
+  const tracks: DiagnosticTrack[] = [];
   for (let offset = 0; ; offset += PAGE_SIZE) {
     const page = await api.getLibraryTracks(
       undefined,
@@ -413,6 +387,7 @@ export function toCsv(groups: DuplicateGroup[], cues: CueRow[]): string {
       "format",
       "checksum",
       "tags_missing",
+      "tags_unknown",
     ].join(","),
   ];
   for (const group of groups) {
@@ -430,6 +405,7 @@ export function toCsv(groups: DuplicateGroup[], cues: CueRow[]): string {
           row.format.label,
           row.checksum ?? "",
           row.tagsMissing.join(" "),
+          row.tagsUnknown.join(" "),
         ]
           .map(csvCell)
           .join(","),
@@ -447,6 +423,7 @@ export function toCsv(groups: DuplicateGroup[], cues: CueRow[]): string {
         "",
         cue.providerName,
         cue.path,
+        "",
         "",
         "",
         "",

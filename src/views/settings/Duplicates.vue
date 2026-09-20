@@ -253,17 +253,28 @@
           <span
             class="duplicates__cell duplicates__cell--tags"
             :title="
-              row.tagsMissing
-                .map((tag) => $t(`settings.duplicates.tag_${tag}`))
-                .join(', ')
+              [
+                ...row.tagsMissing.map((tag) =>
+                  $t(`settings.duplicates.tag_${tag}`),
+                ),
+                ...row.tagsUnknown.map((tag) =>
+                  $t(`settings.duplicates.tag_${tag}_unknown`),
+                ),
+              ].join(', ')
             "
           >
             {{
               $t("settings.duplicates.tags", {
                 score: row.tagScore,
-                total: TAG_CHECKS,
+                total: TAG_CHECKS - row.tagsUnknown.length,
               })
             }}
+            <span
+              v-if="row.tagsUnknown.includes('ids')"
+              class="duplicates__note"
+            >
+              · {{ $t("settings.duplicates.tag_ids_unknown") }}
+            </span>
           </span>
           <Button
             v-if="row.local && !removed.has(row.id)"
@@ -547,7 +558,7 @@ import { computed, reactive, ref } from "vue";
 import { toast } from "vue-sonner";
 import SettingsHeaderCard from "./SettingsHeaderCard.vue";
 
-const KINDS: GroupKind[] = ["copies", "checksum", "probable"];
+const KINDS: GroupKind[] = ["copies", "probable"];
 const SHOW_STEP = 100;
 
 const scanning = ref(false);

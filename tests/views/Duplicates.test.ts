@@ -170,6 +170,47 @@ describe("Duplicates", () => {
     );
   });
 
+  it("shows unloaded external IDs without reporting them missing", async () => {
+    mocks.getLibraryTracks.mockResolvedValue(
+      TRACKS.map((track) => {
+        const summary = { ...track };
+        Reflect.deleteProperty(summary, "external_ids");
+        return summary;
+      }),
+    );
+    const wrapper = mountPage();
+    await wrapper.find("[data-duplicates-scan]").trigger("click");
+    await flushPromises();
+    const tags = wrapper.find(".duplicates__cell--tags");
+    expect(tags.text()).toContain("settings.duplicates.tag_ids_unknown");
+    expect(tags.attributes("title")).toBe(
+      "settings.duplicates.tag_ids_unknown",
+    );
+    expect(wrapper.find('[data-group-kind="checksum"]').exists()).toBe(false);
+  });
+
+  it("does not offer bulk cleanup for unrelated files sharing an mtime", async () => {
+    mocks.getLibraryTracks.mockResolvedValue([
+      {
+        ...TRACKS[0],
+        provider_mappings: [mapping("a.flac", "flac", 0, "1726704000")],
+      },
+      {
+        ...TRACKS[1],
+        provider_mappings: [mapping("b.flac", "flac", 0, "1726704000")],
+      },
+    ]);
+    const wrapper = mountPage();
+    await wrapper.find("[data-duplicates-scan]").trigger("click");
+    await flushPromises();
+    expect(wrapper.findAll("[data-group-kind]")).toHaveLength(0);
+    expect(wrapper.find("[data-duplicates-select-lesser]").exists()).toBe(
+      false,
+    );
+    expect(mocks.removeProviderMapping).not.toHaveBeenCalled();
+    expect(mocks.trashMove).not.toHaveBeenCalled();
+  });
+
   it("selects every lesser copy of the safe kinds and removes them after a confirmation", async () => {
     const wrapper = mountPage();
     await wrapper.find("[data-duplicates-scan]").trigger("click");
