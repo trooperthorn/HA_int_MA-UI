@@ -6,6 +6,9 @@ export interface ArchiveCapabilities {
   preview_preconditions?: boolean;
   version_listing?: boolean;
   archive_apply?: boolean;
+  subscription_sync?: boolean;
+  sync_policy_api_version?: number;
+  interval_bounds?: { min: number; max: number };
   max_items: number;
 }
 
@@ -107,4 +110,54 @@ export interface ArchiveApplyStatus {
   retryable?: boolean;
   destination?: ArchiveDestination | null;
   error?: string | null;
+}
+
+export interface ArchiveSyncPolicy {
+  subscription_id: string;
+  mode: "manual" | "scheduled";
+  interval_seconds: number;
+  initiating_user_id: string | null;
+  revision: number;
+  updated_at: string | null;
+}
+
+export interface ArchiveSyncJob {
+  id: string;
+  subscription_id: string;
+  trigger: "manual" | "scheduled";
+  state:
+    | "queued"
+    | "running"
+    | "succeeded"
+    | "failed"
+    | "cancelled"
+    | "interrupted";
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  observed_snapshot: string | null;
+  version_id: string | null;
+  error: string | null;
+}
+
+export interface ArchiveSyncStatus {
+  policy: ArchiveSyncPolicy;
+  state: {
+    subscription_id: string;
+    next_check_at: string | null;
+    last_check_at: string | null;
+    last_success_at: string | null;
+    consecutive_failures: number;
+    access_state:
+      | "unknown"
+      | "accessible"
+      | "authentication_required"
+      | "access_denied"
+      | "temporarily_unavailable"
+      | "provider_offline";
+    last_error_code: string | null;
+    last_error: string | null;
+  };
+  jobs: ArchiveSyncJob[];
+  latest_job?: ArchiveSyncJob | null;
 }
