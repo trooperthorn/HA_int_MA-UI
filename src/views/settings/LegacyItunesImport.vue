@@ -189,7 +189,7 @@
             <div
               v-for="(mapping, index) in pathMappings"
               :key="mapping.source_root"
-              class="itunes-mapping grid gap-2 sm:grid-cols-2"
+              class="itunes-mapping grid gap-2 sm:grid-cols-3"
               data-testid="itunes-path-mapping"
             >
               <label class="min-w-0 space-y-1">
@@ -198,6 +198,17 @@
                   :value="mapping.source_root"
                   class="itunes-input"
                   readonly
+                />
+              </label>
+              <label class="min-w-0 space-y-1">
+                <span>{{
+                  $t("settings.itunes_import.provider_instance")
+                }}</span>
+                <input
+                  v-model.trim="pathMappings[index].provider_instance_id"
+                  class="itunes-input"
+                  data-testid="itunes-provider-instance"
+                  autocomplete="off"
                 />
               </label>
               <label class="min-w-0 space-y-1">
@@ -278,7 +289,120 @@
                 })
               }}
             </p>
-            <p>{{ $t("settings.itunes_import.preview_read_only") }}</p>
+            <p>
+              {{
+                $t(
+                  applySupported
+                    ? "settings.itunes_import.preview_resolved"
+                    : "settings.itunes_import.preview_read_only",
+                )
+              }}
+            </p>
+            <div
+              v-if="applySupported"
+              data-testid="itunes-apply-section"
+              class="mt-3 space-y-2 border-t pt-3"
+            >
+              <p v-if="!applyPermission" role="alert">
+                {{ $t("settings.itunes_import.apply_permission") }}
+              </p>
+              <p
+                v-else-if="selectedPlaylistIds.length !== 1"
+                data-testid="itunes-apply-selection"
+                class="text-muted-foreground"
+              >
+                {{ $t("settings.itunes_import.apply_one_playlist") }}
+              </p>
+              <p
+                v-else-if="!applyPreviewEligible"
+                data-testid="itunes-apply-blocked"
+                class="text-muted-foreground"
+              >
+                {{ $t("settings.itunes_import.apply_requires_resolved") }}
+              </p>
+              <template v-else>
+                <label class="flex items-start gap-2">
+                  <input
+                    v-model="applyConfirmed"
+                    data-testid="itunes-apply-confirm"
+                    type="checkbox"
+                  />
+                  <span>
+                    {{
+                      $t("settings.itunes_import.apply_confirm", {
+                        count: preview.matched,
+                      })
+                    }}
+                  </span>
+                </label>
+                <label
+                  v-if="requiresPartialApply"
+                  class="flex items-start gap-2"
+                >
+                  <input
+                    v-model="partialConfirmed"
+                    data-testid="itunes-apply-partial"
+                    type="checkbox"
+                  />
+                  <span>
+                    {{
+                      $t("settings.itunes_import.apply_partial_confirm", {
+                        matched: preview.matched,
+                        omitted: omittedOccurrences,
+                      })
+                    }}
+                  </span>
+                </label>
+                <div class="flex flex-wrap gap-2">
+                  <Button
+                    data-testid="itunes-apply"
+                    :disabled="!canApply"
+                    @click="applyImport"
+                    >{{
+                      $t(
+                        applying
+                          ? "settings.itunes_import.applying"
+                          : "settings.itunes_import.apply",
+                      )
+                    }}</Button
+                  >
+                  <Button
+                    data-testid="itunes-apply-refresh"
+                    variant="outline"
+                    :disabled="applying || refreshingApply"
+                    @click="refreshApplyStatus"
+                    >{{ $t("settings.itunes_import.refresh_apply") }}</Button
+                  >
+                </div>
+              </template>
+              <p v-if="applyError" role="alert" class="text-destructive">
+                {{ applyError }}
+              </p>
+              <div
+                v-if="applyStatus"
+                data-testid="itunes-apply-status"
+                class="rounded-lg border p-2"
+              >
+                <p>
+                  {{
+                    $t("settings.itunes_import.apply_status", {
+                      state: applyStatus.state,
+                      count: applyStatus.source_count ?? preview.matched,
+                    })
+                  }}
+                </p>
+                <p
+                  v-if="applyStatus.state === 'uncertain'"
+                  data-testid="itunes-apply-uncertain"
+                  class="text-destructive"
+                >
+                  {{ $t("settings.itunes_import.apply_uncertain") }}
+                </p>
+                <p v-if="applyStatus.error" class="text-destructive">
+                  {{ applyStatus.error }}
+                </p>
+              </div>
+            </div>
           </div>
         </section>
       </template>
@@ -300,6 +424,7 @@ import {
 import type {
   ArchiveCapabilities,
   ItunesImportInspection,
+  ItunesImportApplyStatus,
   ItunesImportPreview,
   ItunesPathMapping,
 } from "@/library-manager/enrichment";
@@ -315,6 +440,7 @@ const checking = ref(false);
 const supported = ref(false);
 const zipSupported = ref(false);
 const uploadSupported = ref(false);
+const applySupported = ref(false);
 const maxUploadBytes = ref(0);
 const selectedZip = ref<File>();
 const libraryPath = ref("");
@@ -322,10 +448,16 @@ const inspection = ref<ItunesImportInspection>();
 const pathMappings = ref<ItunesPathMapping[]>([]);
 const selectedPlaylistIds = ref<string[]>([]);
 const preview = ref<ItunesImportPreview>();
+const applyStatus = ref<ItunesImportApplyStatus>();
+const applyConfirmed = ref(false);
+const partialConfirmed = ref(false);
 const reading = ref(false);
 const previewing = ref(false);
 const uploading = ref(false);
+const applying = ref(false);
+const refreshingApply = ref(false);
 const error = ref("");
+const applyError = ref("");
 let generation = 0;
 let alive = true;
 
@@ -348,11 +480,44 @@ const canUpload = computed(
 const selectablePlaylists = computed(
   () => inspection.value?.playlists.filter((item) => item.selectable) ?? [],
 );
+const applyPermission = computed(() =>
+  authManager.hasScope(Scope.LIBRARY_WRITE),
+);
 const canPreview = computed(
   () =>
     !!inspection.value &&
     selectedPlaylistIds.value.length > 0 &&
-    pathMappings.value.every((item) => item.target_root.trim().length > 0),
+    pathMappings.value.every(
+      (item) =>
+        item.target_root.trim().length > 0 &&
+        item.provider_instance_id.trim().length > 0,
+    ),
+);
+const omittedOccurrences = computed(
+  () =>
+    (preview.value?.unresolved ?? 0) +
+    (preview.value?.ambiguous ?? 0) +
+    (preview.value?.unsupported ?? 0),
+);
+const requiresPartialApply = computed(() => omittedOccurrences.value > 0);
+const applyPreviewEligible = computed(
+  () =>
+    !!preview.value &&
+    preview.value.selected_playlists === 1 &&
+    preview.value.matched > 0 &&
+    typeof preview.value.revision === "number" &&
+    preview.value.revision >= 0,
+);
+const canApply = computed(
+  () =>
+    applySupported.value &&
+    applyPermission.value &&
+    selectedPlaylistIds.value.length === 1 &&
+    applyPreviewEligible.value &&
+    applyConfirmed.value &&
+    (!requiresPartialApply.value || partialConfirmed.value) &&
+    !applying.value &&
+    !refreshingApply.value,
 );
 
 function validInspection(value: ItunesImportInspection): boolean {
@@ -389,17 +554,40 @@ function validPreview(
     !!value.preview_digest
   );
 }
+function validApplyStatus(value: ItunesImportApplyStatus, id: string): boolean {
+  return (
+    value?.api_version === 1 &&
+    value.inspection_id === id &&
+    [
+      "not_applied",
+      "not_started",
+      "prepared",
+      "creating",
+      "applied",
+      "failed",
+      "uncertain",
+    ].includes(value.state)
+  );
+}
 function invalidateInspection() {
   generation++;
   inspection.value = undefined;
   pathMappings.value = [];
   selectedPlaylistIds.value = [];
   preview.value = undefined;
+  applyStatus.value = undefined;
+  applyConfirmed.value = false;
+  partialConfirmed.value = false;
+  applyError.value = "";
   error.value = "";
 }
 function invalidatePreview() {
   generation++;
   preview.value = undefined;
+  applyStatus.value = undefined;
+  applyConfirmed.value = false;
+  partialConfirmed.value = false;
+  applyError.value = "";
   error.value = "";
 }
 function selectZipFile(event: Event) {
@@ -491,6 +679,7 @@ async function inspectLibrary() {
     pathMappings.value = result.roots.map((root) => ({
       source_root: root.source_root,
       target_root: root.suggested_target || "",
+      provider_instance_id: "",
     }));
     selectedPlaylistIds.value = [];
   } catch (value) {
@@ -528,6 +717,71 @@ async function previewImport() {
     if (alive && token === generation) previewing.value = false;
   }
 }
+async function readApplyStatus(
+  inspectionId: string,
+): Promise<ItunesImportApplyStatus> {
+  const result = await api.sendCommand<ItunesImportApplyStatus>(
+    "library_enrichment/itunes_apply_status",
+    { inspection_id: inspectionId },
+    { suppressGlobalError: true },
+  );
+  if (!validApplyStatus(result, inspectionId))
+    throw new Error($t("settings.itunes_import.invalid_response"));
+  return result;
+}
+async function refreshApplyStatus() {
+  const current = preview.value;
+  if (!current || !applySupported.value || refreshingApply.value) return;
+  const token = ++generation;
+  refreshingApply.value = true;
+  applyError.value = "";
+  try {
+    const result = await readApplyStatus(current.inspection_id);
+    if (alive && token === generation) applyStatus.value = result;
+  } catch (value) {
+    if (alive && token === generation)
+      applyError.value = value instanceof Error ? value.message : String(value);
+  } finally {
+    if (alive && token === generation) refreshingApply.value = false;
+  }
+}
+async function applyImport() {
+  const current = preview.value;
+  if (!current || !canApply.value) return;
+  const token = ++generation;
+  applying.value = true;
+  applyError.value = "";
+  try {
+    const result = await api.sendCommand<ItunesImportApplyStatus>(
+      "library_enrichment/itunes_apply",
+      {
+        inspection_id: current.inspection_id,
+        revision: current.revision,
+        source_digest: current.source_digest,
+        preview_digest: current.preview_digest,
+        playlist_id: selectedPlaylistIds.value[0],
+        allow_partial: partialConfirmed.value,
+      },
+      { suppressGlobalError: true },
+    );
+    if (!alive || token !== generation) return;
+    if (!validApplyStatus(result, current.inspection_id))
+      throw new Error($t("settings.itunes_import.invalid_response"));
+    applyStatus.value = result;
+    applyStatus.value = await readApplyStatus(current.inspection_id);
+  } catch (value) {
+    if (alive && token === generation) {
+      applyError.value = value instanceof Error ? value.message : String(value);
+      try {
+        applyStatus.value = await readApplyStatus(current.inspection_id);
+      } catch {
+        // Keep the original apply error when status cannot be read.
+      }
+    }
+  } finally {
+    if (alive && token === generation) applying.value = false;
+  }
+}
 async function initialize() {
   if (!allowed.value) return;
   const token = ++generation;
@@ -553,6 +807,12 @@ async function initialize() {
         result.itunes_zip_upload_api_version === 1 &&
         typeof result.max_itunes_zip_upload_bytes === "number" &&
         result.max_itunes_zip_upload_bytes > 0;
+      applySupported.value =
+        supported.value &&
+        result.itunes_apply === true &&
+        result.itunes_apply_api_version === 1 &&
+        typeof result.max_itunes_apply_occurrences === "number" &&
+        result.max_itunes_apply_occurrences > 0;
       maxUploadBytes.value = uploadSupported.value
         ? result.max_itunes_zip_upload_bytes!
         : 0;
@@ -591,7 +851,9 @@ void initialize();
   }
   [data-testid="itunes-inspect"],
   [data-testid="itunes-zip-upload"],
-  [data-testid="itunes-preview"] {
+  [data-testid="itunes-preview"],
+  [data-testid="itunes-apply"],
+  [data-testid="itunes-apply-refresh"] {
     width: 100%;
     min-height: 44px;
   }

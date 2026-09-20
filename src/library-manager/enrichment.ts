@@ -24,6 +24,9 @@ export interface ArchiveCapabilities {
   raw_payload_inline?: boolean;
   itunes_import?: boolean;
   itunes_import_api_version?: number;
+  itunes_apply?: boolean;
+  itunes_apply_api_version?: number;
+  max_itunes_apply_occurrences?: number;
   itunes_zip_packages?: boolean;
   itunes_zip_api_version?: number;
   itunes_zip_upload?: boolean;
@@ -36,6 +39,7 @@ export interface ArchiveCapabilities {
 export interface ItunesPathMapping {
   source_root: string;
   target_root: string;
+  provider_instance_id: string;
 }
 
 export interface ItunesImportPlaylist {
@@ -86,12 +90,34 @@ export interface ItunesImportPreview {
   inspection_id: string;
   source_digest: string;
   preview_digest: string;
+  revision?: number;
+  projection_digest?: string;
+  playlist_name?: string;
   selected_playlists: number;
   source_tracks: number;
   matched: number;
   unresolved: number;
   ambiguous: number;
   unsupported: number;
+}
+
+export interface ItunesImportApplyStatus {
+  api_version: number;
+  inspection_id: string;
+  state:
+    | "not_applied"
+    | "not_started"
+    | "prepared"
+    | "creating"
+    | "applied"
+    | "failed"
+    | "uncertain";
+  source_count?: number;
+  destination?: {
+    item_id: string;
+    provider_instance_id: string;
+  } | null;
+  error?: string | null;
 }
 
 export type ItemProvenanceState =
