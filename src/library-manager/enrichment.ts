@@ -9,6 +9,9 @@ export interface ArchiveCapabilities {
   subscription_sync?: boolean;
   sync_policy_api_version?: number;
   interval_bounds?: { min: number; max: number };
+  local_matching?: boolean;
+  match_review_api_version?: number;
+  max_match_review_page?: number;
   max_items: number;
 }
 
@@ -160,4 +163,102 @@ export interface ArchiveSyncStatus {
   };
   jobs: ArchiveSyncJob[];
   latest_job?: ArchiveSyncJob | null;
+}
+
+export type ArchiveMatchClassification =
+  | "unmatched"
+  | "candidate"
+  | "ambiguous"
+  | "approved"
+  | "rejected";
+
+export interface ArchiveMatchLocation {
+  id: string;
+  asset_id: string;
+  provider_instance_id: string;
+  item_id: string;
+  evidence: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ArchiveMatchAsset {
+  id: string;
+  media_type: "track";
+  provider_instance_id: string;
+  item_id: string;
+  metadata: Record<string, unknown>;
+  evidence: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  locations: ArchiveMatchLocation[];
+}
+
+export interface ArchiveMatchCandidate {
+  id: string;
+  asset_id: string;
+  score: number;
+  evidence: Record<string, unknown>;
+  algorithm_version: string;
+  observed_at: string;
+  rejected: boolean;
+  approved: boolean;
+  asset: ArchiveMatchAsset;
+}
+
+export interface ArchiveMatchDecision {
+  id: string;
+  source_id: string;
+  asset_id: string | null;
+  action: "approve" | "reject" | "clear";
+  revision: number;
+  actor_id: string;
+  evidence: Record<string, unknown>;
+  algorithm_version: string | null;
+  created_at: string;
+}
+
+export interface ArchiveMatchOverlay {
+  source: {
+    id?: string;
+    provider_domain: string;
+    account_id: string;
+    media_type: "track";
+    source_item_id: string;
+  };
+  revision: number;
+  decision: ArchiveMatchDecision | null;
+  decision_history: ArchiveMatchDecision[];
+  approved_asset_id: string | null;
+  candidates: ArchiveMatchCandidate[];
+}
+
+export interface ArchiveMatchReviewItem {
+  position: number;
+  state: string;
+  source_item_id: string;
+  match: ArchiveMatchOverlay;
+  classification: ArchiveMatchClassification;
+}
+
+export interface ArchiveMatchReviewPage {
+  version_id: string;
+  subscription_id: string;
+  source: {
+    provider_domain: string;
+    provider_instance_id: string;
+    account_id: string;
+  };
+  limit: number;
+  offset: number;
+  total: number;
+  has_more: boolean;
+  candidate_freshness: "fresh" | "stale";
+  candidate_error: "library_read_failed" | null;
+  items: ArchiveMatchReviewItem[];
+}
+
+export interface ArchiveMatchDecisionResult {
+  match: ArchiveMatchOverlay;
+  classification: ArchiveMatchClassification;
 }

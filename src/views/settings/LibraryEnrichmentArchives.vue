@@ -253,6 +253,13 @@
             :key="subscription.committed_version_id"
             :version-id="subscription.committed_version_id"
           />
+          <ArchiveMatchReview
+            v-if="matchPageSize && subscription.committed_version_id"
+            :key="`matches:${subscription.committed_version_id}`"
+            :subscription-id="subscription.id"
+            :version-id="subscription.committed_version_id"
+            :page-size="matchPageSize"
+          />
           <p
             v-else-if="subscription.committed_version_id"
             class="mt-2 text-muted-foreground"
@@ -347,6 +354,7 @@ import { Scope } from "@/plugins/api/interfaces";
 import { authManager } from "@/plugins/auth";
 import { $t } from "@/plugins/i18n";
 import ArchivePlaylistApply from "./ArchivePlaylistApply.vue";
+import ArchiveMatchReview from "./ArchiveMatchReview.vue";
 import ArchiveSyncPolicy from "./ArchiveSyncPolicy.vue";
 import type {
   ArchiveCapabilities,
@@ -379,6 +387,15 @@ const syncBounds = computed(() => {
     bounds.max >= bounds.min
     ? bounds
     : undefined;
+});
+const matchPageSize = computed(() => {
+  const caps = capabilities.value;
+  return caps?.local_matching &&
+    caps.match_review_api_version === 1 &&
+    Number.isInteger(caps.max_match_review_page) &&
+    Number(caps.max_match_review_page) > 0
+    ? Math.min(100, Number(caps.max_match_review_page))
+    : 0;
 });
 const checking = ref(false);
 const capabilityError = ref("");

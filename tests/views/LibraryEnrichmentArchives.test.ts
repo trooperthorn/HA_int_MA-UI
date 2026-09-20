@@ -429,6 +429,26 @@ describe("Library Enrichment archive controls", () => {
     },
   );
 
+  it.each([1, 2])(
+    "gates lazy local match review on compatible version %s",
+    async (match_review_api_version) => {
+      persisted = structuredClone(pending);
+      mocks.sendCommand.mockResolvedValueOnce({
+        ...cap,
+        local_matching: true,
+        match_review_api_version,
+        max_match_review_page: 200,
+      });
+      const wrapper = mountPage();
+      await flushPromises();
+      expect(wrapper.find('[data-testid="archive-match-open"]').exists()).toBe(
+        match_review_api_version === 1,
+      );
+      expect(calls("match_review")).toHaveLength(0);
+      expect(calls("set_match_decision")).toHaveLength(0);
+    },
+  );
+
   it("deduplicates imported candidates across live pagination", async () => {
     const wrapper = mountPage();
     await flushPromises();
