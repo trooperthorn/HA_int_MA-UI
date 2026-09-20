@@ -3018,5 +3018,22 @@
     "legend_channel": "Stream to zone",
     "legend_output": "Zone to output",
     "legend_idle": "Not in path"
+  },
+  "map": {
+    "title": "Library map",
+    "shown": "Shown, click to filter",
+    "links": "Links",
+    "limit": "Items per type",
+    "include_tracks": "Include tracks",
+    "size": "Size",
+    "show_labels": "Show labels",
+    "hide_labels": "Hide labels",
+    "fit": "Fit",
+    "export": "Export PNG",
+    "retry": "Retry",
+    "loading": "Reading the library...",
+    "clear_selection": "Clear selection",
+    "view_arc": "View: By era",
+    "view_web": "View: Library web"
   }
 }
