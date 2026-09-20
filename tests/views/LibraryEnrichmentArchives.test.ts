@@ -38,6 +38,7 @@ vi.mock("@/plugins/api", () => ({
 vi.mock("@/plugins/auth", () => ({
   authManager: { hasScope: mocks.hasScope },
 }));
+vi.mock("vue-router", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/plugins/i18n", () => ({
   $t: (key: string, args?: unknown) => key + (args ? JSON.stringify(args) : ""),
 }));
@@ -382,6 +383,23 @@ describe("Library Enrichment archive controls", () => {
       wrapper.get('[data-testid="archive-capture"]').attributes("disabled"),
     ).toBeUndefined();
   });
+
+  it.each([true, false])(
+    "gates visible playlist controls on archive_apply (%s)",
+    async (archive_apply) => {
+      persisted = structuredClone(pending);
+      mocks.sendCommand.mockResolvedValueOnce({ ...cap, archive_apply });
+      const wrapper = mountPage();
+      await flushPromises();
+      expect(
+        wrapper.find('[data-testid="archive-apply-preview"]').exists(),
+      ).toBe(archive_apply);
+      expect(calls("apply_preview")).toHaveLength(0);
+      expect(calls("apply")).toHaveLength(0);
+      if (!archive_apply)
+        expect(wrapper.text()).toContain("settings.archives.apply_unavailable");
+    },
+  );
 
   it("deduplicates imported candidates across live pagination", async () => {
     const wrapper = mountPage();
