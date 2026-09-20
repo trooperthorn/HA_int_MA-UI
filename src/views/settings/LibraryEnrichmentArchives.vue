@@ -266,6 +266,13 @@
           >
             {{ $t("settings.archives.apply_unavailable") }}
           </p>
+          <ArchivePlaybackPolicy
+            v-if="playbackModes.length && subscription.committed_version_id"
+            :key="`playback:${subscription.committed_version_id}`"
+            :subscription-id="subscription.id"
+            :version-id="subscription.committed_version_id"
+            :modes="playbackModes"
+          />
           <Button
             v-if="capabilities.version_listing"
             variant="outline"
@@ -355,6 +362,7 @@ import { authManager } from "@/plugins/auth";
 import { $t } from "@/plugins/i18n";
 import ArchivePlaylistApply from "./ArchivePlaylistApply.vue";
 import ArchiveMatchReview from "./ArchiveMatchReview.vue";
+import ArchivePlaybackPolicy from "./ArchivePlaybackPolicy.vue";
 import ArchiveSyncPolicy from "./ArchiveSyncPolicy.vue";
 import type {
   ArchiveCapabilities,
@@ -396,6 +404,15 @@ const matchPageSize = computed(() => {
     Number(caps.max_match_review_page) > 0
     ? Math.min(100, Number(caps.max_match_review_page))
     : 0;
+});
+const playbackModes = computed(() => {
+  const caps = capabilities.value;
+  const supported = ["prefer_local", "local_only", "prefer_spotify"] as const;
+  return caps?.playback_policy &&
+    caps.playback_policy_api_version === 1 &&
+    Array.isArray(caps.playback_policy_modes)
+    ? caps.playback_policy_modes.filter((mode) => supported.includes(mode))
+    : [];
 });
 const checking = ref(false);
 const capabilityError = ref("");
