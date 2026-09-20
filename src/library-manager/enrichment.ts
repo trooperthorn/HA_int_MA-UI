@@ -18,6 +18,10 @@ export interface ArchiveCapabilities {
   playback_strict_signal?: string;
   item_provenance?: boolean;
   item_provenance_api_version?: number;
+  provenance_read?: boolean;
+  provenance_api_version?: number;
+  max_provenance_page?: number;
+  raw_payload_inline?: boolean;
   itunes_import?: boolean;
   itunes_import_api_version?: number;
   itunes_zip_packages?: boolean;
@@ -270,6 +274,56 @@ export interface ArchiveVersion {
   snapshot_id: string;
   total: number;
   created_at: string;
+}
+
+export interface ArchiveProvenanceObservation {
+  state: string;
+  value: unknown;
+  source: string;
+  fetched_at: string;
+  parser_version: string;
+  date_precision: string | null;
+  unit: string | null;
+}
+
+export interface ArchiveProvenanceOverride {
+  action: "set";
+  revision: number;
+  actor_id: string;
+  value: unknown;
+  created_at: string;
+}
+
+export interface ArchiveProvenanceField {
+  revision: number;
+  observation: ArchiveProvenanceObservation | null;
+  override: ArchiveProvenanceOverride | null;
+  effective: ArchiveProvenanceObservation | ArchiveProvenanceOverride | null;
+}
+
+export interface ArchiveProvenancePage {
+  api_version: number;
+  version_id: string;
+  subscription_id: string;
+  items: {
+    position: number;
+    state: string;
+    source_item_id: string;
+    provenance: {
+      subject: {
+        provider_domain: string;
+        account_id: string;
+        media_type: string;
+        source_item_id: string;
+      };
+      fields: Record<string, ArchiveProvenanceField>;
+    } | null;
+  }[];
+  limit: number;
+  offset: number;
+  total: number;
+  has_more: boolean;
+  raw_payload_inline: false;
 }
 
 export interface ArchiveDestination {
