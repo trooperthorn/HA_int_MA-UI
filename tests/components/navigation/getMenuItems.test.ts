@@ -115,9 +115,10 @@ describe("getMenuItems (sidebar.menu preference)", () => {
     ]);
 
     const items = getMenuItems();
-    expect(items.map((item) => item.id).slice(0, 7)).toEqual([
+    expect(items.map((item) => item.id).slice(0, 8)).toEqual([
       "librarymanager",
       "flow",
+      "librarymap",
       "party",
       "radios",
       "discover",

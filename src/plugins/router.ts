@@ -238,6 +238,12 @@ export const routes: RouteRecordRaw[] = [
           import(/* webpackChunkName: "flow" */ "@/flow/FlowView.vue"),
       },
       {
+        path: "/map",
+        name: "librarymap",
+        component: () =>
+          import(/* webpackChunkName: "librarymap" */ "@/map/MapView.vue"),
+      },
+      {
         path: "/library",
         name: "librarymanager",
         component: () =>

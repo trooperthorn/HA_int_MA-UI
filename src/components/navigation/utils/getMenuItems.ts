@@ -15,6 +15,7 @@ import {
   Radio,
   Search,
   Settings,
+  Share2,
   Sparkles,
   Waypoints,
 } from "@lucide/vue";
@@ -97,6 +98,14 @@ const MENU_ITEM_REGISTRY: MenuItemDefinition[] = [
     label: "flow.title",
     icon: Waypoints,
     path: "/flow",
+    isLibraryNode: false,
+    group: "library",
+  },
+  {
+    id: "librarymap",
+    label: "map.title",
+    icon: Share2,
+    path: "/map",
     isLibraryNode: false,
     group: "library",
   },
