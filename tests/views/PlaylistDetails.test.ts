@@ -49,6 +49,9 @@ vi.mock("@/components/DynamicItemSample.vue", () => ({
 vi.mock("@/components/PlaylistAccessSummary.vue", () => ({
   default: { name: "PlaylistAccessSummary", template: "<div />" },
 }));
+vi.mock("@/components/ItemProvenanceSummary.vue", () => ({
+  default: { name: "ItemProvenanceSummary", template: "<div />" },
+}));
 vi.mock("@/components/smart_playlist/SmartPlaylistRulesView.vue", () => ({
   default: { name: "SmartPlaylistRulesView", template: "<div />" },
 }));

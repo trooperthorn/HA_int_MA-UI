@@ -46,6 +46,10 @@
       </Dialog>
     </template>
   </InfoHeader>
+  <ItemProvenanceSummary
+    :library-item-id="props.itemId"
+    :provider="props.provider"
+  />
   <EditSmartPlaylistDialog
     v-if="smartRules && itemDetails"
     v-model:open="showEditDialog"
@@ -96,6 +100,7 @@
 <script setup lang="ts">
 import DynamicItemSample from "@/components/DynamicItemSample.vue";
 import InfoHeader from "@/components/InfoHeader.vue";
+import ItemProvenanceSummary from "@/components/ItemProvenanceSummary.vue";
 import ItemsListing, { LoadDataParams } from "@/components/ItemsListing.vue";
 import PlaylistAccessSummary from "@/components/PlaylistAccessSummary.vue";
 import ProviderDetails from "@/components/ProviderDetails.vue";
