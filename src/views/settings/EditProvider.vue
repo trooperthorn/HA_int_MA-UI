@@ -224,6 +224,10 @@
       <AmbientSoundsCustomSounds
         v-if="config.domain === 'ambient_sounds' && config.enabled"
       />
+      <LibraryEnrichmentArchives
+        v-if="config.domain === 'library_enrichment' && config.enabled"
+        :key="config.instance_id"
+      />
     </div>
 
     <edit-config
@@ -348,6 +352,7 @@ import { toast } from "vue-sonner";
 import AdvancedSettingsToggle from "./AdvancedSettingsToggle.vue";
 import AmbientSoundsCustomSounds from "./AmbientSoundsCustomSounds.vue";
 import EditConfig from "./EditConfig.vue";
+import LibraryEnrichmentArchives from "./LibraryEnrichmentArchives.vue";
 
 // global refs
 const router = useRouter();

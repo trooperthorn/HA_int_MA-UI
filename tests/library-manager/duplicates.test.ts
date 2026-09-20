@@ -133,12 +133,40 @@ describe("tag health", () => {
     expect(tagHealth(bare)).toEqual({
       score: 1,
       missing: ["album", "track_number", "ids", "cover"],
+      unknown: [],
     });
+  });
+
+  it.each([undefined, null])(
+    "keeps unloaded IDs unknown (%s)",
+    (external_ids) => {
+      const summary = track({ item_id: "1", name: "x", external_ids });
+      expect(tagHealth(summary)).toEqual({
+        score: 4,
+        missing: [],
+        unknown: ["ids"],
+      });
+      expect(
+        rowsOf({
+          ...summary,
+          provider_mappings: [mapping({ item_id: "a" })],
+        })[0].tagsUnknown,
+      ).toEqual(["ids"]);
+    },
+  );
+
+  it("does not claim missing MusicBrainz/ISRC based on unrelated loaded IDs", () => {
+    const full = track({
+      item_id: "1",
+      name: "x",
+      external_ids: [["acoustid", "value"]],
+    });
+    expect(tagHealth(full)).toEqual({ score: 5, missing: [], unknown: [] });
   });
 });
 
 describe("buildGroups", () => {
-  it("finds copies, identical files and probable pairs", () => {
+  it("finds copies and probable pairs without treating provider details as hashes", () => {
     const tracks = [
       // A: one track, a flac and an mp3 copy on the same source
       track({
@@ -149,7 +177,7 @@ describe("buildGroups", () => {
           mp3("E/O/9 - Lies.mp3", "c2"),
         ],
       }),
-      // B: the same file under two different tracks
+      // B: matching metadata under two tracks; opaque details prove no identity
       track({
         item_id: "2",
         name: "Anywhere",
@@ -193,7 +221,7 @@ describe("buildGroups", () => {
     const groups = buildGroups(tracks);
     expect(groups.map((group) => group.kind)).toEqual([
       "copies",
-      "checksum",
+      "probable",
       "probable",
     ]);
 
@@ -205,15 +233,51 @@ describe("buildGroups", () => {
     expect(copies.keep).toBe(0);
     expect(copies.rows[0].sourceName).toBe("SSD");
 
-    const identical = groups[1];
-    expect(identical.reason).toBe("identical file");
-    expect(new Set(identical.rows.map((row) => row.trackId))).toEqual(
+    const candidate = groups[1];
+    expect(candidate.reason).toBe("name and duration");
+    expect(new Set(candidate.rows.map((row) => row.trackId))).toEqual(
       new Set(["2", "3"]),
     );
 
     const probable = groups[2];
     expect(probable.rows.map((row) => row.trackId)).toEqual(["4", "5"]);
     expect(probable.rows[probable.keep].trackId).toBe("4");
+  });
+
+  it.each(["1726704000", "abcdef0123456789", "sha256:" + "a".repeat(64)])(
+    "never groups unrelated files by opaque provider details: %s",
+    (details) => {
+      const tracks = [
+        track({
+          item_id: "1",
+          name: "Lies",
+          provider_mappings: [mapping({ item_id: "a.flac", details })],
+        }),
+        track({
+          item_id: "2",
+          name: "Pyramid",
+          artists: [{ name: "Alan Parsons" }],
+          provider_mappings: [mapping({ item_id: "b.flac", details })],
+        }),
+      ];
+      expect(buildGroups(tracks)).toEqual([]);
+      expect(rowsOf(tracks[0])[0].checksum).toBeNull();
+    },
+  );
+
+  it("keeps same-track mappings as import candidates when mtimes match", () => {
+    const groups = buildGroups([
+      track({
+        item_id: "1",
+        name: "Lies",
+        provider_mappings: [
+          mapping({ item_id: "a.flac", details: "1726704000" }),
+          mapping({ item_id: "b.flac", details: "1726704000" }),
+        ],
+      }),
+    ]);
+    expect(groups[0].kind).toBe("copies");
+    expect(groups[0].reason).toBe("merged at import");
   });
 
   it("does not pair songs whose durations differ too much", () => {
@@ -283,13 +347,25 @@ describe("cue rows and csv", () => {
     const csv = toCsv(groups, cues);
     const lines = csv.trim().split("\n");
     expect(lines[0]).toBe(
-      "kind,group,keep,track,artists,album,source,path,format,checksum,tags_missing",
+      "kind,group,keep,track,artists,album,source,path,format,checksum,tags_missing,tags_unknown",
     );
     expect(lines[1]).toContain('"Say ""hi"", now"');
     expect(lines[1]).toContain(",keep,");
     expect(lines.at(-1)).toContain(
       "cue,orphaned CUE sheet,,,,,SSD,Aaron Lewis/Town Line/Town Line.cue",
     );
+  });
+
+  it("exports unloaded IDs separately from absent IDs", () => {
+    const groups = buildGroups([
+      track({
+        item_id: "1",
+        name: "Lies",
+        external_ids: undefined,
+        provider_mappings: [mapping({ item_id: "a.flac" }), mp3("a.mp3")],
+      }),
+    ]);
+    expect(toCsv(groups, []).trim().split("\n")[1]).toMatch(/,,,ids$/);
   });
 });
 
