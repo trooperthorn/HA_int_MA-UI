@@ -41,6 +41,46 @@
         {{ $t("settings.archives.match_loading") }}
       </p>
       <template v-if="page">
+        <div
+          v-if="maxBulkApprovals !== 0"
+          class="sticky top-0 z-10 space-y-2 rounded-lg border bg-background p-3 shadow-sm"
+        >
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <label class="flex items-center gap-2 font-medium">
+              <input
+                data-testid="archive-match-select-all"
+                type="checkbox"
+                :checked="allRecommendedSelected"
+                :disabled="!recommendedCandidates.length || writing || reading"
+                @change="
+                  toggleAllRecommended(
+                    ($event.target as HTMLInputElement).checked,
+                  )
+                "
+              />
+              {{ $t("settings.archives.match_select_all") }}
+            </label>
+            <Button
+              data-testid="archive-match-approve-all"
+              :disabled="
+                !canWrite ||
+                uncertain ||
+                writing ||
+                reading ||
+                !selectedRecommended.length
+              "
+              @click="approveSelected"
+              >{{
+                $t("settings.archives.match_approve_all", {
+                  count: selectedRecommended.length,
+                })
+              }}</Button
+            >
+          </div>
+          <p class="text-sm text-muted-foreground">
+            {{ $t("settings.archives.match_approve_all_help") }}
+          </p>
+        </div>
         <p
           v-if="page.candidate_freshness === 'stale'"
           role="status"
@@ -120,6 +160,27 @@
             class="space-y-1 rounded border p-2"
             data-testid="archive-match-candidate"
           >
+            <label
+              v-if="isRecommended(item, candidate)"
+              class="mb-2 flex items-center gap-2 font-medium"
+            >
+              <input
+                data-testid="archive-match-select"
+                type="checkbox"
+                :checked="selectedKeys.includes(candidateKey(item, candidate))"
+                :disabled="
+                  writing || reading || item.classification === 'approved'
+                "
+                @change="
+                  toggleCandidate(
+                    item,
+                    candidate,
+                    ($event.target as HTMLInputElement).checked,
+                  )
+                "
+              />
+              {{ $t("settings.archives.match_include_approval") }}
+            </label>
             <p class="font-medium">
               {{ metadata(candidate, "name") || candidate.asset_id }}
               <span v-if="metadata(candidate, 'artist')">
@@ -216,13 +277,44 @@
             >{{ $t("settings.archives.match_next") }}</Button
           >
         </div>
+        <details
+          class="rounded-lg border p-3"
+          data-testid="archive-match-diagnostics"
+        >
+          <summary class="cursor-pointer font-medium">
+            {{ $t("settings.archives.match_diagnostics") }}
+          </summary>
+          <p class="my-2 text-sm text-muted-foreground">
+            {{ $t("settings.archives.match_diagnostics_help") }}
+          </p>
+          <Button
+            data-testid="archive-match-copy-diagnostics"
+            variant="outline"
+            class="mb-2"
+            @click="copyDiagnostics"
+            >{{
+              $t(
+                diagnosticsCopied
+                  ? "settings.archives.match_diagnostics_copied"
+                  : "settings.archives.match_diagnostics_copy",
+              )
+            }}</Button
+          >
+          <textarea
+            ref="diagnosticsArea"
+            data-testid="archive-match-diagnostics-text"
+            class="diagnostics-output"
+            readonly
+            :value="diagnosticsText"
+          ></textarea>
+        </details>
       </template>
     </template>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
 import type {
   ArchiveMatchCandidate,
@@ -240,6 +332,7 @@ const props = defineProps<{
   subscriptionId: string;
   versionId: string;
   pageSize: number;
+  maxBulkApprovals?: number;
 }>();
 const canRead = computed(() =>
   authManager.hasScope(Scope.CONFIG_PROVIDERS_WRITE),
@@ -261,6 +354,16 @@ const reading = ref(false);
 const writing = ref(false);
 const uncertain = ref(false);
 const error = ref("");
+const selectedKeys = ref<string[]>([]);
+const diagnosticsArea = ref<HTMLTextAreaElement>();
+const diagnosticsCopied = ref(false);
+const bulkOutcome = ref<Record<string, unknown> | null>(null);
+type BulkApprovalResult = {
+  operation_id: string;
+  approved_count: number;
+  idempotent_replay: boolean;
+  items: ArchiveMatchDecisionResult[];
+};
 let generation = 0;
 let alive = true;
 const timers = new Set<ReturnType<typeof setTimeout>>();
@@ -270,6 +373,57 @@ const visibleItems = computed(() =>
     : (page.value?.items ?? []).filter(
         (item) => item.classification === filter.value,
       ),
+);
+const candidateKey = (
+  item: ArchiveMatchReviewItem,
+  candidate: ArchiveMatchCandidate,
+) => `${item.source_item_id}:${candidate.asset_id}`;
+const isRecommended = (
+  item: ArchiveMatchReviewItem,
+  candidate: ArchiveMatchCandidate,
+) =>
+  candidate.asset_id === item.match.candidates[0]?.asset_id &&
+  !candidate.rejected &&
+  (item.classification === "candidate" || item.classification === "ambiguous");
+const recommendedCandidates = computed(() => {
+  const candidates = visibleItems.value.flatMap((item) => {
+    const candidate = item.match.candidates[0];
+    return candidate && isRecommended(item, candidate)
+      ? [{ item, candidate, key: candidateKey(item, candidate) }]
+      : [];
+  });
+  return candidates.filter(
+    ({ item }, index) =>
+      candidates.findIndex(
+        (entry) => entry.item.source_item_id === item.source_item_id,
+      ) === index,
+  );
+});
+const selectedRecommended = computed(() =>
+  recommendedCandidates.value.filter(({ key }) =>
+    selectedKeys.value.includes(key),
+  ),
+);
+const allRecommendedSelected = computed(
+  () =>
+    recommendedCandidates.value.length > 0 &&
+    selectedRecommended.value.length === recommendedCandidates.value.length,
+);
+const diagnosticsText = computed(() =>
+  JSON.stringify(
+    {
+      generated_at: new Date().toISOString(),
+      subscription_id: props.subscriptionId,
+      version_id: props.versionId,
+      filter: filter.value,
+      uncertain: uncertain.value,
+      error: error.value || null,
+      last_bulk_approval: bulkOutcome.value,
+      page: page.value ?? null,
+    },
+    null,
+    2,
+  ),
 );
 const request = <T,>(name: string, args: Record<string, unknown>) =>
   api.sendCommand<T>(`library_enrichment/${name}`, args, {
@@ -351,11 +505,138 @@ async function load(offset: number, clearsUncertain = false) {
     if (!validPage(result, offset))
       throw new Error($t("settings.archives.match_invalid_response"));
     page.value = result;
+    selectedKeys.value = result.items.flatMap((item) => {
+      const candidate = item.match.candidates[0];
+      return candidate && isRecommended(item, candidate)
+        ? [candidateKey(item, candidate)]
+        : [];
+    });
     if (clearsUncertain) uncertain.value = false;
   } catch (value) {
     if (alive && token === generation) error.value = errorText(value);
   } finally {
     if (alive && token === generation) reading.value = false;
+  }
+}
+function toggleCandidate(
+  item: ArchiveMatchReviewItem,
+  candidate: ArchiveMatchCandidate,
+  checked: boolean,
+) {
+  const key = candidateKey(item, candidate);
+  selectedKeys.value = checked
+    ? [...new Set([...selectedKeys.value, key])]
+    : selectedKeys.value.filter((value) => value !== key);
+}
+function toggleAllRecommended(checked: boolean) {
+  const pageKeys = new Set(recommendedCandidates.value.map(({ key }) => key));
+  selectedKeys.value = checked
+    ? [...new Set([...selectedKeys.value, ...pageKeys])]
+    : selectedKeys.value.filter((key) => !pageKeys.has(key));
+}
+async function approveSelected() {
+  if (!canWrite.value || uncertain.value || reading.value || writing.value)
+    return;
+  const approvals = selectedRecommended.value.slice(
+    0,
+    Math.min(200, props.maxBulkApprovals ?? 200),
+  );
+  if (!approvals.length) return;
+  const token = generation;
+  const operationId =
+    globalThis.crypto?.randomUUID?.() ??
+    `match-approval-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  writing.value = true;
+  error.value = "";
+  bulkOutcome.value = {
+    operation_id: operationId,
+    requested_count: approvals.length,
+    state: "submitting",
+  };
+  try {
+    const result = await bounded(
+      request<BulkApprovalResult>("approve_match_candidates", {
+        version_id: props.versionId,
+        operation_id: operationId,
+        approvals: approvals.map(({ item, candidate }) => ({
+          source_item_id: item.source_item_id,
+          asset_id: candidate.asset_id,
+          expected_revision: item.match.revision,
+        })),
+      }),
+    );
+    if (!alive || token !== generation || !canWrite.value || !page.value)
+      return;
+    const expected = new Map(
+      approvals.map(({ item, candidate }) => [
+        item.source_item_id,
+        { assetId: candidate.asset_id, revision: item.match.revision + 1 },
+      ]),
+    );
+    if (
+      result.operation_id !== operationId ||
+      result.approved_count !== approvals.length ||
+      !Array.isArray(result.items) ||
+      result.items.length !== approvals.length ||
+      result.items.some((item) => {
+        const expectedItem = expected.get(item.match.source.source_item_id);
+        return (
+          !expectedItem ||
+          item.match.revision !== expectedItem.revision ||
+          item.match.approved_asset_id !== expectedItem.assetId ||
+          item.classification !== "approved"
+        );
+      })
+    )
+      throw new Error($t("settings.archives.match_invalid_response"));
+    const results = new Map(
+      result.items.map((item) => [item.match.source.source_item_id, item]),
+    );
+    page.value.items = page.value.items.map((occurrence) => {
+      const updated = results.get(occurrence.source_item_id);
+      return updated
+        ? {
+            ...occurrence,
+            match: updated.match,
+            classification: updated.classification,
+          }
+        : occurrence;
+    });
+    const approvedKeys = new Set(approvals.map(({ key }) => key));
+    selectedKeys.value = selectedKeys.value.filter(
+      (key) => !approvedKeys.has(key),
+    );
+    bulkOutcome.value = {
+      operation_id: result.operation_id,
+      requested_count: approvals.length,
+      approved_count: result.approved_count,
+      idempotent_replay: result.idempotent_replay,
+      state: "approved",
+    };
+  } catch (value) {
+    if (alive && token === generation) {
+      uncertain.value = true;
+      error.value = errorText(value);
+      bulkOutcome.value = {
+        operation_id: operationId,
+        requested_count: approvals.length,
+        state: "uncertain",
+        error: error.value,
+      };
+    }
+  } finally {
+    if (alive && token === generation) writing.value = false;
+  }
+}
+async function copyDiagnostics() {
+  diagnosticsCopied.value = false;
+  try {
+    await navigator.clipboard.writeText(diagnosticsText.value);
+    diagnosticsCopied.value = true;
+  } catch {
+    await nextTick();
+    diagnosticsArea.value?.focus();
+    diagnosticsArea.value?.select();
   }
 }
 function open() {
@@ -431,6 +712,9 @@ watch(
     uncertain.value = false;
     error.value = "";
     filter.value = "all";
+    selectedKeys.value = [];
+    diagnosticsCopied.value = false;
+    bulkOutcome.value = null;
   },
   { flush: "sync" },
 );
@@ -448,5 +732,17 @@ onBeforeUnmount(() => {
   border-radius: 0.375rem;
   padding: 0.5rem;
   background: var(--background);
+}
+.diagnostics-output {
+  min-height: 12rem;
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  padding: 0.75rem;
+  background: var(--background);
+  font-family: monospace;
+  font-size: 0.75rem;
+  white-space: pre;
 }
 </style>

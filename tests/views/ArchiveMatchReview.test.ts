@@ -232,6 +232,94 @@ describe("Archive local match review", () => {
     );
   });
 
+  it("checks recommended candidates by default and atomically approves checked rows", async () => {
+    mocks.sendCommand.mockImplementation(async (command: string, args) => {
+      if (command === "library_enrichment/match_review")
+        return structuredClone(page);
+      if (command === "library_enrichment/approve_match_candidates")
+        return {
+          operation_id: args.operation_id,
+          approved_count: 1,
+          idempotent_replay: false,
+          items: [
+            {
+              match: {
+                ...structuredClone(item.match),
+                revision: 5,
+                approved_asset_id: "asset-1",
+              },
+              classification: "approved",
+            },
+          ],
+        };
+      throw new Error("Unexpected command");
+    });
+    const wrapper = mountReview();
+    await wrapper.get('[data-testid="archive-match-open"]').trigger("click");
+    await flushPromises();
+    expect(
+      wrapper.get<HTMLInputElement>('[data-testid="archive-match-select"]')
+        .element.checked,
+    ).toBe(true);
+    await wrapper
+      .get('[data-testid="archive-match-approve-all"]')
+      .trigger("click");
+    await flushPromises();
+    const request = calls("approve_match_candidates")[0][1];
+    expect(request.version_id).toBe("version-1");
+    expect(request.operation_id).toEqual(expect.any(String));
+    expect(request.approvals).toEqual([
+      {
+        source_item_id: "spotify-track-1",
+        asset_id: "asset-1",
+        expected_revision: 4,
+      },
+    ]);
+    expect(wrapper.findAll('[data-testid="archive-match-clear"]')).toHaveLength(
+      2,
+    );
+    expect(
+      wrapper
+        .get('[data-testid="archive-match-diagnostics-text"]')
+        .attributes("value"),
+    ).toContain('"state": "approved"');
+  });
+
+  it("lets the user uncheck a proposed match before bulk approval", async () => {
+    const wrapper = mountReview();
+    await wrapper.get('[data-testid="archive-match-open"]').trigger("click");
+    await flushPromises();
+    await wrapper
+      .get('[data-testid="archive-match-select-all"]')
+      .setValue(false);
+    expect(
+      wrapper
+        .get('[data-testid="archive-match-approve-all"]')
+        .attributes("disabled"),
+    ).toBeDefined();
+    expect(calls("approve_match_candidates")).toHaveLength(0);
+  });
+
+  it("provides selectable diagnostics when clipboard access is unavailable", async () => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: vi.fn().mockRejectedValue(new Error("blocked")) },
+    });
+    const wrapper = mountReview();
+    await wrapper.get('[data-testid="archive-match-open"]').trigger("click");
+    await flushPromises();
+    const textarea = wrapper.get<HTMLTextAreaElement>(
+      '[data-testid="archive-match-diagnostics-text"]',
+    );
+    const select = vi.spyOn(textarea.element, "select");
+    await wrapper
+      .get('[data-testid="archive-match-copy-diagnostics"]')
+      .trigger("click");
+    await flushPromises();
+    expect(textarea.element.value).toContain('"version_id": "version-1"');
+    expect(select).toHaveBeenCalledOnce();
+  });
+
   it("sends a candidate-specific rejection", async () => {
     mocks.sendCommand.mockImplementation(async (command: string) => {
       if (command === "library_enrichment/match_review")

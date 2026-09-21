@@ -12,6 +12,7 @@ export interface ArchiveCapabilities {
   local_matching?: boolean;
   match_review_api_version?: number;
   max_match_review_page?: number;
+  max_match_approvals?: number;
   playback_policy?: boolean;
   playback_policy_api_version?: number;
   playback_policy_modes?: ArchivePlaybackPolicyMode[];

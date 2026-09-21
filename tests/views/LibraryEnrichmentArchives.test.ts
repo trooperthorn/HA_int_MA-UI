@@ -442,7 +442,7 @@ describe("Library Enrichment archive controls", () => {
       const wrapper = mountPage();
       await flushPromises();
       expect(wrapper.find('[data-testid="archive-match-open"]').exists()).toBe(
-        match_review_api_version === 1,
+        true,
       );
       expect(calls("match_review")).toHaveLength(0);
       expect(calls("set_match_decision")).toHaveLength(0);
