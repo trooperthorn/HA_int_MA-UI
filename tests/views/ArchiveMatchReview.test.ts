@@ -301,6 +301,17 @@ describe("Archive local match review", () => {
   });
 
   it("provides selectable diagnostics when clipboard access is unavailable", async () => {
+    const sensitivePage = structuredClone(page);
+    sensitivePage.source.account_id = "SECRET_ACCOUNT";
+    sensitivePage.source.provider_instance_id = "SECRET_PROVIDER_INSTANCE";
+    sensitivePage.items[0].source_item_id = "SECRET_SOURCE_ID";
+    sensitivePage.items[0].match.source.source_item_id = "SECRET_SOURCE_ID";
+    sensitivePage.items[0].match.candidates[0].asset.item_id =
+      "C:\\Secret\\Music\\private.mp3";
+    sensitivePage.items[0].match.candidates[0].evidence = {
+      raw_secret: "SECRET_EVIDENCE",
+    };
+    mocks.sendCommand.mockResolvedValueOnce(sensitivePage);
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: { writeText: vi.fn().mockRejectedValue(new Error("blocked")) },
@@ -316,7 +327,23 @@ describe("Archive local match review", () => {
       .get('[data-testid="archive-match-copy-diagnostics"]')
       .trigger("click");
     await flushPromises();
-    expect(textarea.element.value).toContain('"version_id": "version-1"');
+    expect(textarea.element.value).toContain('"title": "Local song"');
+    expect(textarea.element.value).toContain('"classification": "ambiguous"');
+    for (const secret of [
+      "subscription-1",
+      "version-1",
+      "SECRET_ACCOUNT",
+      "SECRET_PROVIDER_INSTANCE",
+      "SECRET_SOURCE_ID",
+      "C:\\Secret\\Music\\private.mp3",
+      "SECRET_EVIDENCE",
+      "spotify-track-1",
+      "local-1",
+      "track-9",
+      "duration_delta",
+    ]) {
+      expect(textarea.element.value).not.toContain(secret);
+    }
     expect(select).toHaveBeenCalledOnce();
   });
 

@@ -206,7 +206,7 @@
           {{ $t("settings.archives.polling_paused") }}
         </p>
         <div
-          v-for="job in status.jobs"
+          v-for="job in activeJobs"
           :key="job.id"
           class="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm"
           data-testid="archive-job"
@@ -236,6 +236,55 @@
             >{{ $t("settings.archives.cancel") }}</Button
           >
         </div>
+        <details
+          v-if="historicalJobs.length"
+          class="rounded-lg border text-sm"
+          data-testid="archive-job-history"
+        >
+          <summary class="cursor-pointer p-3 font-medium">
+            {{
+              $t("settings.archives.job_history", {
+                count: historicalJobs.length,
+              })
+            }}
+          </summary>
+          <div class="space-y-2 border-t p-3">
+            <div
+              v-for="job in visibleHistoricalJobs"
+              :key="job.id"
+              class="rounded border p-2"
+              data-testid="archive-history-job"
+            >
+              <p>
+                {{ jobName(job) }} ·
+                {{ $t(`settings.archives.state_${job.state}`) }}
+              </p>
+              <p class="text-muted-foreground">
+                {{
+                  $t("settings.archives.progress", {
+                    received: job.received,
+                    total: job.total ?? "—",
+                  })
+                }}
+                · {{ job.created_at }}
+              </p>
+              <p v-if="job.error" class="text-destructive">{{ job.error }}</p>
+            </div>
+            <Button
+              v-if="historicalJobs.length > JOB_HISTORY_LIMIT"
+              data-testid="archive-job-history-more"
+              variant="outline"
+              @click.prevent="showAllJobHistory = !showAllJobHistory"
+              >{{
+                $t(
+                  showAllJobHistory
+                    ? "settings.archives.job_history_less"
+                    : "settings.archives.job_history_more",
+                )
+              }}</Button
+            >
+          </div>
+        </details>
         <p
           v-if="!loadingStatus && !status.subscriptions.length && !statusError"
           class="text-sm text-muted-foreground"
@@ -473,6 +522,19 @@ const writing = ref(false);
 const actionError = ref("");
 const notice = ref("");
 const status = ref<ArchiveStatus>({ subscriptions: [], jobs: [] });
+const JOB_HISTORY_LIMIT = 5;
+const showAllJobHistory = ref(false);
+const activeJobs = computed(() =>
+  status.value.jobs.filter((job) => job.state === "pending"),
+);
+const historicalJobs = computed(() =>
+  status.value.jobs.filter((job) => job.state !== "pending"),
+);
+const visibleHistoricalJobs = computed(() =>
+  showAllJobHistory.value
+    ? historicalJobs.value
+    : historicalJobs.value.slice(0, JOB_HISTORY_LIMIT),
+);
 const loadingStatus = ref(false);
 const statusError = ref("");
 const cancelling = ref("");
@@ -548,6 +610,7 @@ async function initialize() {
   sources.value = [];
   sourceError.value = "";
   status.value = { subscriptions: [], jobs: [] };
+  showAllJobHistory.value = false;
   loadingStatus.value = false;
   refreshRequested = false;
   loadingVersions.value = false;

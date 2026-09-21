@@ -409,17 +409,57 @@ const allRecommendedSelected = computed(
     recommendedCandidates.value.length > 0 &&
     selectedRecommended.value.length === recommendedCandidates.value.length,
 );
+const diagnosticItems = computed(() =>
+  (page.value?.items ?? []).map((item) => ({
+    position: item.position + 1,
+    state: item.state,
+    classification: item.classification,
+    candidates: item.match.candidates.map((candidate) => ({
+      score: candidate.score,
+      title: metadata(candidate, "name") || null,
+      artist: metadata(candidate, "artist") || null,
+      album: metadata(candidate, "album") || null,
+      provider_domain: metadata(candidate, "provider_domain") || null,
+      rejected: candidate.rejected,
+      approved: candidate.approved,
+    })),
+  })),
+);
 const diagnosticsText = computed(() =>
   JSON.stringify(
     {
       generated_at: new Date().toISOString(),
-      subscription_id: props.subscriptionId,
-      version_id: props.versionId,
       filter: filter.value,
       uncertain: uncertain.value,
-      error: error.value || null,
-      last_bulk_approval: bulkOutcome.value,
-      page: page.value ?? null,
+      page: page.value
+        ? {
+            start: page.value.total ? page.value.offset + 1 : 0,
+            end: Math.min(
+              page.value.offset + page.value.items.length,
+              page.value.total,
+            ),
+            total: page.value.total,
+            has_more: page.value.has_more,
+            candidate_freshness: page.value.candidate_freshness,
+            visible_count: diagnosticItems.value.length,
+          }
+        : null,
+      classifications: diagnosticItems.value.reduce<Record<string, number>>(
+        (counts, item) => {
+          counts[item.classification] = (counts[item.classification] ?? 0) + 1;
+          return counts;
+        },
+        {},
+      ),
+      last_bulk_approval: bulkOutcome.value
+        ? {
+            state: bulkOutcome.value.state,
+            requested_count: bulkOutcome.value.requested_count,
+            approved_count: bulkOutcome.value.approved_count,
+            idempotent_replay: bulkOutcome.value.idempotent_replay,
+          }
+        : null,
+      items: diagnosticItems.value,
     },
     null,
     2,
@@ -618,10 +658,8 @@ async function approveSelected() {
       uncertain.value = true;
       error.value = errorText(value);
       bulkOutcome.value = {
-        operation_id: operationId,
         requested_count: approvals.length,
         state: "uncertain",
-        error: error.value,
       };
     }
   } finally {

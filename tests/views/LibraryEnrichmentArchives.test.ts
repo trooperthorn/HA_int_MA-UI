@@ -304,6 +304,39 @@ describe("Library Enrichment archive controls", () => {
     expect(wrapper.find('[data-testid="archive-cancel"]').exists()).toBe(false);
   });
 
+  it("keeps active jobs prominent and caps completed jobs in collapsed history", async () => {
+    persisted = {
+      ...structuredClone(pending),
+      jobs: [
+        ...structuredClone(pending.jobs),
+        ...Array.from({ length: 7 }, (_, index) => ({
+          id: `completed-${index}`,
+          subscription_id: "sub",
+          state: "committed" as const,
+          received: 3,
+          total: 3,
+          error: null,
+          created_at: `2026-09-20T00:0${index}:00Z`,
+        })),
+      ],
+    };
+    const wrapper = mountPage();
+    await flushPromises();
+
+    expect(wrapper.findAll('[data-testid="archive-job"]')).toHaveLength(1);
+    const history = wrapper.get('[data-testid="archive-job-history"]');
+    expect(history.attributes("open")).toBeUndefined();
+    expect(wrapper.findAll('[data-testid="archive-history-job"]')).toHaveLength(
+      5,
+    );
+    await wrapper
+      .get('[data-testid="archive-job-history-more"]')
+      .trigger("click");
+    expect(wrapper.findAll('[data-testid="archive-history-job"]')).toHaveLength(
+      7,
+    );
+  });
+
   it("reports stopping separately when cancellation has not completed", async () => {
     persisted = structuredClone(pending);
     const wrapper = mountPage();

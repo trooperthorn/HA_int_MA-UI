@@ -223,9 +223,11 @@ class HttpProxyBridge {
     return new Promise((resolve) => {
       // If no service worker support or no controller, resolve immediately
       if (!navigator.serviceWorker?.controller) {
-        console.warn(
-          "[HttpProxyBridge] No service worker controller, skipping remote mode notification",
-        );
+        if (isRemote) {
+          console.warn(
+            "[HttpProxyBridge] No service worker controller, skipping remote mode notification",
+          );
+        }
         resolve();
         return;
       }
