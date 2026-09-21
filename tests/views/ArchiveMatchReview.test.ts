@@ -428,6 +428,11 @@ describe("Archive local match review", () => {
     await wrapper.get('[data-testid="archive-match-open"]').trigger("click");
     await vi.advanceTimersByTimeAsync(15000);
     expect(wrapper.text()).toContain("settings.archives.match_timeout");
+    expect(
+      wrapper
+        .get('[data-testid="archive-match-diagnostics-text"]')
+        .attributes("value"),
+    ).toContain('"code": "timeout"');
 
     const response = deferred<ArchiveMatchReviewPage>();
     mocks.sendCommand.mockReturnValueOnce(response.promise);
@@ -453,5 +458,28 @@ describe("Archive local match review", () => {
     expect(wrapper.text()).toContain(
       "settings.archives.match_error_library_read_failed",
     );
+    expect(
+      wrapper
+        .get('[data-testid="archive-match-diagnostics-text"]')
+        .attributes("value"),
+    ).toContain('"candidate_error": "library_read_failed"');
+  });
+
+  it("reports invalid responses with a normalized copy-safe diagnostic", async () => {
+    mocks.sendCommand.mockResolvedValueOnce({
+      ...structuredClone(page),
+      version_id: "SECRET_WRONG_VERSION",
+    });
+    const wrapper = mountReview();
+    await wrapper.get('[data-testid="archive-match-open"]').trigger("click");
+    await flushPromises();
+    const diagnostics = wrapper.get<HTMLTextAreaElement>(
+      '[data-testid="archive-match-diagnostics-text"]',
+    ).element.value;
+    expect(diagnostics).toContain('"code": "invalid_response"');
+    expect(diagnostics).toContain(
+      '"message": "The server returned an invalid match review response."',
+    );
+    expect(diagnostics).not.toContain("SECRET_WRONG_VERSION");
   });
 });

@@ -277,38 +277,38 @@
             >{{ $t("settings.archives.match_next") }}</Button
           >
         </div>
-        <details
-          class="rounded-lg border p-3"
-          data-testid="archive-match-diagnostics"
-        >
-          <summary class="cursor-pointer font-medium">
-            {{ $t("settings.archives.match_diagnostics") }}
-          </summary>
-          <p class="my-2 text-sm text-muted-foreground">
-            {{ $t("settings.archives.match_diagnostics_help") }}
-          </p>
-          <Button
-            data-testid="archive-match-copy-diagnostics"
-            variant="outline"
-            class="mb-2"
-            @click="copyDiagnostics"
-            >{{
-              $t(
-                diagnosticsCopied
-                  ? "settings.archives.match_diagnostics_copied"
-                  : "settings.archives.match_diagnostics_copy",
-              )
-            }}</Button
-          >
-          <textarea
-            ref="diagnosticsArea"
-            data-testid="archive-match-diagnostics-text"
-            class="diagnostics-output"
-            readonly
-            :value="diagnosticsText"
-          ></textarea>
-        </details>
       </template>
+      <details
+        class="rounded-lg border p-3"
+        data-testid="archive-match-diagnostics"
+      >
+        <summary class="cursor-pointer font-medium">
+          {{ $t("settings.archives.match_diagnostics") }}
+        </summary>
+        <p class="my-2 text-sm text-muted-foreground">
+          {{ $t("settings.archives.match_diagnostics_help") }}
+        </p>
+        <Button
+          data-testid="archive-match-copy-diagnostics"
+          variant="outline"
+          class="mb-2"
+          @click="copyDiagnostics"
+          >{{
+            $t(
+              diagnosticsCopied
+                ? "settings.archives.match_diagnostics_copied"
+                : "settings.archives.match_diagnostics_copy",
+            )
+          }}</Button
+        >
+        <textarea
+          ref="diagnosticsArea"
+          data-testid="archive-match-diagnostics-text"
+          class="diagnostics-output"
+          readonly
+          :value="diagnosticsText"
+        ></textarea>
+      </details>
     </template>
   </section>
 </template>
@@ -425,12 +425,39 @@ const diagnosticItems = computed(() =>
     })),
   })),
 );
+const diagnosticClientError = computed(() => {
+  if (!error.value) return null;
+  const normalized = error.value.toLowerCase();
+  if (normalized.includes("timeout") || normalized.includes("timed out"))
+    return {
+      code: "timeout",
+      message: "The match review request timed out.",
+    };
+  if (
+    normalized.includes("invalid_response") ||
+    normalized.includes("incompatible") ||
+    normalized.includes("invalid response")
+  )
+    return {
+      code: "invalid_response",
+      message: "The server returned an invalid match review response.",
+    };
+  return {
+    code: "request_failed",
+    message: "The match review request failed. See server diagnostics.",
+  };
+});
 const diagnosticsText = computed(() =>
   JSON.stringify(
     {
       generated_at: new Date().toISOString(),
       filter: filter.value,
       uncertain: uncertain.value,
+      candidate_error:
+        page.value?.candidate_error === "library_read_failed"
+          ? "library_read_failed"
+          : null,
+      client_error: diagnosticClientError.value,
       page: page.value
         ? {
             start: page.value.total ? page.value.offset + 1 : 0,

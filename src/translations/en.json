@@ -1056,7 +1056,7 @@
       "match_previous": "Previous page",
       "match_next": "Next page",
       "match_diagnostics": "Copyable match diagnostics",
-      "match_diagnostics_help": "This contains the current review page, candidate evidence, and any error. Copy it when reporting a matching problem.",
+      "match_diagnostics_help": "This copy-safe summary contains visible match fields, counts, and normalized failure codes. It excludes library paths, account and item identifiers, raw evidence, and server error text.",
       "match_diagnostics_copy": "Copy diagnostics",
       "match_diagnostics_copied": "Diagnostics copied",
       "playback_title": "Archived playback policy",

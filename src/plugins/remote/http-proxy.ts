@@ -84,7 +84,10 @@ class HttpProxyBridge {
 
         // Wait for service worker to be controlling the page
         // This is critical to prevent race conditions on hard refresh
-        const hasController = await this.waitForController();
+        const storedMode = localStorage.getItem(REMOTE_MODE_STORAGE_KEY);
+        const hasController = await this.waitForController(
+          storedMode === "remote",
+        );
 
         // Listen for messages from service worker
         navigator.serviceWorker.addEventListener("message", (event) => {
@@ -96,7 +99,6 @@ class HttpProxyBridge {
 
         // Check if we were in remote mode (from localStorage) and notify SW early
         // This prevents the race condition where images load before remote mode is set
-        const storedMode = localStorage.getItem(REMOTE_MODE_STORAGE_KEY);
         if (hasController) {
           if (storedMode === "remote") {
             console.log(
@@ -160,7 +162,7 @@ class HttpProxyBridge {
    * Wait for the service worker to be controlling the page
    * Returns true if controller is available, false if timed out
    */
-  private waitForController(): Promise<boolean> {
+  private waitForController(warnOnTimeout: boolean): Promise<boolean> {
     return new Promise((resolve) => {
       if (navigator.serviceWorker.controller) {
         this.isReady.value = true;
@@ -190,9 +192,11 @@ class HttpProxyBridge {
         );
         // Resolve anyway after timeout - the app should still work
         // even if service worker isn't controlling yet
-        console.warn(
-          "[HttpProxyBridge] Timeout waiting for service worker controller",
-        );
+        if (warnOnTimeout) {
+          console.warn(
+            "[HttpProxyBridge] Timeout waiting for service worker controller",
+          );
+        }
         // Don't set isReady = true here - SW isn't actually controlling
         resolve(false);
       }, 3000);
@@ -232,9 +236,23 @@ class HttpProxyBridge {
         return;
       }
 
+      // Local mode is the service worker default. Send the state in case this
+      // tab is returning from remote mode, but do not create an acknowledgment
+      // timer for a local startup notification.
+      if (!isRemote) {
+        navigator.serviceWorker.controller.postMessage({
+          type: "set-remote-mode",
+          protocol: MESSAGE_PROTOCOL_VERSION,
+          data: { isRemote, proxyScope },
+        });
+        resolve();
+        return;
+      }
+
       // Set up listener for acknowledgment BEFORE sending message
       const onAck = (event: MessageEvent) => {
         if (event.data?.type === "remote-mode-ack") {
+          clearTimeout(acknowledgmentTimer);
           navigator.serviceWorker?.removeEventListener("message", onAck);
           console.log(
             "[HttpProxyBridge] Remote mode acknowledged by service worker",
@@ -245,7 +263,7 @@ class HttpProxyBridge {
       navigator.serviceWorker.addEventListener("message", onAck);
 
       // Set a timeout in case ack never comes
-      setTimeout(() => {
+      const acknowledgmentTimer = setTimeout(() => {
         navigator.serviceWorker?.removeEventListener("message", onAck);
         console.warn(
           "[HttpProxyBridge] Timeout waiting for remote mode acknowledgment",
