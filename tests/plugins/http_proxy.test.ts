@@ -92,6 +92,82 @@ describe("HttpProxyBridge", () => {
     });
   });
 
+  it("silently skips local mode without a controller but warns for remote mode", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: { ...serviceWorker, controller: null },
+    });
+    const { httpProxyBridge } = await import("@/plugins/remote/http-proxy");
+
+    await httpProxyBridge.setTransport(null);
+    expect(warn).not.toHaveBeenCalled();
+
+    await httpProxyBridge.setTransport(
+      {} as Parameters<typeof httpProxyBridge.setTransport>[0],
+      "guest-remote-id",
+    );
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledWith(
+      "[HttpProxyBridge] No service worker controller, skipping remote mode notification",
+    );
+  });
+
+  it("keeps controller timeout silent locally and warns when restoring remote mode", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: { ...serviceWorker, controller: null },
+    });
+    let imported = await import("@/plugins/remote/http-proxy");
+    const localInitialization = imported.httpProxyBridge.initialize();
+    await vi.advanceTimersByTimeAsync(3000);
+    await localInitialization;
+    expect(warn).not.toHaveBeenCalledWith(
+      "[HttpProxyBridge] Timeout waiting for service worker controller",
+    );
+
+    vi.resetModules();
+    localStorage.setItem("ma_remote_mode", "remote");
+    sessionStorage.setItem("ma_sw_reload_attempt", "true");
+    imported = await import("@/plugins/remote/http-proxy");
+    const remoteInitialization = imported.httpProxyBridge.initialize();
+    await vi.advanceTimersByTimeAsync(3000);
+    await remoteInitialization;
+    expect(warn).toHaveBeenCalledWith(
+      "[HttpProxyBridge] Timeout waiting for service worker controller",
+    );
+  });
+
+  it("does not wait or warn for a missing local acknowledgment but warns remotely", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const noAckPostMessage = vi.fn();
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: {
+        ...serviceWorker,
+        controller: { postMessage: noAckPostMessage },
+      },
+    });
+    const { httpProxyBridge } = await import("@/plugins/remote/http-proxy");
+
+    await httpProxyBridge.setTransport(null);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(warn).not.toHaveBeenCalledWith(
+      "[HttpProxyBridge] Timeout waiting for remote mode acknowledgment",
+    );
+
+    const remoteNotification = httpProxyBridge.setTransport(
+      {} as Parameters<typeof httpProxyBridge.setTransport>[0],
+      "guest-remote-id",
+    );
+    await vi.advanceTimersByTimeAsync(2000);
+    await remoteNotification;
+    expect(warn).toHaveBeenCalledWith(
+      "[HttpProxyBridge] Timeout waiting for remote mode acknowledgment",
+    );
+  });
+
   it("hands proxied bytes to the service worker without re-encoding them", async () => {
     const { httpProxyBridge } = await import("@/plugins/remote/http-proxy");
     const body = new Uint8Array([0, 1, 254, 255]);

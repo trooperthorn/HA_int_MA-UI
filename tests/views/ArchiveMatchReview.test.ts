@@ -232,6 +232,121 @@ describe("Archive local match review", () => {
     );
   });
 
+  it("checks recommended candidates by default and atomically approves checked rows", async () => {
+    mocks.sendCommand.mockImplementation(async (command: string, args) => {
+      if (command === "library_enrichment/match_review")
+        return structuredClone(page);
+      if (command === "library_enrichment/approve_match_candidates")
+        return {
+          operation_id: args.operation_id,
+          approved_count: 1,
+          idempotent_replay: false,
+          items: [
+            {
+              match: {
+                ...structuredClone(item.match),
+                revision: 5,
+                approved_asset_id: "asset-1",
+              },
+              classification: "approved",
+            },
+          ],
+        };
+      throw new Error("Unexpected command");
+    });
+    const wrapper = mountReview();
+    await wrapper.get('[data-testid="archive-match-open"]').trigger("click");
+    await flushPromises();
+    expect(
+      wrapper.get<HTMLInputElement>('[data-testid="archive-match-select"]')
+        .element.checked,
+    ).toBe(true);
+    await wrapper
+      .get('[data-testid="archive-match-approve-all"]')
+      .trigger("click");
+    await flushPromises();
+    const request = calls("approve_match_candidates")[0][1];
+    expect(request.version_id).toBe("version-1");
+    expect(request.operation_id).toEqual(expect.any(String));
+    expect(request.approvals).toEqual([
+      {
+        source_item_id: "spotify-track-1",
+        asset_id: "asset-1",
+        expected_revision: 4,
+      },
+    ]);
+    expect(wrapper.findAll('[data-testid="archive-match-clear"]')).toHaveLength(
+      2,
+    );
+    expect(
+      wrapper
+        .get('[data-testid="archive-match-diagnostics-text"]')
+        .attributes("value"),
+    ).toContain('"state": "approved"');
+  });
+
+  it("lets the user uncheck a proposed match before bulk approval", async () => {
+    const wrapper = mountReview();
+    await wrapper.get('[data-testid="archive-match-open"]').trigger("click");
+    await flushPromises();
+    await wrapper
+      .get('[data-testid="archive-match-select-all"]')
+      .setValue(false);
+    expect(
+      wrapper
+        .get('[data-testid="archive-match-approve-all"]')
+        .attributes("disabled"),
+    ).toBeDefined();
+    expect(calls("approve_match_candidates")).toHaveLength(0);
+  });
+
+  it("provides selectable diagnostics when clipboard access is unavailable", async () => {
+    const sensitivePage = structuredClone(page);
+    sensitivePage.source.account_id = "SECRET_ACCOUNT";
+    sensitivePage.source.provider_instance_id = "SECRET_PROVIDER_INSTANCE";
+    sensitivePage.items[0].source_item_id = "SECRET_SOURCE_ID";
+    sensitivePage.items[0].match.source.source_item_id = "SECRET_SOURCE_ID";
+    sensitivePage.items[0].match.candidates[0].asset.item_id =
+      "C:\\Secret\\Music\\private.mp3";
+    sensitivePage.items[0].match.candidates[0].evidence = {
+      raw_secret: "SECRET_EVIDENCE",
+    };
+    mocks.sendCommand.mockResolvedValueOnce(sensitivePage);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: vi.fn().mockRejectedValue(new Error("blocked")) },
+    });
+    const wrapper = mountReview();
+    await wrapper.get('[data-testid="archive-match-open"]').trigger("click");
+    await flushPromises();
+    const textarea = wrapper.get<HTMLTextAreaElement>(
+      '[data-testid="archive-match-diagnostics-text"]',
+    );
+    const select = vi.spyOn(textarea.element, "select");
+    await wrapper
+      .get('[data-testid="archive-match-copy-diagnostics"]')
+      .trigger("click");
+    await flushPromises();
+    expect(textarea.element.value).toContain('"title": "Local song"');
+    expect(textarea.element.value).toContain('"classification": "ambiguous"');
+    for (const secret of [
+      "subscription-1",
+      "version-1",
+      "SECRET_ACCOUNT",
+      "SECRET_PROVIDER_INSTANCE",
+      "SECRET_SOURCE_ID",
+      "C:\\Secret\\Music\\private.mp3",
+      "SECRET_EVIDENCE",
+      "spotify-track-1",
+      "local-1",
+      "track-9",
+      "duration_delta",
+    ]) {
+      expect(textarea.element.value).not.toContain(secret);
+    }
+    expect(select).toHaveBeenCalledOnce();
+  });
+
   it("sends a candidate-specific rejection", async () => {
     mocks.sendCommand.mockImplementation(async (command: string) => {
       if (command === "library_enrichment/match_review")
@@ -313,6 +428,11 @@ describe("Archive local match review", () => {
     await wrapper.get('[data-testid="archive-match-open"]').trigger("click");
     await vi.advanceTimersByTimeAsync(15000);
     expect(wrapper.text()).toContain("settings.archives.match_timeout");
+    expect(
+      wrapper
+        .get('[data-testid="archive-match-diagnostics-text"]')
+        .attributes("value"),
+    ).toContain('"code": "timeout"');
 
     const response = deferred<ArchiveMatchReviewPage>();
     mocks.sendCommand.mockReturnValueOnce(response.promise);
@@ -338,5 +458,28 @@ describe("Archive local match review", () => {
     expect(wrapper.text()).toContain(
       "settings.archives.match_error_library_read_failed",
     );
+    expect(
+      wrapper
+        .get('[data-testid="archive-match-diagnostics-text"]')
+        .attributes("value"),
+    ).toContain('"candidate_error": "library_read_failed"');
+  });
+
+  it("reports invalid responses with a normalized copy-safe diagnostic", async () => {
+    mocks.sendCommand.mockResolvedValueOnce({
+      ...structuredClone(page),
+      version_id: "SECRET_WRONG_VERSION",
+    });
+    const wrapper = mountReview();
+    await wrapper.get('[data-testid="archive-match-open"]').trigger("click");
+    await flushPromises();
+    const diagnostics = wrapper.get<HTMLTextAreaElement>(
+      '[data-testid="archive-match-diagnostics-text"]',
+    ).element.value;
+    expect(diagnostics).toContain('"code": "invalid_response"');
+    expect(diagnostics).toContain(
+      '"message": "The server returned an invalid match review response."',
+    );
+    expect(diagnostics).not.toContain("SECRET_WRONG_VERSION");
   });
 });

@@ -205,120 +205,8 @@
         <p v-if="pollingPaused" role="status">
           {{ $t("settings.archives.polling_paused") }}
         </p>
-        <p
-          v-if="!loadingStatus && !status.subscriptions.length && !statusError"
-          class="text-sm text-muted-foreground"
-        >
-          {{ $t("settings.archives.no_archives") }}
-        </p>
         <div
-          v-for="subscription in status.subscriptions"
-          :key="subscription.id"
-          class="rounded-lg border p-3 text-sm"
-          data-testid="archive-subscription"
-        >
-          <p class="font-medium">{{ subscription.name }}</p>
-          <p>
-            {{ subscription.account_id }} ·
-            {{ subscription.provider_instance_id }}
-          </p>
-          <p class="break-all">{{ subscription.source_playlist_id }}</p>
-          <ArchiveSyncPolicy
-            v-if="syncBounds"
-            :subscription-id="subscription.id"
-            :bounds="syncBounds"
-            @committed="refreshStatus(true)"
-          />
-          <p>
-            {{
-              $t("settings.archives.observed", {
-                snapshot: subscription.observed_snapshot || "—",
-              })
-            }}
-          </p>
-          <p>
-            {{
-              subscription.committed_version_id
-                ? $t("settings.archives.committed", {
-                    snapshot: subscription.committed_snapshot,
-                    at: subscription.committed_at,
-                  })
-                : $t("settings.archives.not_committed")
-            }}
-          </p>
-          <ArchivePlaylistApply
-            v-if="
-              capabilities.archive_apply && subscription.committed_version_id
-            "
-            :key="subscription.committed_version_id"
-            :version-id="subscription.committed_version_id"
-          />
-          <ArchiveMatchReview
-            v-if="matchPageSize && subscription.committed_version_id"
-            :key="`matches:${subscription.committed_version_id}`"
-            :subscription-id="subscription.id"
-            :version-id="subscription.committed_version_id"
-            :page-size="matchPageSize"
-          />
-          <p
-            v-else-if="subscription.committed_version_id"
-            class="mt-2 text-muted-foreground"
-          >
-            {{ $t("settings.archives.apply_unavailable") }}
-          </p>
-          <ArchivePlaybackPolicy
-            v-if="playbackModes.length && subscription.committed_version_id"
-            :key="`playback:${subscription.committed_version_id}`"
-            :subscription-id="subscription.id"
-            :version-id="subscription.committed_version_id"
-            :modes="playbackModes"
-          />
-          <Button
-            v-if="capabilities.version_listing"
-            variant="outline"
-            class="mt-2"
-            :disabled="loadingVersions"
-            @click="loadVersions(subscription.id)"
-            >{{ $t("settings.archives.versions") }}</Button
-          >
-          <div
-            v-if="versionSubscription === subscription.id"
-            class="mt-2 space-y-1"
-            data-testid="archive-versions"
-          >
-            <p v-if="versionError" role="alert" class="text-destructive">
-              {{ versionError }}
-            </p>
-            <div v-for="version in versions" :key="version.id">
-              <p>
-                {{
-                  $t("settings.archives.version", {
-                    snapshot: version.snapshot_id,
-                    count: version.total,
-                    at: version.created_at,
-                  })
-                }}
-              </p>
-              <ArchiveVersionProvenance
-                v-if="provenancePageSize"
-                :version-id="version.id"
-                :page-size="provenancePageSize"
-              />
-            </div>
-            <Button
-              v-if="moreVersions"
-              variant="outline"
-              :disabled="loadingVersions"
-              @click="loadVersions(subscription.id, true)"
-              >{{ $t("settings.archives.more_versions") }}</Button
-            >
-            <p v-if="!loadingVersions && !versions.length && !versionError">
-              {{ $t("settings.archives.not_committed") }}
-            </p>
-          </div>
-        </div>
-        <div
-          v-for="job in status.jobs"
+          v-for="job in activeJobs"
           :key="job.id"
           class="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-sm"
           data-testid="archive-job"
@@ -348,6 +236,183 @@
             >{{ $t("settings.archives.cancel") }}</Button
           >
         </div>
+        <details
+          v-if="historicalJobs.length"
+          class="rounded-lg border text-sm"
+          data-testid="archive-job-history"
+        >
+          <summary class="cursor-pointer p-3 font-medium">
+            {{
+              $t("settings.archives.job_history", {
+                count: historicalJobs.length,
+              })
+            }}
+          </summary>
+          <div class="space-y-2 border-t p-3">
+            <div
+              v-for="job in visibleHistoricalJobs"
+              :key="job.id"
+              class="rounded border p-2"
+              data-testid="archive-history-job"
+            >
+              <p>
+                {{ jobName(job) }} ·
+                {{ $t(`settings.archives.state_${job.state}`) }}
+              </p>
+              <p class="text-muted-foreground">
+                {{
+                  $t("settings.archives.progress", {
+                    received: job.received,
+                    total: job.total ?? "—",
+                  })
+                }}
+                · {{ job.created_at }}
+              </p>
+              <p v-if="job.error" class="text-destructive">{{ job.error }}</p>
+            </div>
+            <Button
+              v-if="historicalJobs.length > JOB_HISTORY_LIMIT"
+              data-testid="archive-job-history-more"
+              variant="outline"
+              @click.prevent="showAllJobHistory = !showAllJobHistory"
+              >{{
+                $t(
+                  showAllJobHistory
+                    ? "settings.archives.job_history_less"
+                    : "settings.archives.job_history_more",
+                )
+              }}</Button
+            >
+          </div>
+        </details>
+        <p
+          v-if="!loadingStatus && !status.subscriptions.length && !statusError"
+          class="text-sm text-muted-foreground"
+        >
+          {{ $t("settings.archives.no_archives") }}
+        </p>
+        <details
+          v-for="subscription in status.subscriptions"
+          :key="subscription.id"
+          class="rounded-lg border text-sm"
+          data-testid="archive-subscription"
+        >
+          <summary class="cursor-pointer list-none p-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p class="font-medium">{{ subscription.name }}</p>
+                <p class="text-muted-foreground">
+                  {{ subscription.account_id }} ·
+                  {{ subscription.provider_instance_id }}
+                </p>
+              </div>
+              <span class="rounded border px-2 py-1">
+                {{
+                  subscription.committed_version_id
+                    ? $t("settings.archives.history_ready")
+                    : $t("settings.archives.not_committed")
+                }}
+              </span>
+            </div>
+          </summary>
+          <div class="space-y-2 border-t p-3">
+            <p class="break-all">{{ subscription.source_playlist_id }}</p>
+            <ArchiveSyncPolicy
+              v-if="syncBounds"
+              :subscription-id="subscription.id"
+              :bounds="syncBounds"
+              @committed="refreshStatus(true)"
+            />
+            <p>
+              {{
+                $t("settings.archives.observed", {
+                  snapshot: subscription.observed_snapshot || "—",
+                })
+              }}
+            </p>
+            <p>
+              {{
+                subscription.committed_version_id
+                  ? $t("settings.archives.committed", {
+                      snapshot: subscription.committed_snapshot,
+                      at: subscription.committed_at,
+                    })
+                  : $t("settings.archives.not_committed")
+              }}
+            </p>
+            <ArchivePlaylistApply
+              v-if="
+                capabilities.archive_apply && subscription.committed_version_id
+              "
+              :key="subscription.committed_version_id"
+              :version-id="subscription.committed_version_id"
+            />
+            <ArchiveMatchReview
+              v-if="matchPageSize && subscription.committed_version_id"
+              :key="`matches:${subscription.committed_version_id}`"
+              :subscription-id="subscription.id"
+              :version-id="subscription.committed_version_id"
+              :page-size="matchPageSize"
+              :max-bulk-approvals="maxMatchApprovals"
+            />
+            <p
+              v-else-if="subscription.committed_version_id"
+              class="mt-2 text-muted-foreground"
+            >
+              {{ $t("settings.archives.apply_unavailable") }}
+            </p>
+            <ArchivePlaybackPolicy
+              v-if="playbackModes.length && subscription.committed_version_id"
+              :key="`playback:${subscription.committed_version_id}`"
+              :subscription-id="subscription.id"
+              :version-id="subscription.committed_version_id"
+              :modes="playbackModes"
+            />
+            <Button
+              v-if="capabilities.version_listing"
+              variant="outline"
+              class="mt-2"
+              :disabled="loadingVersions"
+              @click="loadVersions(subscription.id)"
+              >{{ $t("settings.archives.versions") }}</Button
+            >
+            <div
+              v-if="versionSubscription === subscription.id"
+              class="mt-2 space-y-1"
+              data-testid="archive-versions"
+            >
+              <p v-if="versionError" role="alert" class="text-destructive">
+                {{ versionError }}
+              </p>
+              <div v-for="version in versions" :key="version.id">
+                <p>
+                  {{
+                    $t("settings.archives.version", {
+                      snapshot: version.snapshot_id,
+                      count: version.total,
+                      at: version.created_at,
+                    })
+                  }}
+                </p>
+                <ArchiveVersionProvenance
+                  v-if="provenancePageSize"
+                  :version-id="version.id"
+                  :page-size="provenancePageSize"
+                />
+              </div>
+              <Button
+                v-if="moreVersions"
+                variant="outline"
+                :disabled="loadingVersions"
+                @click="loadVersions(subscription.id, true)"
+                >{{ $t("settings.archives.more_versions") }}</Button
+              >
+              <p v-if="!loadingVersions && !versions.length && !versionError">
+                {{ $t("settings.archives.not_committed") }}
+              </p>
+            </div>
+          </div>
+        </details>
       </template>
     </CardContent>
   </Card>
@@ -407,10 +472,19 @@ const syncBounds = computed(() => {
 const matchPageSize = computed(() => {
   const caps = capabilities.value;
   return caps?.local_matching &&
-    caps.match_review_api_version === 1 &&
+    (caps.match_review_api_version === 1 ||
+      caps.match_review_api_version === 2) &&
     Number.isInteger(caps.max_match_review_page) &&
     Number(caps.max_match_review_page) > 0
     ? Math.min(100, Number(caps.max_match_review_page))
+    : 0;
+});
+const maxMatchApprovals = computed(() => {
+  const caps = capabilities.value;
+  return caps?.match_review_api_version === 2 &&
+    Number.isInteger(caps.max_match_approvals) &&
+    Number(caps.max_match_approvals) > 0
+    ? Math.min(200, Number(caps.max_match_approvals))
     : 0;
 });
 const provenancePageSize = computed(() => {
@@ -448,6 +522,19 @@ const writing = ref(false);
 const actionError = ref("");
 const notice = ref("");
 const status = ref<ArchiveStatus>({ subscriptions: [], jobs: [] });
+const JOB_HISTORY_LIMIT = 5;
+const showAllJobHistory = ref(false);
+const activeJobs = computed(() =>
+  status.value.jobs.filter((job) => job.state === "pending"),
+);
+const historicalJobs = computed(() =>
+  status.value.jobs.filter((job) => job.state !== "pending"),
+);
+const visibleHistoricalJobs = computed(() =>
+  showAllJobHistory.value
+    ? historicalJobs.value
+    : historicalJobs.value.slice(0, JOB_HISTORY_LIMIT),
+);
 const loadingStatus = ref(false);
 const statusError = ref("");
 const cancelling = ref("");
@@ -523,6 +610,7 @@ async function initialize() {
   sources.value = [];
   sourceError.value = "";
   status.value = { subscriptions: [], jobs: [] };
+  showAllJobHistory.value = false;
   loadingStatus.value = false;
   refreshRequested = false;
   loadingVersions.value = false;
