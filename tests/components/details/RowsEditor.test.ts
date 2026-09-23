@@ -252,7 +252,7 @@ describe("RowsEditor", () => {
 
     expect(sources(mountEditor(["albums", "top_tracks"]))).toEqual([
       ["library", "spotify--1"],
-      ["all", "spotify--1"],
+      ["all", "library", "spotify--1"],
     ]);
   });
 

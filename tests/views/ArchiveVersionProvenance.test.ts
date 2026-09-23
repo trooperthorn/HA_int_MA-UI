@@ -64,9 +64,9 @@ const page = (offset = 0) => ({
   ],
 });
 
-function mountPage(versionId = "v1") {
+function mountPage(versionId = "v1", canOverride = false) {
   return mount(Provenance, {
-    props: { versionId, pageSize: 25 },
+    props: { versionId, pageSize: 25, canOverride },
     global: {
       mocks: {
         $t: (key: string, args?: unknown) =>
@@ -105,6 +105,63 @@ describe("archive version provenance", () => {
     ).toContain("A song");
     expect(wrapper.text()).not.toContain("must-never-render");
     expect(wrapper.text()).not.toContain("hidden");
+  });
+
+  it("sends a revision-checked correction and retains the observation", async () => {
+    const initial = page();
+    const field = initial.items[0].provenance.fields.title;
+    mocks.sendCommand.mockResolvedValueOnce(initial).mockResolvedValueOnce({
+      subject: initial.items[0].provenance.subject,
+      fields: {
+        title: {
+          ...field,
+          revision: 3,
+          override: {
+            action: "set",
+            revision: 3,
+            actor_id: "admin",
+            value: "Correct title",
+            created_at: "2026-09-23T00:00:00Z",
+          },
+          effective: {
+            action: "set",
+            revision: 3,
+            actor_id: "admin",
+            value: "Correct title",
+            created_at: "2026-09-23T00:00:00Z",
+          },
+        },
+      },
+    });
+    const wrapper = mountPage("v1", true);
+    await wrapper
+      .get('[data-testid="archive-provenance-open"]')
+      .trigger("click");
+    await flushPromises();
+    const correct = wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("provenance_correct"));
+    expect(correct).toBeDefined();
+    await correct!.trigger("click");
+    await wrapper.get("textarea").setValue('"Correct title"');
+    const save = wrapper
+      .findAll("button")
+      .find((button) => button.text().includes("provenance_save"));
+    await save!.trigger("click");
+    await flushPromises();
+    expect(mocks.sendCommand).toHaveBeenLastCalledWith(
+      "library_enrichment/set_provenance_override",
+      {
+        version_id: "v1",
+        source_item_id: "track-0",
+        field_name: "title",
+        value: "Correct title",
+        expected_revision: 2,
+      },
+      { suppressGlobalError: true },
+    );
+    expect(wrapper.text()).toContain("Correct title");
+    expect(wrapper.text()).toContain("A song");
   });
 
   it("uses bounded server pages", async () => {

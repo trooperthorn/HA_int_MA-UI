@@ -206,6 +206,36 @@ describe("useArtistRowData", () => {
 
     expect(mockLoadArtistTopTracks).toHaveBeenCalledTimes(1);
     expect(itemIds(page.topTracksItems.value)).toEqual(["newer", "older"]);
+    expect(page.topTracksAreRecentLibrary.value).toBe(true);
+  });
+
+  it("retains the top-tracks label when a provider supplies a ranking", async () => {
+    const page = setupRowData({ rows: ["top_tracks"] });
+    mockLoadArtistTopTracks.mockResolvedValue([track({ item_id: "ranked" })]);
+    mockLoadArtistLibraryTracks.mockResolvedValue([
+      track({ item_id: "local" }),
+    ]);
+
+    await showArtist(page, libraryArtist());
+
+    expect(itemIds(page.topTracksItems.value)).toEqual(["ranked"]);
+    expect(page.topTracksAreRecentLibrary.value).toBe(false);
+  });
+
+  it("uses only cached library tracks for a selected local top-tracks view", async () => {
+    const page = setupRowData({ rows: ["top_tracks"] });
+    saveRowSources({ top_tracks: "library" });
+    mockLoadArtistLibraryTracks.mockResolvedValue([
+      track({ item_id: "older", album: album({ year: 1999 }) }),
+      track({ item_id: "newer", album: album({ year: 2024 }) }),
+    ]);
+
+    await showArtist(page, libraryArtist());
+
+    expect(mockLoadArtistTopTracks).not.toHaveBeenCalled();
+    expect(mockLoadArtistLibraryTracks).toHaveBeenCalledTimes(1);
+    expect(itemIds(page.topTracksItems.value)).toEqual(["newer", "older"]);
+    expect(page.topTracksAreRecentLibrary.value).toBe(true);
   });
 
   it("shares one request between the rows fed by the library and the appearances", async () => {

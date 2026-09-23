@@ -102,10 +102,23 @@ export function useArtistRowData(
 
   // falls back to the newest library tracks when no provider supplies top tracks
   const topTracksItems = computed(() => {
+    if (topTracksSource.value === "library")
+      return libraryTracks.value && newestLibraryTracks(libraryTracks.value);
     const items = sourceItems(topTracks.value, topTracksSource.value);
     if (items === undefined) return undefined;
     if (items.length) return items;
     return libraryTracks.value && newestLibraryTracks(libraryTracks.value);
+  });
+
+  const topTracksAreRecentLibrary = computed(() => {
+    if (topTracksSource.value === "library")
+      return libraryTracks.value !== undefined;
+    const items = sourceItems(topTracks.value, topTracksSource.value);
+    return (
+      items !== undefined &&
+      items.length === 0 &&
+      libraryTracks.value !== undefined
+    );
   });
 
   const similarArtistItems = computed(() =>
@@ -148,7 +161,8 @@ export function useArtistRowData(
     }
     if (rows.includes("top_tracks")) {
       fetchLibraryTracks();
-      fetchTopTracks(topTracksSource.value!);
+      if (topTracksSource.value !== "library")
+        fetchTopTracks(topTracksSource.value!);
     }
     if (rows.includes("similar_artists")) {
       fetchSimilarArtists(similarArtistsSource.value!);
@@ -202,6 +216,7 @@ export function useArtistRowData(
   return {
     libraryTracks,
     topTracksItems,
+    topTracksAreRecentLibrary,
     albumItems,
     singleItems,
     appearsOnItems,

@@ -232,6 +232,12 @@
         v-if="config.domain === 'library_enrichment' && config.enabled"
         :key="`itunes:${config.instance_id}`"
       />
+      <SendspinDiscoveryStatus
+        v-if="config.domain === 'sendspin' && config.enabled"
+      />
+      <SendspinSourceStatus
+        v-if="config.domain === 'sendspin_source' && config.enabled"
+      />
     </div>
 
     <edit-config
@@ -358,6 +364,8 @@ import AmbientSoundsCustomSounds from "./AmbientSoundsCustomSounds.vue";
 import EditConfig from "./EditConfig.vue";
 import LibraryEnrichmentArchives from "./LibraryEnrichmentArchives.vue";
 import LegacyItunesImport from "./LegacyItunesImport.vue";
+import SendspinDiscoveryStatus from "./SendspinDiscoveryStatus.vue";
+import SendspinSourceStatus from "./SendspinSourceStatus.vue";
 
 // global refs
 const router = useRouter();

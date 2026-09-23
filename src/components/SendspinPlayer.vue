@@ -40,6 +40,7 @@ import {
   resolveBuffer,
   resolveCodecs,
   webPlayerStatus,
+  clearWebPlayerHealth,
   webPlayerTuning,
 } from "@/plugins/web_player_tuning";
 import {
@@ -534,6 +535,7 @@ function restartPlayer() {
   player = null;
   webPlayerStatus.connected = false;
   webPlayerStatus.codec = null;
+  clearWebPlayerHealth();
   startPlayer();
 }
 
@@ -594,6 +596,16 @@ function startAdaptive() {
     if (!player) return;
     const info = player.syncInfo;
     if (!info) return;
+    webPlayerStatus.syncErrorMs = Number.isFinite(info.syncErrorMs)
+      ? Math.round(info.syncErrorMs)
+      : null;
+    webPlayerStatus.resyncCount = Number.isSafeInteger(info.resyncCount)
+      ? info.resyncCount
+      : null;
+    webPlayerStatus.outputLatencyMs = Number.isFinite(info.outputLatencyMs)
+      ? Math.round(info.outputLatencyMs)
+      : null;
+    webPlayerStatus.healthSampledAt = Date.now();
     if (isPlaying.value && ++healthTicks % HEALTH_LOG_EVERY_TICKS === 0) {
       logHealth(info);
     }
@@ -686,6 +698,7 @@ onBeforeUnmount(() => {
     player = null;
     webPlayerStatus.connected = false;
     webPlayerStatus.codec = null;
+    clearWebPlayerHealth();
   }
   stopAdaptive();
   if (unsubMetadata) unsubMetadata();

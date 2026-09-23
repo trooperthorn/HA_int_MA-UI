@@ -10,6 +10,7 @@ import {
   Folder,
   LayoutList,
   MicVocal,
+  Monitor,
   PartyPopper,
   Podcast,
   Radio,
@@ -117,6 +118,15 @@ const MENU_ITEM_REGISTRY: MenuItemDefinition[] = [
     isLibraryNode: false,
     group: "library",
     available: () => store.enabledPlugins.has("party"),
+  },
+  {
+    id: "sendspin_display",
+    label: "sendspin_display.title",
+    icon: Monitor,
+    path: "/sendspin-display",
+    isLibraryNode: false,
+    group: "library",
+    available: () => store.enabledPlugins.has("sendspin"),
   },
   {
     id: "radios",

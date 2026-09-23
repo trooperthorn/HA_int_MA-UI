@@ -6,21 +6,28 @@ export interface ArchiveCapabilities {
   preview_preconditions?: boolean;
   version_listing?: boolean;
   archive_apply?: boolean;
+  mirror_apply?: boolean;
+  mirror_api_version?: number;
+  destination_rebind_api_version?: number;
   subscription_sync?: boolean;
   sync_policy_api_version?: number;
   interval_bounds?: { min: number; max: number };
   local_matching?: boolean;
   match_review_api_version?: number;
+  match_relocation_api_version?: number;
   max_match_review_page?: number;
   max_match_approvals?: number;
   playback_policy?: boolean;
   playback_policy_api_version?: number;
+  playback_detach?: boolean;
   playback_policy_modes?: ArchivePlaybackPolicyMode[];
   playback_strict_signal?: string;
   item_provenance?: boolean;
   item_provenance_api_version?: number;
   provenance_read?: boolean;
   provenance_api_version?: number;
+  provenance_override_api_version?: number;
+  local_catalog_api_version?: number;
   max_provenance_page?: number;
   raw_payload_inline?: boolean;
   itunes_import?: boolean;
@@ -126,6 +133,9 @@ export type ItemProvenanceState =
   | "source_changed"
   | "capture_pending"
   | "capture_failed"
+  | "mirror_conflict"
+  | "mirror_uncertain"
+  | "mirror_detached"
   | "unknown";
 
 /** Version 1 of the read-only provenance summary for a library item. */
@@ -136,7 +146,7 @@ export interface ItemProvenance {
   library_item_id: string;
   state: ItemProvenanceState;
   destination: {
-    kind: "archive" | "playback";
+    kind: "archive" | "playback" | "mirror";
     item_id: string;
     provider_instance_id: string;
     version_id: string | null;
@@ -234,11 +244,70 @@ export interface ArchivePlaybackProjectionStatus {
   projected_count?: number;
   omitted_count?: number;
   projection_digest?: string;
+  destination_content_digest?: string | null;
   version_id?: string;
   gaps?: ArchivePlaybackPreviewGap[];
   destination?: ArchiveDestination | null;
   retryable?: boolean;
   error?: string | null;
+}
+
+export interface ArchiveMirrorStatus {
+  subscription_id: string;
+  revision: number;
+  enabled: number;
+  allow_partial: number;
+  state:
+    | "disabled"
+    | "pending"
+    | "prepared"
+    | "writing"
+    | "applied"
+    | "failed"
+    | "uncertain"
+    | "conflict"
+    | "detached";
+  applied_version_id?: string | null;
+  target_version_id?: string | null;
+  target_digest?: string | null;
+  destination_item_id?: string | null;
+  destination_content_digest?: string | null;
+  error?: string | null;
+}
+
+export interface ArchiveDestinationRebindReview {
+  kind: "mirror" | "playback";
+  subscription_id: string;
+  old_item_id: string;
+  candidate_item_id: string;
+  expected_content_digest: string;
+  observed_content_digest: string;
+  revision: number | null;
+  classification: "exact_content" | "mismatch";
+}
+
+export interface ArchiveMirrorRecoveryPreview {
+  subscription_id: string;
+  candidate_item_id: string;
+  target_version_id: string;
+  target_digest: string;
+  revision: number;
+  observed_content_digest: string;
+  classification: "matches_target" | "unchanged_previous" | "mismatch";
+  observed_count: number;
+  target_count: number;
+}
+
+export interface ArchiveMirrorPreview {
+  subscription_id: string;
+  version_id: string;
+  name: string;
+  source_count: number;
+  projected_count: number;
+  omitted_count: number;
+  omitted: { position: number; state: string }[];
+  projection_digest: string;
+  requires_partial_consent: boolean;
 }
 
 export interface ArchiveSelection {
@@ -506,6 +575,7 @@ export interface ArchiveMatchOverlay {
   decision: ArchiveMatchDecision | null;
   decision_history: ArchiveMatchDecision[];
   approved_asset_id: string | null;
+  approved_asset?: ArchiveMatchAsset | null;
   candidates: ArchiveMatchCandidate[];
 }
 

@@ -1,5 +1,5 @@
 diff --git a/dist/audio/decoder.d.ts b/dist/audio/decoder.d.ts
-index b304628dff7028d93377eae51648516d6635ab75..da47e0d9ec7727df52832f58a95f8187503d5718 100644
+index b304628..da47e0d 100644
 --- a/dist/audio/decoder.d.ts
 +++ b/dist/audio/decoder.d.ts
 @@ -12,6 +12,7 @@ export declare class SendspinDecoder {
@@ -21,7 +21,7 @@ index b304628dff7028d93377eae51648516d6635ab75..da47e0d9ec7727df52832f58a95f8187
      private createWebCodecsDecoder;
      private handleAudioData;
 diff --git a/dist/audio/decoder.js b/dist/audio/decoder.js
-index 8a5d7a449beadbe2dfb1251b3e72f7fe1f35c110..6f4c39eb230797701177d0c4f84237e480ae2afd 100644
+index 8a5d7a4..6f4c39e 100644
 --- a/dist/audio/decoder.js
 +++ b/dist/audio/decoder.js
 @@ -11,6 +11,8 @@ export class SendspinDecoder {
@@ -154,7 +154,7 @@ index 8a5d7a449beadbe2dfb1251b3e72f7fe1f35c110..6f4c39eb230797701177d0c4f84237e4
      }
      // Handle decoded audio data from native Opus decoder
 diff --git a/dist/audio/scheduler.d.ts b/dist/audio/scheduler.d.ts
-index 872beb035e861ab6f81ba0a98b711c5336d1a97a..ce7bd919044ee9113ae9e6ce222709a43d405d8b 100644
+index 872beb0..ce7bd91 100644
 --- a/dist/audio/scheduler.d.ts
 +++ b/dist/audio/scheduler.d.ts
 @@ -21,6 +21,8 @@ export interface AudioSchedulerOptions {
@@ -175,7 +175,7 @@ index 872beb035e861ab6f81ba0a98b711c5336d1a97a..ce7bd919044ee9113ae9e6ce222709a4
      get correctionMode(): CorrectionMode;
      setCorrectionMode(mode: CorrectionMode): void;
 diff --git a/dist/audio/scheduler.js b/dist/audio/scheduler.js
-index b06314d3dcf68511af39f63168709d53d7752ed6..defae284e199810412893bea0ddaf575af4b4b3b 100644
+index b06314d..defae28 100644
 --- a/dist/audio/scheduler.js
 +++ b/dist/audio/scheduler.js
 @@ -101,6 +101,7 @@ export class AudioScheduler {
@@ -200,11 +200,832 @@ index b06314d3dcf68511af39f63168709d53d7752ed6..defae284e199810412893bea0ddaf575
          this.gainNode = this.audioContext.createGain();
          const audioElement = this.audioElement;
          if (this.outputMode === "direct") {
+diff --git a/dist/core/core.d.ts b/dist/core/core.d.ts
+index 9a9ed04..2012361 100644
+--- a/dist/core/core.d.ts
++++ b/dist/core/core.d.ts
+@@ -8,7 +8,7 @@
+  */
+ import { StateManager } from "./state-manager";
+ import { SendspinTimeFilter } from "./time-filter";
+-import type { SendspinCoreConfig, DecodedAudioChunk, StreamFormat, GoodbyeReason, PlayerState, ControllerCommand, ControllerCommands } from "../types";
++import type { SendspinCoreConfig, DecodedAudioChunk, StreamFormat, GoodbyeReason, PlayerState, ControllerCommand, ControllerCommands, PreferredFormat } from "../types";
+ import type { StreamHandler } from "../internal-types";
+ export declare class SendspinCore implements StreamHandler {
+     private wsManager;
+@@ -25,10 +25,14 @@ export declare class SendspinCore implements StreamHandler {
+     private transport;
+     private pairing;
+     private handshakeInfo;
++    private artworkStreamActive;
+     private _onAudioData?;
+     private _onStreamStart?;
+     private _onStreamClear?;
+     private _onStreamEnd?;
++    private _onArtworkFrame?;
++    private _onArtworkStreamStart?;
++    private _onArtworkStreamEnd?;
+     private _onVolumeUpdate?;
+     private _onSyncDelayChange?;
+     private _onConnectionOpen?;
+@@ -40,6 +44,8 @@ export declare class SendspinCore implements StreamHandler {
+     handleStreamStart(format: StreamFormat, isFormatUpdate: boolean): void;
+     handleStreamClear(): void;
+     handleStreamEnd(): void;
++    handleArtworkStreamStart(config: { channels: Array<{ source: string; format?: string; width?: number; height?: number }> }): void;
++    handleArtworkStreamEnd(): void;
+     handleVolumeUpdate(): void;
+     private applyDelay;
+     handleSyncDelayChange(delayMs: number): void;
+@@ -48,6 +54,9 @@ export declare class SendspinCore implements StreamHandler {
+     set onStreamStart(cb: ((format: StreamFormat, isFormatUpdate: boolean) => void) | undefined);
+     set onStreamClear(cb: (() => void) | undefined);
+     set onStreamEnd(cb: (() => void) | undefined);
++    set onArtworkFrame(cb: ((frame: Uint8Array) => void) | undefined);
++    set onArtworkStreamStart(cb: ((config: { channels: Array<{ source: string; format?: string; width?: number; height?: number }> }) => void) | undefined);
++    set onArtworkStreamEnd(cb: (() => void) | undefined);
+     set onVolumeUpdate(cb: (() => void) | undefined);
+     set onSyncDelayChange(cb: ((delayMs: number) => void) | undefined);
+     set onConnectionOpen(cb: (() => void) | undefined);
+@@ -65,7 +74,10 @@ export declare class SendspinCore implements StreamHandler {
+     setSyncDelay(delayMs: number): void;
+     setRequiredLeadTimeMs(leadTimeMs: number): void;
+     setMinBufferMs(minBufferMs: number): void;
++    setPreferredFormat(format: PreferredFormat | null): void;
+     sendCommand<T extends ControllerCommand>(command: T, params: ControllerCommands[T]): void;
++    setAvailable(available: boolean): void;
++    leaveGroup(): void;
+     get isPlaying(): boolean;
+     get volume(): number;
+     get muted(): boolean;
+@@ -103,4 +115,4 @@ export declare class SendspinCore implements StreamHandler {
+     /** @internal */
+     get _timeFilter(): SendspinTimeFilter;
+ }
+-//# sourceMappingURL=core.d.ts.map
+\ No newline at end of file
++//# sourceMappingURL=core.d.ts.map
+diff --git a/dist/core/core.js b/dist/core/core.js
+index 45f85ba..f1c5a25 100644
+--- a/dist/core/core.js
++++ b/dist/core/core.js
+@@ -24,6 +24,7 @@ import { encodePairingToken } from "./noise/pairing-token";
+ export class SendspinCore {
+     constructor(config) {
+         this.handshakeInfo = null;
++        this.artworkStreamActive = false;
+         // Validate configured codecs up front so a set with no browser overlap
+         // throws to the app instead of failing silently inside client/hello dispatch.
+         if (config.codecs)
+@@ -90,8 +91,10 @@ export class SendspinCore {
+         this.protocolHandler = new ProtocolHandler(this.transport, helloContext, this, // this class implements StreamHandler
+         this.stateManager, this.timeFilter, {
+             clientName,
++            supportedRoles: config.supportedRoles,
+             productName: config.productName,
+             codecs: config.codecs,
++            preferredFormat: config.preferredFormat,
+             bufferCapacity: config.bufferCapacity,
+             requiredLeadTimeMs: config.requiredLeadTimeMs,
+             minBufferMs: config.minBufferMs,
+@@ -99,6 +102,8 @@ export class SendspinCore {
+             onVolumeCommand: config.onVolumeCommand,
+             onDelayCommand: config.onDelayCommand,
+             getExternalVolume: config.getExternalVolume,
++            artworkChannels: config.artworkChannels,
++            artworkWireMode: config.artworkWireMode,
+         });
+     }
+     // Route decrypted control messages from the transport. Pairing consumes its
+@@ -135,9 +140,11 @@ export class SendspinCore {
+         // starts clean and a synchronous send from onConnectionOpen can't emit a
+         // frame under the dead session's keys.
+         this.transport.onSocketClosed();
++        this.handleArtworkStreamEnd();
+         this.handshakeInfo = null;
+         this.protocolHandler.stopTimeSync();
+         this.protocolHandler.resetActivation();
++        this.timeFilter.reset();
+         this.pairing.reset();
+         // Stop periodic state-update sends so they don't spam
+         // "WebSocket not connected" warnings after the transport is gone.
+@@ -150,6 +157,12 @@ export class SendspinCore {
+     // (called by ProtocolHandler)
+     // ========================================
+     handleBinaryMessage(data) {
++        const type = new Uint8Array(data)[0];
++        if (type >= 8 && type <= 11) {
++            if (this.artworkStreamActive)
++                this._onArtworkFrame?.(new Uint8Array(data));
++            return;
++        }
+         const format = this.stateManager.currentStreamFormat;
+         if (!format) {
+             console.warn("Sendspin: Received audio chunk but no stream format set");
+@@ -172,6 +185,16 @@ export class SendspinCore {
+         this.decoder.clearState();
+         this._onStreamEnd?.();
+     }
++    handleArtworkStreamStart(config) {
++        this.artworkStreamActive = true;
++        this._onArtworkStreamStart?.(config);
++    }
++    handleArtworkStreamEnd() {
++        if (!this.artworkStreamActive)
++            return;
++        this.artworkStreamActive = false;
++        this._onArtworkStreamEnd?.();
++    }
+     handleVolumeUpdate() {
+         this._onVolumeUpdate?.();
+     }
+@@ -201,6 +224,15 @@ export class SendspinCore {
+     set onStreamEnd(cb) {
+         this._onStreamEnd = cb;
+     }
++    set onArtworkFrame(cb) {
++        this._onArtworkFrame = cb;
++    }
++    set onArtworkStreamStart(cb) {
++        this._onArtworkStreamStart = cb;
++    }
++    set onArtworkStreamEnd(cb) {
++        this._onArtworkStreamEnd = cb;
++    }
+     set onVolumeUpdate(cb) {
+         this._onVolumeUpdate = cb;
+     }
+@@ -261,6 +293,7 @@ export class SendspinCore {
+             this.protocolHandler.sendGoodbye(reason);
+         }
+         this.protocolHandler.stopTimeSync();
++        this.handleArtworkStreamEnd();
+         this.stateManager.clearAllIntervals();
+         this.wsManager.disconnect();
+         this.decoder.close();
+@@ -296,17 +329,37 @@ export class SendspinCore {
+     setMinBufferMs(minBufferMs) {
+         this.protocolHandler.setMinBufferMs(minBufferMs);
+     }
++    setPreferredFormat(format) {
++        this.protocolHandler.setPreferredFormat(format);
++    }
+     // ========================================
+     // Controller commands
+     // ========================================
+     sendCommand(command, params) {
+         const supportedCommands = this.stateManager.serverState.controller?.supported_commands;
+-        if (supportedCommands && !supportedCommands.includes(command)) {
++        if (!Array.isArray(supportedCommands) || !supportedCommands.includes(command)) {
+             throw new Error(`Command '${command}' is not supported by the server. ` +
+-                `Supported commands: ${supportedCommands.join(", ")}`);
++                `Supported commands: ${supportedCommands?.join(", ") ?? "none reported"}`);
++        }
++        if (command === "seek") {
++            const position = params?.position_ms;
++            const maximum = this.stateManager.serverState.controller?.seek_max_ms;
++            if (!Number.isSafeInteger(position) || position < 0 ||
++                !Number.isSafeInteger(maximum) || position > maximum) {
++                throw new RangeError("seek requires an integer position_ms within the server's seekable range");
++            }
++        }
++        if (command === "seek_relative" && !Number.isSafeInteger(params?.offset_ms)) {
++            throw new RangeError("seek_relative requires an integer offset_ms");
+         }
+         this.protocolHandler.sendCommand(command, params);
+     }
++    setAvailable(available) {
++        this.protocolHandler.setAvailable(available);
++    }
++    leaveGroup() {
++        this.protocolHandler.leaveGroup();
++    }
+     // ========================================
+     // State getters
+     // ========================================
+@@ -407,4 +460,4 @@ export class SendspinCore {
+         return this.timeFilter;
+     }
+ }
+-//# sourceMappingURL=core.js.map
+\ No newline at end of file
++//# sourceMappingURL=core.js.map
+diff --git a/dist/core/protocol-handler.d.ts b/dist/core/protocol-handler.d.ts
+index a8fddcc..9f0c2f1 100644
+--- a/dist/core/protocol-handler.d.ts
++++ b/dist/core/protocol-handler.d.ts
+@@ -1,5 +1,5 @@
+ import type { SendspinTimeFilter } from "./time-filter";
+-import type { Codec, ControllerCommand, ControllerCommands, GoodbyeReason, PairMethodDescriptor, ServerMessage } from "../types";
++import type { Codec, ControllerCommand, ControllerCommands, GoodbyeReason, PairMethodDescriptor, PreferredFormat, ServerMessage } from "../types";
+ import type { StreamHandler } from "../internal-types";
+ import type { StateManager } from "./state-manager";
+ export interface MessageSender {
+@@ -12,9 +12,13 @@ export interface HelloContext {
+     unpairedAccess: boolean;
+ }
+ export interface ProtocolHandlerConfig {
++    supportedRoles?: Array<"player@v1" | "controller@v1" | "metadata@v1" | "artwork@v1">;
++    artworkChannels?: Array<{ source: "album" | "artist" | "none"; format?: "jpeg" | "png"; width?: number; height?: number }>;
++    artworkWireMode?: "legacy" | "announce-parts";
+     clientName?: string;
+     productName?: string;
+     codecs?: Codec[];
++    preferredFormat?: PreferredFormat;
+     bufferCapacity?: number;
+     requiredLeadTimeMs?: number;
+     minBufferMs?: number;
+@@ -33,8 +37,13 @@ export declare class ProtocolHandler {
+     private stateManager;
+     private timeFilter;
+     private clientName;
++    private supportedRoles;
++    private artworkChannels;
++    private artworkWireMode;
++    private available;
+     private productName?;
+     private codecs;
++    private preferredFormat;
+     private bufferCapacity;
+     private requiredLeadTimeMs;
+     private minBufferMs;
+@@ -47,8 +56,12 @@ export declare class ProtocolHandler {
+     private activeRoles;
+     private pairingSuspended;
+     private lastSentPlayer;
++    private pendingMetadata;
++    private metadataTimer;
+     constructor(sender: MessageSender, helloContext: HelloContext, streamHandler: StreamHandler, stateManager: StateManager, timeFilter: SendspinTimeFilter, config?: ProtocolHandlerConfig);
+     handleServerMessage(message: ServerMessage): void;
++    private clearPendingMetadata;
++    private scheduleMetadata;
+     private handleServerHello;
+     private handleServerActivate;
+     private restartStateUpdateInterval;
+@@ -67,8 +80,11 @@ export declare class ProtocolHandler {
+     sendClientHello(): void;
+     setRequiredLeadTimeMs(leadTimeMs: number): void;
+     setMinBufferMs(minBufferMs: number): void;
++    setPreferredFormat(format: PreferredFormat | null): void;
+     sendStateUpdate(skipHardwareRead?: boolean): void;
++    setAvailable(available: boolean): void;
++    leaveGroup(): void;
+     sendGoodbye(reason: GoodbyeReason): void;
+     sendCommand<T extends ControllerCommand>(command: T, params: ControllerCommands[T]): void;
+ }
+-//# sourceMappingURL=protocol-handler.d.ts.map
+\ No newline at end of file
++//# sourceMappingURL=protocol-handler.d.ts.map
+diff --git a/dist/core/protocol-handler.js b/dist/core/protocol-handler.js
+index a77a065..e11ae88 100644
+--- a/dist/core/protocol-handler.js
++++ b/dist/core/protocol-handler.js
+@@ -24,9 +24,30 @@ export class ProtocolHandler {
+         // full state has been sent yet. Cleared on (re)connect so the first send is
+         // full again.
+         this.lastSentPlayer = null;
++        this.pendingMetadata = null;
++        this.metadataTimer = null;
+         this.clientName = config.clientName ?? "Sendspin Player";
++        const roles = config.supportedRoles ?? ["player@v1", "controller@v1", "metadata@v1"];
++        if (!Array.isArray(roles) || roles.length === 0 ||
++            roles.some((role) => !["player@v1", "controller@v1", "metadata@v1", "artwork@v1"].includes(role)) ||
++            new Set(roles).size !== roles.length) {
++            throw new RangeError("supportedRoles must contain unique implemented Sendspin roles");
++        }
++        this.supportedRoles = roles;
++        this.artworkChannels = config.artworkChannels;
++        this.artworkWireMode = config.artworkWireMode ?? "legacy";
++        if (roles.includes("artwork@v1") &&
++            (!Array.isArray(this.artworkChannels) || this.artworkChannels.length < 1 || this.artworkChannels.length > 4 ||
++                this.artworkChannels.some((channel) => !["album", "artist", "none"].includes(channel.source) ||
++                    (channel.source !== "none" && (!["jpeg", "png"].includes(channel.format) ||
++                        !Number.isSafeInteger(channel.width) || channel.width <= 0 ||
++                        !Number.isSafeInteger(channel.height) || channel.height <= 0))))) {
++            throw new RangeError("artwork@v1 requires 1-4 valid artworkChannels");
++        }
++        this.available = true;
+         this.productName = config.productName;
+         this.codecs = config.codecs ?? ["opus", "flac", "pcm"];
++        this.preferredFormat = null;
+         // Left undefined so the capacity is derived from the formats actually
+         // advertised in client/hello (see sendClientHello).
+         this.bufferCapacity = config.bufferCapacity;
+@@ -39,7 +60,9 @@ export class ProtocolHandler {
+         this.onVolumeCommand = config.onVolumeCommand;
+         this.onDelayCommand = config.onDelayCommand;
+         this.getExternalVolume = config.getExternalVolume;
+-        this.timeSyncManager = new TimeSyncManager(sender, stateManager, timeFilter);
++        this.timeSyncManager = new TimeSyncManager(sender, stateManager, timeFilter, () => this.sendStateUpdate());
++        if (config.preferredFormat)
++            this.setPreferredFormat(config.preferredFormat);
+     }
+     // Handle server messages
+     handleServerMessage(message) {
+@@ -66,13 +89,50 @@ export class ProtocolHandler {
+                 this.handleServerCommand(message);
+                 break;
+             case "server/state":
+-                this.stateManager.updateServerState(message.payload);
++                if (this.activeRoles) {
++                    const activeState = {};
++                    for (const [role, state] of Object.entries(message.payload)) {
++                        if (this.activeRoles.has(`${role}@v1`))
++                            activeState[role] = state;
++                    }
++                    if (Object.hasOwn(activeState, "metadata")) {
++                        this.scheduleMetadata(activeState.metadata);
++                        delete activeState.metadata;
++                    }
++                    if (Object.keys(activeState).length)
++                        this.stateManager.updateServerState(activeState);
++                }
+                 break;
+             case "group/update":
+                 this.stateManager.updateGroupState(message.payload);
+                 break;
+         }
+     }
++    clearPendingMetadata() {
++        if (this.metadataTimer !== null)
++            clearTimeout(this.metadataTimer);
++        this.metadataTimer = null;
++        this.pendingMetadata = null;
++    }
++    scheduleMetadata(metadata) {
++        this.clearPendingMetadata();
++        const timestamp = metadata?.timestamp;
++        if (typeof timestamp === "number" && Number.isFinite(timestamp)) {
++            const clientTimeUs = this.timeFilter.computeClientTime(timestamp);
++            const waitMs = clientTimeUs / 1000 - performance.now();
++            if (waitMs > 0) {
++                this.pendingMetadata = metadata;
++                this.metadataTimer = setTimeout(() => {
++                    const pending = this.pendingMetadata;
++                    this.clearPendingMetadata();
++                    if (pending !== null && this.activeRoles?.has("metadata@v1"))
++                        this.stateManager.updateServerState({ metadata: pending });
++                }, Math.min(waitMs, 2147483647));
++                return;
++            }
++        }
++        this.stateManager.updateServerState({ metadata });
++    }
+     // Handle server hello: reply with client/hello. client/state and time-sync
+     // are deferred to server/activate.
+     handleServerHello() {
+@@ -84,8 +144,26 @@ export class ProtocolHandler {
+     handleServerActivate(message) {
+         this.pairingSuspended = false;
+         let rolesChanged = false;
+-        if (message.payload.active_roles !== undefined) {
+-            const nextRoles = new Set(message.payload.active_roles);
++        if (message.payload.active_roles !== undefined || this.activeRoles === null) {
++            // A first activation without active_roles activates no roles.
++            const nextRoles = new Set(message.payload.active_roles ?? []);
++            if (this.activeRoles !== null) {
++                for (const role of this.activeRoles) {
++                    if (!nextRoles.has(role)) {
++                        if (role === "metadata@v1")
++                            this.clearPendingMetadata();
++                        if (role === "artwork@v1")
++                            this.streamHandler.handleArtworkStreamEnd();
++                        this.stateManager.clearServerRole(role.split("@")[0]);
++                        if (role === "player@v1") {
++                            this.streamHandler.handleStreamEnd();
++                            this.stateManager.currentStreamFormat = null;
++                            this.stateManager.isPlaying = false;
++                            this.lastSentPlayer = null;
++                        }
++                    }
++                }
++            }
+             rolesChanged =
+                 this.activeRoles === null ||
+                     nextRoles.size !== this.activeRoles.size ||
+@@ -114,6 +192,8 @@ export class ProtocolHandler {
+         this.timeSyncManager.stop();
+     }
+     suspendForPairing() {
++        this.clearPendingMetadata();
++        this.streamHandler.handleArtworkStreamEnd();
+         this.pairingSuspended = true;
+         this.activated = false;
+         this.activeRoles = new Set();
+@@ -126,6 +206,8 @@ export class ProtocolHandler {
+      * @internal called by SendspinCore on transport close, not part of the public API.
+      */
+     resetActivation(preserveActiveRoles = false) {
++        this.clearPendingMetadata();
++        this.streamHandler.handleArtworkStreamEnd();
+         this.pairingSuspended = false;
+         this.activated = false;
+         if (!preserveActiveRoles)
+@@ -134,6 +216,10 @@ export class ProtocolHandler {
+         this.stateManager.clearStateUpdateInterval();
+     }
+     handleStreamStart(message) {
++        if (this.activeRoles?.has("artwork@v1") && message.payload.artwork)
++            this.streamHandler.handleArtworkStreamStart(message.payload.artwork);
++        if (!this.activeRoles?.has("player@v1") || !message.payload.player)
++            return;
+         const isFormatUpdate = this.stateManager.currentStreamFormat !== null;
+         this.stateManager.currentStreamFormat = message.payload.player;
+         console.log(isFormatUpdate
+@@ -159,6 +245,8 @@ export class ProtocolHandler {
+     }
+     handleStreamEnd(message) {
+         const roles = message.payload?.roles;
++        if (!roles || roles.includes("artwork"))
++            this.streamHandler.handleArtworkStreamEnd();
+         if (!roles || roles.includes("player")) {
+             console.log("Sendspin: Stream ended");
+             this.streamHandler.handleStreamEnd();
+@@ -198,8 +286,10 @@ export class ProtocolHandler {
+                     }
+                 }
+                 break;
++            case "set_output_delay":
+             case "set_static_delay": {
+-                const delay = playerCommand.static_delay_ms;
++                const delay = playerCommand.command === "set_output_delay"
++                    ? playerCommand.output_delay_ms : playerCommand.static_delay_ms;
+                 if (typeof delay === "number" && isFinite(delay)) {
+                     const clamped = clampSyncDelayMs(delay);
+                     this.streamHandler.handleSyncDelayChange(clamped);
+@@ -215,12 +305,14 @@ export class ProtocolHandler {
+     }
+     // client_id and version live in client/init, not the hello.
+     sendClientHello() {
+-        const supportedFormats = getSupportedFormats(this.codecs);
++        const playerRole = this.supportedRoles.includes("player@v1");
++        const artworkRole = this.supportedRoles.includes("artwork@v1");
++        const supportedFormats = playerRole ? getSupportedFormats(this.codecs) : [];
+         const hello = {
+             type: "client/hello",
+             payload: {
+                 name: this.clientName,
+-                supported_roles: ["player@v1", "controller@v1", "metadata@v1"],
++                supported_roles: this.supportedRoles,
+                 trust_level: this.helloContext.trustLevel(),
+                 supported_pair_methods: this.helloContext.pairMethods(),
+                 unpaired_access: { enabled: this.helloContext.unpairedAccess },
+@@ -230,11 +322,18 @@ export class ProtocolHandler {
+                     software_version: (typeof navigator !== "undefined" && navigator.userAgent) ||
+                         "Unknown",
+                 },
+-                "player@v1_support": {
++                ...(playerRole ? { "player@v1_support": {
+                     supported_formats: supportedFormats,
+                     buffer_capacity: this.bufferCapacity ?? getDefaultBufferCapacity(supportedFormats),
+-                    supported_commands: ["volume", "mute"],
+-                },
++                } } : {}),
++                ...(artworkRole && this.artworkWireMode === "legacy" ? { "artwork@v1_support": {
++                    channels: this.artworkChannels.map((channel) => ({
++                        source: channel.source,
++                        format: channel.format ?? "jpeg",
++                        media_width: channel.width ?? 1,
++                        media_height: channel.height ?? 1,
++                    })),
++                } } : {}),
+             },
+         };
+         // Reset so the first client/state after connect is a full snapshot.
+@@ -251,8 +350,25 @@ export class ProtocolHandler {
+         this.minBufferMs = minBufferMs;
+         this.sendStateUpdate();
+     }
+-    // Send state update. The first send after a (re)connect is a full snapshot;
+-    // later sends are deltas carrying only changed fields, which the server merges.
++    setPreferredFormat(format) {
++        if (format === null) {
++            this.preferredFormat = null;
++        }
++        else {
++            const supported = getSupportedFormats(this.codecs);
++            const selected = supported.find((candidate) => candidate.codec === format?.codec &&
++                candidate.sample_rate === format?.sample_rate &&
++                candidate.channels === format?.channels &&
++                candidate.bit_depth === format?.bit_depth);
++            if (!selected)
++                throw new RangeError("preferredFormat must be an advertised Sendspin format");
++            this.preferredFormat = { ...selected };
++        }
++        if (this.activated)
++            this.sendStateUpdate();
++    }
++    // Every included player object is a full state snapshot. Omitting format
++    // after a preference was set clears that preference on current-spec servers.
+     // When skipHardwareRead is true, use stateManager values instead of reading from hardware.
+     // This avoids race conditions when responding to volume commands.
+     sendStateUpdate(skipHardwareRead = false) {
+@@ -266,49 +382,54 @@ export class ProtocolHandler {
+             muted = externalVol.muted;
+         }
+         const syncDelayMs = this.streamHandler.getSyncDelayMs();
+-        const staticDelayMs = clampSyncDelayMs(syncDelayMs);
++        const outputDelayMs = clampSyncDelayMs(syncDelayMs);
+         const payload = {
+-            available: true,
++            // Player output must not be offered until its clock has a measured
++            // relationship to the server clock. Controller-only clients do not
++            // render timestamped audio and may become available immediately.
++            available: this.available &&
++                (!this.activeRoles?.has("player@v1") || this.timeFilter.is_synchronized),
+         };
+-        if (this.activeRoles === null || this.activeRoles.has("player@v1")) {
++        if (this.supportedRoles.includes("player@v1") &&
++            (this.activeRoles === null || this.activeRoles.has("player@v1"))) {
+             const current = {
+                 volume,
+                 muted,
+-                static_delay_ms: staticDelayMs,
++                output_delay_ms: outputDelayMs,
+                 required_lead_time_ms: this.requiredLeadTimeMs,
+                 min_buffer_ms: this.minBufferMs,
++                ...(this.preferredFormat ? { format: this.preferredFormat } : {}),
++            };
++            payload.player = {
++                ...current,
++                supported_commands: ["volume", "mute", "set_output_delay"],
+             };
+-            const last = this.lastSentPlayer;
+-            if (last === null) {
+-                // Full state: every field plus the static supported_commands.
+-                payload.player = {
+-                    ...current,
+-                    supported_commands: ["set_static_delay"],
+-                };
+-            }
+-            else {
+-                // Delta: only changed fields.
+-                const player = {};
+-                if (current.static_delay_ms !== last.static_delay_ms)
+-                    player.static_delay_ms = current.static_delay_ms;
+-                if (current.volume !== last.volume)
+-                    player.volume = current.volume;
+-                if (current.muted !== last.muted)
+-                    player.muted = current.muted;
+-                if (current.required_lead_time_ms !== last.required_lead_time_ms)
+-                    player.required_lead_time_ms = current.required_lead_time_ms;
+-                if (current.min_buffer_ms !== last.min_buffer_ms)
+-                    player.min_buffer_ms = current.min_buffer_ms;
+-                payload.player = player;
+-            }
+             this.lastSentPlayer = current;
+         }
++        if (this.supportedRoles.includes("artwork@v1") && this.artworkWireMode === "announce-parts" &&
++            (this.activeRoles === null || this.activeRoles.has("artwork@v1"))) {
++            payload.artwork = { channels: this.artworkChannels };
++        }
+         const message = {
+             type: "client/state",
+             payload,
+         };
+         this.sender.sendControl(message);
+     }
++    setAvailable(available) {
++        if (typeof available !== "boolean")
++            throw new TypeError("available must be a boolean");
++        if (this.available === available)
++            return;
++        this.available = available;
++        if (this.activated && !this.pairingSuspended)
++            this.sendStateUpdate();
++    }
++    leaveGroup() {
++        if (!this.activated || this.pairingSuspended)
++            return;
++        this.sender.sendControl({ type: "client/leave", payload: {} });
++    }
+     // Send goodbye message before disconnecting
+     sendGoodbye(reason) {
+         this.sender.sendControl({
+@@ -333,4 +454,4 @@ export class ProtocolHandler {
+         });
+     }
+ }
+-//# sourceMappingURL=protocol-handler.js.map
+\ No newline at end of file
++//# sourceMappingURL=protocol-handler.js.map
+diff --git a/dist/core/state-manager.d.ts b/dist/core/state-manager.d.ts
+index ceb59ef..324133f 100644
+--- a/dist/core/state-manager.d.ts
++++ b/dist/core/state-manager.d.ts
+@@ -45,8 +45,9 @@ export declare class StateManager {
+     reset(): void;
+     private notifyStateChange;
+     updateServerState(update: ServerStatePayload): void;
++    clearServerRole(role: string): void;
+     updateGroupState(update: GroupUpdatePayload): void;
+     get serverState(): ServerStatePayload;
+     get groupState(): GroupUpdatePayload;
+ }
+-//# sourceMappingURL=state-manager.d.ts.map
+\ No newline at end of file
++//# sourceMappingURL=state-manager.d.ts.map
+diff --git a/dist/core/state-manager.js b/dist/core/state-manager.js
+index 931c5f8..567f432 100644
+--- a/dist/core/state-manager.js
++++ b/dist/core/state-manager.js
+@@ -162,6 +162,18 @@ export class StateManager {
+     // Update server state (merges delta, null clears fields)
+     updateServerState(update) {
+         this._serverState = applyDiff(this._serverState, update);
++        // Metadata is a complete snapshot. In particular, omitted progress
++        // clears the previous track position instead of merging it forward.
++        if (update.metadata && typeof update.metadata === "object")
++            this._serverState.metadata = { ...update.metadata };
++        this.notifyStateChange();
++    }
++    clearServerRole(role) {
++        if (!(role in this._serverState))
++            return;
++        const next = { ...this._serverState };
++        delete next[role];
++        this._serverState = next;
+         this.notifyStateChange();
+     }
+     // Update group state (merges delta, null clears fields)
+@@ -177,4 +189,4 @@ export class StateManager {
+         return this._groupState;
+     }
+ }
+-//# sourceMappingURL=state-manager.js.map
+\ No newline at end of file
++//# sourceMappingURL=state-manager.js.map
+diff --git a/dist/core/time-sync-manager.d.ts b/dist/core/time-sync-manager.d.ts
+index 912ac2d..6f2b772 100644
+--- a/dist/core/time-sync-manager.d.ts
++++ b/dist/core/time-sync-manager.d.ts
+@@ -6,12 +6,13 @@ export declare class TimeSyncManager {
+     private sender;
+     private stateManager;
+     private timeFilter;
++    private onSynchronized;
+     private timeSyncBurstActive;
+     private timeSyncBurstSentCount;
+     private timeSyncInFlightClientTransmitted;
+     private timeSyncInFlightTimeout;
+     private timeSyncBurstSamples;
+-    constructor(sender: MessageSender, stateManager: StateManager, timeFilter: SendspinTimeFilter);
++    constructor(sender: MessageSender, stateManager: StateManager, timeFilter: SendspinTimeFilter, onSynchronized?: () => void);
+     startAndSchedule(): void;
+     private scheduleNextTimeSyncBurstTick;
+     private startTimeSyncBurstIfIdle;
+@@ -26,4 +27,4 @@ export declare class TimeSyncManager {
+     handleServerTime(message: ServerTime): void;
+     sendTimeSync(clientTimeUs?: number): number;
+ }
+-//# sourceMappingURL=time-sync-manager.d.ts.map
+\ No newline at end of file
++//# sourceMappingURL=time-sync-manager.d.ts.map
+diff --git a/dist/core/time-sync-manager.js b/dist/core/time-sync-manager.js
+index bf87d25..7da4290 100644
+--- a/dist/core/time-sync-manager.js
++++ b/dist/core/time-sync-manager.js
+@@ -3,10 +3,11 @@ const TIME_SYNC_BURST_INTERVAL_MS = 10000;
+ const TIME_SYNC_REQUEST_TIMEOUT_MS = 2000;
+ const TIME_SYNC_ROBUST_SELECTION_COUNT = 3;
+ export class TimeSyncManager {
+-    constructor(sender, stateManager, timeFilter) {
++    constructor(sender, stateManager, timeFilter, onSynchronized) {
+         this.sender = sender;
+         this.stateManager = stateManager;
+         this.timeFilter = timeFilter;
++        this.onSynchronized = onSynchronized;
+         this.timeSyncBurstActive = false;
+         this.timeSyncBurstSentCount = 0;
+         this.timeSyncInFlightClientTransmitted = null;
+@@ -75,7 +76,10 @@ export class TimeSyncManager {
+         this.clearTimeSyncProbeTimeout();
+         const candidate = this.selectTimeSyncBurstCandidate();
+         if (candidate) {
++            const wasSynchronized = this.timeFilter.is_synchronized;
+             this.timeFilter.update(candidate.measurement, candidate.maxError, candidate.t4);
++            if (!wasSynchronized && this.timeFilter.is_synchronized)
++                this.onSynchronized?.();
+         }
+         this.timeSyncBurstActive = false;
+         this.timeSyncBurstSentCount = 0;
+@@ -150,4 +154,4 @@ export class TimeSyncManager {
+         return clientTimeUs;
+     }
+ }
+-//# sourceMappingURL=time-sync-manager.js.map
+\ No newline at end of file
++//# sourceMappingURL=time-sync-manager.js.map
+diff --git a/dist/core/transport.js b/dist/core/transport.js
+index 5758d9e..1a23fe6 100644
+--- a/dist/core/transport.js
++++ b/dist/core/transport.js
+@@ -301,19 +301,25 @@ export class SendspinTransport {
+     }
+     handleActivate(msg) {
+         const payloadRoles = msg.payload.active_roles;
+-        // active_roles is required on the first activate and persists when later ones omit it.
+-        if (!this.seenActivate && payloadRoles === undefined) {
+-            this.sendGoodbyeAndClose("unauthorized");
+-            return;
++        // A missing first list means no active roles. Later omissions retain the
++        // previous list only while this connection remains playback-capable.
++        let effectiveRoles = payloadRoles ?? this.effectiveActiveRoles ?? [];
++        let forwardRoles = payloadRoles !== undefined || !this.seenActivate;
++        let result = authorizeActivate(this.matched.category, msg.payload.activities, effectiveRoles, this.deps.unpairedAccess);
++        if (payloadRoles === undefined && !result.ok) {
++            const withoutRoles = authorizeActivate(this.matched.category, msg.payload.activities, [], this.deps.unpairedAccess);
++            if (withoutRoles.ok) {
++                effectiveRoles = [];
++                forwardRoles = true;
++                result = withoutRoles;
++            }
+         }
+-        if (payloadRoles !== undefined)
+-            this.effectiveActiveRoles = payloadRoles;
+-        this.seenActivate = true;
+-        const result = authorizeActivate(this.matched.category, msg.payload.activities, this.effectiveActiveRoles, this.deps.unpairedAccess);
+         if (!result.ok) {
+             this.sendGoodbyeAndClose(result.goodbye);
+             return;
+         }
++        this.effectiveActiveRoles = effectiveRoles;
++        this.seenActivate = true;
+         this.clearTimeout();
+         const queuedCommands = !msg.payload.activities.includes("pairing") &&
+             this.effectiveActiveRoles?.includes("controller@v1")
+@@ -321,7 +327,9 @@ export class SendspinTransport {
+             : [];
+         this.quiesced = false;
+         this.outboundQueue = [];
+-        this.cb.onControlMessage(msg);
++        this.cb.onControlMessage(forwardRoles
++            ? { ...msg, payload: { ...msg.payload, active_roles: effectiveRoles } }
++            : msg);
+         for (const command of queuedCommands)
+             this.encryptSend(command);
+     }
+@@ -386,4 +394,4 @@ SendspinTransport.QUIESCED_TYPES = new Set([
+     "client/time",
+     "client/state",
+ ]);
+-//# sourceMappingURL=transport.js.map
+\ No newline at end of file
++//# sourceMappingURL=transport.js.map
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index 8627437..9e3d7de 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -1,4 +1,4 @@
+-import type { SendspinPlayerConfig, PlayerState, StreamFormat, GoodbyeReason, ControllerCommand, ControllerCommands, CorrectionMode } from "./types";
++import type { SendspinPlayerConfig, PlayerState, StreamFormat, GoodbyeReason, ControllerCommand, ControllerCommands, CorrectionMode, PreferredFormat } from "./types";
+ declare function detectIsAndroid(): boolean;
+ declare function detectIsIOS(): boolean;
+ declare function detectIsMobile(): boolean;
+@@ -40,6 +40,8 @@ export declare class SendspinPlayer {
+      * number.
+      */
+     setMinBufferMs(minBufferMs: number): void;
++    /** Prefer one advertised audio format, or clear the preference. */
++    setPreferredFormat(format: PreferredFormat | null): void;
+     /**
+      * Set the sync correction mode at runtime.
+      */
+@@ -48,6 +50,10 @@ export declare class SendspinPlayer {
+      * Send a controller command to the server.
+      */
+     sendCommand<T extends ControllerCommand>(command: T, params: ControllerCommands[T]): void;
++    /** Mark this client busy with external activity or ready for Sendspin again. */
++    setAvailable(available: boolean): void;
++    /** Leave the current playing group without disconnecting. */
++    leaveGroup(): void;
+     get isPlaying(): boolean;
+     get volume(): number;
+     get muted(): boolean;
+@@ -105,4 +111,4 @@ export type { SendspinClientIdentity } from "./client-identity";
+ export { SendspinDecoder } from "./audio/decoder";
+ export { AudioScheduler } from "./audio/scheduler";
+ export { detectIsAndroid, detectIsIOS, detectIsMobile, detectIsCastRuntime };
+-//# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
++//# sourceMappingURL=index.d.ts.map
 diff --git a/dist/index.js b/dist/index.js
-index 1e4ff4cc5dab7c11d266b8af1344b8dca3a1841c..5fe71e6102689e252b05741b6bb96f4de3657179 100644
+index 1e4ff4c..bd97400 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -92,6 +92,7 @@ export class SendspinPlayer {
+@@ -52,9 +52,11 @@ export class SendspinPlayer {
+         this.core = new SendspinCore({
+             baseUrl: config.baseUrl,
+             clientName: config.clientName,
++            supportedRoles: config.supportedRoles,
+             productName: config.productName,
+             webSocket: config.webSocket,
+             codecs: config.codecs,
++            preferredFormat: config.preferredFormat,
+             bufferCapacity: config.bufferCapacity,
+             syncDelay: config.syncDelay,
+             defaultSyncDelay: config.defaultSyncDelay,
+@@ -92,6 +94,7 @@ export class SendspinPlayer {
              syncDelayMs: syncDelay,
              useHardwareVolume: config.useHardwareVolume ?? false,
              correctionMode: config.correctionMode ?? "sync",
@@ -212,11 +1033,181 @@ index 1e4ff4cc5dab7c11d266b8af1344b8dca3a1841c..5fe71e6102689e252b05741b6bb96f4d
              storage,
              useOutputLatencyCompensation: config.useOutputLatencyCompensation ?? true,
              correctionThresholds: config.correctionThresholds,
+@@ -221,6 +224,10 @@ export class SendspinPlayer {
+     setMinBufferMs(minBufferMs) {
+         this.core.setMinBufferMs(minBufferMs);
+     }
++    /** Prefer one advertised audio format, or clear the preference. */
++    setPreferredFormat(format) {
++        this.core.setPreferredFormat(format);
++    }
+     /**
+      * Set the sync correction mode at runtime.
+      */
+@@ -236,6 +243,12 @@ export class SendspinPlayer {
+     sendCommand(command, params) {
+         this.core.sendCommand(command, params);
+     }
++    setAvailable(available) {
++        this.core.setAvailable(available);
++    }
++    leaveGroup() {
++        this.core.leaveGroup();
++    }
+     // Getters for reactive state
+     get isPlaying() {
+         return this.core.isPlaying;
+@@ -317,4 +330,4 @@ export { SendspinDecoder } from "./audio/decoder";
+ export { AudioScheduler } from "./audio/scheduler";
+ // Export platform detection utilities
+ export { detectIsAndroid, detectIsIOS, detectIsMobile, detectIsCastRuntime };
+-//# sourceMappingURL=index.js.map
+\ No newline at end of file
++//# sourceMappingURL=index.js.map
+diff --git a/dist/internal-types.d.ts b/dist/internal-types.d.ts
+index a340a59..b420b18 100644
+--- a/dist/internal-types.d.ts
++++ b/dist/internal-types.d.ts
+@@ -14,6 +14,8 @@ export interface AudioBufferQueueItem {
+  */
+ export interface StreamHandler {
+     handleBinaryMessage(data: ArrayBuffer): void;
++    handleArtworkStreamStart(config: { channels: Array<{ source: string; format?: string; width?: number; height?: number }> }): void;
++    handleArtworkStreamEnd(): void;
+     handleStreamStart(format: StreamFormat, isFormatUpdate: boolean): void;
+     handleStreamClear(): void;
+     handleStreamEnd(): void;
+@@ -21,4 +23,4 @@ export interface StreamHandler {
+     handleSyncDelayChange(delayMs: number): void;
+     getSyncDelayMs(): number;
+ }
+-//# sourceMappingURL=internal-types.d.ts.map
+\ No newline at end of file
++//# sourceMappingURL=internal-types.d.ts.map
 diff --git a/dist/types.d.ts b/dist/types.d.ts
-index a8091286bdb0e5a1e8b19d31eab3ce888f18136b..297533f5b18ba9178495a4de6fe16ee85c345fe5 100644
+index a809128..edca988 100644
 --- a/dist/types.d.ts
 +++ b/dist/types.d.ts
-@@ -420,6 +420,13 @@ export interface SendspinPlayerConfig extends SendspinCoreConfig {
+@@ -6,6 +6,7 @@ export declare enum MessageType {
+     CLIENT_STATE = "client/state",
+     SERVER_STATE = "server/state",
+     CLIENT_COMMAND = "client/command",
++    CLIENT_LEAVE = "client/leave",
+     CLIENT_GOODBYE = "client/goodbye",
+     SERVER_COMMAND = "server/command",
+     STREAM_START = "stream/start",
+@@ -63,6 +64,12 @@ export interface ControllerCommands {
+     shuffle: void;
+     unshuffle: void;
+     switch: void;
++    seek: {
++        position_ms: number;
++    };
++    seek_relative: {
++        offset_ms: number;
++    };
+ }
+ export type ControllerCommand = keyof ControllerCommands;
+ export interface ClientHello {
+@@ -88,7 +95,6 @@ export interface ClientHello {
+                 bit_depth: number;
+             }>;
+             buffer_capacity: number;
+-            supported_commands: string[];
+         };
+     };
+ }
+@@ -103,12 +109,13 @@ export interface ClientState {
+     payload: {
+         available: boolean;
+         player?: {
+-            static_delay_ms?: number;
++            output_delay_ms?: number;
+             volume?: number;
+             muted?: boolean;
+             required_lead_time_ms?: number;
+             min_buffer_ms?: number;
+             supported_commands?: string[];
++            format?: PreferredFormat | null;
+         };
+     };
+ }
+@@ -118,6 +125,10 @@ export interface ClientGoodbye {
+         reason: GoodbyeReason;
+     };
+ }
++export interface ClientLeave {
++    type: MessageType.CLIENT_LEAVE;
++    payload: Record<string, never>;
++}
+ export interface ClientCommand {
+     type: MessageType.CLIENT_COMMAND;
+     payload: {
+@@ -125,6 +136,8 @@ export interface ClientCommand {
+             command: ControllerCommand;
+             volume?: number;
+             mute?: boolean;
++            position_ms?: number;
++            offset_ms?: number;
+         };
+     };
+ }
+@@ -144,9 +157,11 @@ export interface ServerStateMetadata {
+     timestamp?: number;
+     title?: string | null;
+     artist?: string | null;
++    album_artist?: string | null;
+     album?: string | null;
+     artwork_url?: string | null;
+     year?: number | null;
++    track?: number | null;
+     track_number?: number | null;
+     progress?: {
+         track_progress: number;
+@@ -160,6 +175,7 @@ export interface ServerStateController {
+     supported_commands?: string[];
+     volume?: number;
+     muted?: boolean;
++    seek_max_ms?: number;
+ }
+ export interface ServerStatePlayer {
+ }
+@@ -200,10 +216,11 @@ export interface ServerCommand {
+     type: MessageType.SERVER_COMMAND;
+     payload: {
+         player: {
+-            command: "volume" | "mute" | "set_static_delay";
++            command: "volume" | "mute" | "set_output_delay" | "set_static_delay";
+             volume?: number;
+             mute?: boolean;
+             static_delay_ms?: number;
++            output_delay_ms?: number;
+         };
+     };
+ }
+@@ -339,7 +356,7 @@ export interface ServerUnpair {
+     payload: Record<string, unknown>;
+ }
+ export type ServerMessage = ServerHello | ServerInit | NoiseHandshake | ServerActivate | ServerPairInit | ServerPairAuth | ServerPairConfirm | ServerPairFinalize | ServerUnpair | PairAbort | ServerTime | ServerState | StreamStart | StreamClear | StreamEnd | ServerCommand | GroupUpdate;
+-export type ClientMessage = ClientHello | ClientTime | ClientState | ClientCommand | ClientGoodbye;
++export type ClientMessage = ClientHello | ClientTime | ClientState | ClientCommand | ClientGoodbye | ClientLeave;
+ export type StreamFormat = {
+     codec: string;
+     sample_rate: number;
+@@ -350,6 +367,12 @@ export type StreamFormat = {
+ export type PlayerState = "synchronized" | "error";
+ export type AudioOutputMode = "direct" | "media-element";
+ export type Codec = "pcm" | "opus" | "flac";
++export type PreferredFormat = {
++    codec: Codec;
++    sample_rate: number;
++    channels: number;
++    bit_depth: number;
++};
+ /**
+  * Audio sync correction mode:
+  * - "sync": Multi-device sync, may use small playback-rate adjustments (capped at ±0.5%, inaudible) for faster convergence.
+@@ -420,6 +443,13 @@ export interface SendspinPlayerConfig extends SendspinCoreConfig {
       * Default: true
       */
      useOutputLatencyCompensation?: boolean;
@@ -230,3 +1221,62 @@ index a8091286bdb0e5a1e8b19d31eab3ce888f18136b..297533f5b18ba9178495a4de6fe16ee8
  }
  /**
   * A decoded audio chunk with raw PCM samples.
+@@ -483,6 +513,12 @@ export interface ReconnectConfig {
+  * Configuration for SendspinCore (protocol + decoding, no playback).
+  */
+ export interface SendspinCoreConfig {
++    /** Roles this client implements. A controller-only client need not advertise a player. */
++    supportedRoles?: Array<"player@v1" | "controller@v1" | "metadata@v1" | "artwork@v1">;
++    /** Positional artwork channels (1-4) when artwork@v1 is advertised. */
++    artworkChannels?: Array<{ source: "album" | "artist" | "none"; format?: "jpeg" | "png"; width?: number; height?: number }>;
++    /** Legacy aiosendspin 9.1.1 or current announce/parts framing. */
++    artworkWireMode?: "legacy" | "announce-parts";
+     /**
+      * Base URL of the Sendspin server (e.g., "http://192.168.1.100:8095").
+      * Required unless webSocket is provided.
+@@ -503,6 +539,8 @@ export interface SendspinCoreConfig {
+      * Default: ["opus", "flac", "pcm"]
+      */
+     codecs?: Codec[];
++    /** Must match a format advertised in client/hello. Can be changed at runtime. */
++    preferredFormat?: PreferredFormat;
+     /**
+      * Buffer capacity in bytes, advertised to the server as the amount of
+      * not-yet-played encoded audio it may send ahead.
+@@ -532,7 +570,7 @@ export interface SendspinCoreConfig {
+      * a Bluetooth link), not for browser output latency, which is measured and
+      * compensated automatically via `useOutputLatencyCompensation`.
+      *
+-     * Server-commanded delays (set_static_delay) are persisted via `storage` and
++     * Server-commanded delays (set_output_delay) are persisted via `storage` and
+      * restored on the next connect. Passing `syncDelay` explicitly overrides any
+      * persisted value for that connect.
+      */
+@@ -579,7 +617,7 @@ export interface SendspinCoreConfig {
+      */
+     onVolumeCommand?: (volume: number, muted: boolean) => void;
+     /**
+-     * Callback when server sends a set_static_delay command.
++     * Callback when server sends a set_output_delay or legacy set_static_delay command.
+      * Called with the new static delay in milliseconds (0-5000).
+      * The SDK persists the value via `storage` before invoking this callback.
+      */
+@@ -674,4 +712,4 @@ export interface SendspinStorage {
+     getItem(key: string): string | null;
+     setItem(key: string, value: string): void;
+ }
+-//# sourceMappingURL=types.d.ts.map
+\ No newline at end of file
++//# sourceMappingURL=types.d.ts.map
+diff --git a/dist/types.js b/dist/types.js
+index 9802a21..66fe115 100644
+--- a/dist/types.js
++++ b/dist/types.js
+@@ -8,6 +8,7 @@ export var MessageType;
+     MessageType["CLIENT_STATE"] = "client/state";
+     MessageType["SERVER_STATE"] = "server/state";
+     MessageType["CLIENT_COMMAND"] = "client/command";
++    MessageType["CLIENT_LEAVE"] = "client/leave";
+     MessageType["CLIENT_GOODBYE"] = "client/goodbye";
+     MessageType["SERVER_COMMAND"] = "server/command";
+     MessageType["STREAM_START"] = "stream/start";

@@ -22,7 +22,7 @@ import { visualizerEnabledForPlayer } from "@/composables/visualizer/useVisualiz
 import VisualizerMenuControl from "@/layouts/default/PlayerOSD/VisualizerMenuControl.vue";
 import SyncAdjustMenuControl from "@/layouts/default/PlayerOSD/SyncAdjustMenuControl.vue";
 import { isHiddenPlayer, setPlayerHidden } from "@/helpers/hidden_players";
-import { supportsSyncAdjust } from "@/helpers/sync_adjust";
+import { getAudioDelayTargets } from "@/helpers/sync_adjust";
 import { Droplet, Eye, EyeOff, Megaphone, Sparkles, Timer } from "@lucide/vue";
 import { h, markRaw } from "vue";
 import { useHosts } from "@/composables/ai-radio/useHosts";
@@ -419,19 +419,26 @@ export const getPlayerMenuItems = (
   // on the same scope as the settings entry below: it writes player config.
   // Upstream replaced authManager.isAdmin() with scope checks and removed the
   // method, so this had to move with it.
-  if (
-    isPlayer &&
-    authManager.hasScope(Scope.CONFIG_PLAYERS_WRITE) &&
-    supportsSyncAdjust(player)
-  ) {
-    menuItems.push({
-      menuId: "audio_delay",
-      label: "player_select.sync_adjust",
-      labelArgs: [],
-      icon: markRaw(Timer),
-      subComponent: markRaw(SyncAdjustMenuControl),
-      componentProps: { playerId: player.player_id, provider: player.provider },
-    });
+  if (isPlayer && authManager.hasScope(Scope.CONFIG_PLAYERS_WRITE)) {
+    const delayTargets = getAudioDelayTargets(player);
+    for (const target of delayTargets) {
+      menuItems.push({
+        menuId:
+          delayTargets.length === 1
+            ? "audio_delay"
+            : `audio_delay:${target.playerId}`,
+        label: target.name
+          ? "player_select.sync_adjust_protocol"
+          : "player_select.sync_adjust",
+        labelArgs: target.name ? [target.name] : [],
+        icon: markRaw(Timer),
+        subComponent: markRaw(SyncAdjustMenuControl),
+        componentProps: {
+          playerId: target.playerId,
+          provider: target.provider,
+        },
+      });
+    }
   }
 
   // hide from / restore to this user's player list (player menu only). Not

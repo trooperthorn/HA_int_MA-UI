@@ -122,6 +122,13 @@ describe("artistRows", () => {
       ).toEqual(["all", "lastfm--ghi", "spotify--abc"]);
     });
 
+    it("offers a local view alongside provider top-track rankings", () => {
+      addProvider("spotify--abc", [ProviderFeature.ARTIST_TOPTRACKS]);
+      expect(
+        artistRows.sources("top_tracks", mappedTo("spotify--abc")),
+      ).toEqual(["all", "library", "spotify--abc"]);
+    });
+
     it("offers nothing for a provider artist or a row without a picker", () => {
       addProvider("spotify--abc", [ProviderFeature.ARTIST_ALBUMS]);
       const providerArtist = artist({ provider: "spotify--abc" });

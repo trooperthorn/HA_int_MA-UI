@@ -94,6 +94,7 @@ describe("getMenuItems (sidebar.menu preference)", () => {
   it("shows everything in default order for users without any customization", () => {
     storeMock.enabledPlugins = new Set([
       "party",
+      "sendspin",
       "music_quiz",
       "ai_radio",
       "milkdrop_visualizer",
@@ -109,17 +110,19 @@ describe("getMenuItems (sidebar.menu preference)", () => {
   it("lists one flat section in the fixed order, settings apart", () => {
     storeMock.enabledPlugins = new Set([
       "party",
+      "sendspin",
       "music_quiz",
       "ai_radio",
       "milkdrop_visualizer",
     ]);
 
     const items = getMenuItems();
-    expect(items.map((item) => item.id).slice(0, 8)).toEqual([
+    expect(items.map((item) => item.id).slice(0, 9)).toEqual([
       "librarymanager",
       "flow",
       "librarymap",
       "party",
+      "sendspin_display",
       "radios",
       "discover",
       "search",

@@ -450,6 +450,7 @@ const selectedPlaylistIds = ref<string[]>([]);
 const preview = ref<ItunesImportPreview>();
 const applyStatus = ref<ItunesImportApplyStatus>();
 const applyConfirmed = ref(false);
+const applyAttempted = ref(false);
 const partialConfirmed = ref(false);
 const reading = ref(false);
 const previewing = ref(false);
@@ -486,6 +487,8 @@ const applyPermission = computed(() =>
 const canPreview = computed(
   () =>
     !!inspection.value &&
+    !applying.value &&
+    !refreshingApply.value &&
     selectedPlaylistIds.value.length > 0 &&
     pathMappings.value.every(
       (item) =>
@@ -515,6 +518,9 @@ const canApply = computed(
     selectedPlaylistIds.value.length === 1 &&
     applyPreviewEligible.value &&
     applyConfirmed.value &&
+    !applyAttempted.value &&
+    (!applyStatus.value ||
+      ["not_started", "not_applied"].includes(applyStatus.value.state)) &&
     (!requiresPartialApply.value || partialConfirmed.value) &&
     !applying.value &&
     !refreshingApply.value,
@@ -577,6 +583,7 @@ function invalidateInspection() {
   preview.value = undefined;
   applyStatus.value = undefined;
   applyConfirmed.value = false;
+  applyAttempted.value = false;
   partialConfirmed.value = false;
   applyError.value = "";
   error.value = "";
@@ -586,6 +593,7 @@ function invalidatePreview() {
   preview.value = undefined;
   applyStatus.value = undefined;
   applyConfirmed.value = false;
+  applyAttempted.value = false;
   partialConfirmed.value = false;
   applyError.value = "";
   error.value = "";
@@ -710,6 +718,7 @@ async function previewImport() {
     if (!validPreview(result, source))
       throw new Error($t("settings.itunes_import.invalid_response"));
     preview.value = result;
+    applyAttempted.value = false;
   } catch (value) {
     if (alive && token === generation)
       error.value = value instanceof Error ? value.message : String(value);
@@ -749,6 +758,7 @@ async function applyImport() {
   const current = preview.value;
   if (!current || !canApply.value) return;
   const token = ++generation;
+  applyAttempted.value = true;
   applying.value = true;
   applyError.value = "";
   try {

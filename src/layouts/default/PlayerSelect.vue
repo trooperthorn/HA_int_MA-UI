@@ -471,7 +471,7 @@ function selectPlayer(player: Player) {
       kind: "player",
       playerId: player.player_id,
       onFlowEnded: (finished) => {
-        if (finished && player.type !== PlayerType.SOURCE) {
+        if (finished && isSelectablePlayer(api.players[player.player_id])) {
           activatePlayer(player.player_id);
         }
       },
@@ -479,8 +479,9 @@ function selectPlayer(player: Player) {
     store.showPlayersMenu = false;
     return;
   }
-  // an audio input can't be a playback target; its row is informational
-  if (player.type === PlayerType.SOURCE) return;
+  // Non-audio clients remain visible for discovery and grouping, but cannot
+  // own an audio queue.
+  if (!isSelectablePlayer(player)) return;
   activatePlayer(player.player_id);
   store.showPlayersMenu = false;
 }

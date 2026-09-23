@@ -274,6 +274,122 @@ describe("getPlayerMenuItems power", () => {
   });
 });
 
+describe("getPlayerMenuItems audio delay", () => {
+  beforeEach(() => {
+    hasScope.mockImplementation(scopeChecker(BUILTIN_ROLE_SCOPES.admin));
+  });
+
+  it("targets AirPlay beneath a universal Sendspin bridge", () => {
+    const player = makePlayer({
+      provider: "universal_player",
+      output_protocols: [
+        {
+          output_protocol_id: "airplay-kitchen",
+          name: "AirPlay",
+          is_native: false,
+          protocol_domain: "airplay",
+          priority: 10,
+          available: true,
+          derived_from: null,
+        },
+        {
+          output_protocol_id: "sendspin-kitchen",
+          name: "Sendspin (over AirPlay)",
+          is_native: false,
+          protocol_domain: "sendspin",
+          priority: 20,
+          available: true,
+          derived_from: "airplay-kitchen",
+        },
+      ],
+    });
+    const items = getPlayerMenuItems(player, undefined, {
+      context: "player",
+    }).filter((item) => item.menuId?.startsWith("audio_delay"));
+
+    expect(items).toHaveLength(1);
+    expect(items[0].label).toBe("player_select.sync_adjust_protocol");
+    expect(items[0].labelArgs).toEqual(["AirPlay"]);
+    expect(items[0].componentProps).toEqual({
+      playerId: "airplay-kitchen",
+      provider: "airplay",
+    });
+  });
+
+  it("offers the Cast receiver delay on its derived Sendspin player", () => {
+    const player = makePlayer({
+      provider: "universal_player",
+      output_protocols: [
+        {
+          output_protocol_id: "cast-kitchen",
+          name: "Google Cast",
+          is_native: false,
+          protocol_domain: "chromecast",
+          priority: 10,
+          available: true,
+          derived_from: null,
+        },
+        {
+          output_protocol_id: "sendspin-cast-kitchen",
+          name: "Sendspin (over Cast)",
+          is_native: false,
+          protocol_domain: "sendspin",
+          priority: 20,
+          available: false,
+          derived_from: "cast-kitchen",
+        },
+      ],
+    });
+    const items = getPlayerMenuItems(player, undefined, {
+      context: "player",
+    }).filter((item) => item.menuId?.startsWith("audio_delay"));
+
+    expect(items).toHaveLength(1);
+    expect(items[0].componentProps).toEqual({
+      playerId: "sendspin-cast-kitchen",
+      provider: "sendspin",
+    });
+  });
+
+  it("names each independent protocol when multiple delay controls exist", () => {
+    const player = makePlayer({
+      provider: "universal_player",
+      output_protocols: [
+        {
+          output_protocol_id: "airplay-kitchen",
+          name: "AirPlay",
+          is_native: false,
+          protocol_domain: "airplay",
+          priority: 10,
+          available: true,
+          derived_from: null,
+        },
+        {
+          output_protocol_id: "squeezelite-kitchen",
+          name: "Squeezelite",
+          is_native: false,
+          protocol_domain: "squeezelite",
+          priority: 20,
+          available: true,
+          derived_from: null,
+        },
+      ],
+    });
+    const items = getPlayerMenuItems(player, undefined, {
+      context: "player",
+    }).filter((item) => item.menuId?.startsWith("audio_delay"));
+
+    expect(items.map((item) => item.labelArgs)).toEqual([
+      ["AirPlay"],
+      ["Squeezelite"],
+    ]);
+    expect(items.map((item) => item.componentProps)).toEqual([
+      { playerId: "airplay-kitchen", provider: "airplay" },
+      { playerId: "squeezelite-kitchen", provider: "squeezelite" },
+    ]);
+  });
+});
+
 describe("getPlayerMenuItems settings shortcuts", () => {
   // the settings sections are reached from the settings page itself now, so these
   // menus only offer the way in

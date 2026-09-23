@@ -47,14 +47,100 @@
     <p class="sync-adjust-menu__hint">
       {{ $t(statusMessage || config.hint) }}
     </p>
+    <div
+      v-if="config.key === SENDSPIN_DELAY_KEY"
+      class="sync-adjust-menu__timing"
+    >
+      <p data-testid="sendspin-reported-delay">
+        {{
+          reportedTiming.delay === undefined
+            ? $t("player_select.sendspin_delay_unreported")
+            : $t("player_select.sendspin_delay_reported", [
+                reportedTiming.delay,
+              ])
+        }}
+      </p>
+      <p v-if="reportedTiming.lead !== undefined">
+        {{ $t("player_select.sendspin_startup_lead", [reportedTiming.lead]) }}
+      </p>
+      <p v-if="reportedTiming.buffer !== undefined">
+        {{ $t("player_select.sendspin_min_buffer", [reportedTiming.buffer]) }}
+      </p>
+    </div>
+    <details class="sync-adjust-menu__calibration">
+      <summary>{{ $t("player_select.calibrate_delay") }}</summary>
+      <p class="sync-adjust-menu__hint">
+        {{ $t("player_select.calibrate_instructions") }}
+      </p>
+      <label for="calibration-reference">
+        {{ $t("player_select.calibrate_reference") }}
+      </label>
+      <select
+        id="calibration-reference"
+        v-model="referencePlayerId"
+        data-testid="calibration-reference"
+        @change="calibrationApplied = false"
+      >
+        <option value="">
+          {{ $t("player_select.calibrate_choose_room") }}
+        </option>
+        <option
+          v-for="player in referencePlayers"
+          :key="player.player_id"
+          :value="player.player_id"
+        >
+          {{ player.name }}
+        </option>
+      </select>
+      <label for="calibration-offset">
+        {{ $t("player_select.calibrate_offset") }}
+      </label>
+      <input
+        id="calibration-offset"
+        v-model="measuredOffset"
+        data-testid="calibration-offset"
+        type="number"
+        min="-5000"
+        max="5000"
+        step="1"
+        inputmode="numeric"
+        @input="calibrationApplied = false"
+      />
+      <p v-if="calibrationSuggestion" data-testid="calibration-suggestion">
+        {{
+          $t("player_select.calibrate_suggestion", [
+            calibrationSuggestion.value,
+          ])
+        }}
+      </p>
+      <p v-if="calibrationSuggestion?.limited" class="sync-adjust-menu__hint">
+        {{ $t("player_select.calibrate_limit") }}
+      </p>
+      <Button
+        :disabled="!calibrationSuggestion || !available || saving"
+        data-testid="calibration-apply"
+        size="sm"
+        @click="applyCalibration"
+      >
+        {{ $t("player_select.calibrate_apply") }}
+      </Button>
+      <p v-if="calibrationApplied" role="status" class="sync-adjust-menu__hint">
+        {{ $t("player_select.calibrate_remeasure") }}
+      </p>
+    </details>
   </div>
 </template>
 
 <script setup lang="ts">
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { getAudioDelayConfig } from "@/helpers/sync_adjust";
+import {
+  getAudioDelayConfig,
+  SENDSPIN_DELAY_KEY,
+  suggestCalibratedDelay,
+} from "@/helpers/sync_adjust";
 import { api } from "@/plugins/api";
+import { PlayerType } from "@/plugins/api/interfaces";
 import { $t } from "@/plugins/i18n";
 import { Timer } from "@lucide/vue";
 import { computed, onMounted, ref } from "vue";
@@ -74,6 +160,61 @@ const loaded = ref(false);
 const available = ref(false);
 const saving = ref(false);
 const statusMessage = ref("");
+const referencePlayerId = ref("");
+const measuredOffset = ref<string | number>("");
+const calibrationApplied = ref(false);
+
+const referencePlayers = computed(() =>
+  Object.values(api.players)
+    .filter(
+      (player) =>
+        player.player_id !== props.playerId &&
+        !player.output_protocols?.some(
+          (protocol) => protocol.output_protocol_id === props.playerId,
+        ) &&
+        player.available &&
+        player.enabled &&
+        !player.hide_in_ui &&
+        !player.private &&
+        (player.type === PlayerType.PLAYER ||
+          player.type === PlayerType.PROTOCOL),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name)),
+);
+
+const calibrationSuggestion = computed(() => {
+  if (
+    !available.value ||
+    !referencePlayers.value.some(
+      (player) => player.player_id === referencePlayerId.value,
+    ) ||
+    String(measuredOffset.value).trim() === ""
+  )
+    return undefined;
+  return suggestCalibratedDelay(
+    config.value,
+    saved.value,
+    Number(measuredOffset.value),
+  );
+});
+
+const reportedTiming = computed(() => {
+  const attrs = api.players[props.playerId]?.extra_attributes;
+  const readMs = (key: string, max: number) => {
+    const value = attrs?.[key];
+    return typeof value === "number" &&
+      Number.isInteger(value) &&
+      value >= 0 &&
+      value <= max
+      ? value
+      : undefined;
+  };
+  return {
+    delay: readMs("sendspin_output_delay_ms", 5000),
+    lead: readMs("sendspin_startup_lead_ms", 60000),
+    buffer: readMs("sendspin_min_buffer_ms", 60000),
+  };
+});
 
 const valueLabel = computed(() =>
   !loaded.value
@@ -127,21 +268,29 @@ function nudge(step: number) {
   void save(clamp(draft.value + step));
 }
 
-async function save(value: number) {
-  if (!available.value || saving.value) return;
+async function save(value: number): Promise<boolean> {
+  if (!available.value || saving.value) return false;
   draft.value = value;
-  if (value === saved.value) return;
+  if (value === saved.value) return true;
   saving.value = true;
   try {
     await api.savePlayerConfig(props.playerId, { [config.value.key]: value });
     saved.value = value;
+    return true;
   } catch (error) {
     console.error("Failed to save audio delay:", error);
     draft.value = saved.value;
     toast.error($t("player_select.sync_adjust_failed"));
+    return false;
   } finally {
     saving.value = false;
   }
+}
+
+async function applyCalibration() {
+  const suggestion = calibrationSuggestion.value;
+  if (!suggestion) return;
+  calibrationApplied.value = await save(suggestion.value);
 }
 </script>
 
@@ -187,5 +336,32 @@ async function save(value: number) {
   margin: 0;
   font-size: 0.75rem;
   opacity: 0.65;
+}
+
+.sync-adjust-menu__calibration {
+  border-top: 1px solid rgba(var(--v-theme-on-surface), 0.12);
+  padding-top: 8px;
+}
+
+.sync-adjust-menu__calibration summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.sync-adjust-menu__calibration label,
+.sync-adjust-menu__calibration select,
+.sync-adjust-menu__calibration input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.sync-adjust-menu__calibration select,
+.sync-adjust-menu__calibration input {
+  border: 1px solid rgba(var(--v-theme-on-surface), 0.25);
+  border-radius: 6px;
+  padding: 6px;
+  background: rgb(var(--v-theme-surface));
+  color: rgb(var(--v-theme-on-surface));
 }
 </style>

@@ -244,10 +244,63 @@ function mountPlayerCard(
 }
 
 describe("PlayerCard", () => {
+  it("keeps non-audio clients visible without offering audio selection", () => {
+    for (const type of [
+      PlayerType.SOURCE,
+      PlayerType.DISPLAY,
+      PlayerType.VISUALIZER,
+      PlayerType.LIGHT,
+    ]) {
+      const wrapper = mountPlayerCard(createPlayer({ type }));
+      expect(
+        wrapper.find(".player-select-action").attributes("disabled"),
+      ).toBeDefined();
+    }
+  });
   beforeEach(() => {
     apiMock.players = {};
     apiMock.queues = {};
     store.deviceType = "desktop";
+  });
+
+  it("shows a Cast receiver failure on its combined player card", () => {
+    apiMock.players["sendspin-cast"] = createPlayer({
+      player_id: "sendspin-cast",
+      provider: "sendspin",
+      type: PlayerType.PROTOCOL,
+      extra_attributes: {
+        sendspin_cast_state: "error",
+        sendspin_cast_failure: "launch_timeout",
+      },
+    });
+    const player = createPlayer({
+      provider: "universal_player",
+      output_protocols: [
+        {
+          output_protocol_id: "cast-base",
+          name: "Google Cast",
+          protocol_domain: "chromecast",
+          priority: 10,
+          is_native: false,
+          available: true,
+          derived_from: null,
+        },
+        {
+          output_protocol_id: "sendspin-cast",
+          name: "Sendspin (over Cast)",
+          protocol_domain: "sendspin",
+          priority: 20,
+          is_native: false,
+          available: true,
+          derived_from: "cast-base",
+        },
+      ],
+    });
+
+    const wrapper = mountPlayerCard(player);
+    expect(wrapper.find('[role="status"]').text()).toContain(
+      "player_select.cast_receiver_launch_timeout",
+    );
   });
 
   it("uses a primary border for the active player", () => {

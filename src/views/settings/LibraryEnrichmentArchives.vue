@@ -354,6 +354,7 @@
               :version-id="subscription.committed_version_id"
               :page-size="matchPageSize"
               :max-bulk-approvals="maxMatchApprovals"
+              :can-relocate="capabilities.match_relocation_api_version === 1"
             />
             <p
               v-else-if="subscription.committed_version_id"
@@ -367,6 +368,18 @@
               :subscription-id="subscription.id"
               :version-id="subscription.committed_version_id"
               :modes="playbackModes"
+              :can-detach="capabilities.playback_detach === true"
+              :can-rebind="capabilities.destination_rebind_api_version === 1"
+            />
+            <ArchiveMirror
+              v-if="
+                capabilities.mirror_apply && subscription.committed_version_id
+              "
+              :key="`mirror:${subscription.committed_version_id}`"
+              :subscription-id="subscription.id"
+              :version-id="subscription.committed_version_id"
+              :can-reconcile="(capabilities.mirror_api_version ?? 0) >= 2"
+              :can-rebind="capabilities.destination_rebind_api_version === 1"
             />
             <Button
               v-if="capabilities.version_listing"
@@ -398,6 +411,9 @@
                   v-if="provenancePageSize"
                   :version-id="version.id"
                   :page-size="provenancePageSize"
+                  :can-override="
+                    capabilities?.provenance_override_api_version === 1
+                  "
                 />
               </div>
               <Button
@@ -435,6 +451,7 @@ import { $t } from "@/plugins/i18n";
 import ArchivePlaylistApply from "./ArchivePlaylistApply.vue";
 import ArchiveMatchReview from "./ArchiveMatchReview.vue";
 import ArchivePlaybackPolicy from "./ArchivePlaybackPolicy.vue";
+import ArchiveMirror from "./ArchiveMirror.vue";
 import ArchiveSyncPolicy from "./ArchiveSyncPolicy.vue";
 import ArchiveVersionProvenance from "./ArchiveVersionProvenance.vue";
 import type {

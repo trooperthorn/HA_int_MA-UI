@@ -358,6 +358,23 @@ describe("isSelectablePlayer", () => {
     );
   });
 
+  it("rejects non-audio clients while allowing audio protocols and groups", () => {
+    for (const type of [
+      PlayerType.DISPLAY,
+      PlayerType.VISUALIZER,
+      PlayerType.LIGHT,
+      PlayerType.UNKNOWN,
+    ]) {
+      expect(isSelectablePlayer(createPlayer({ type }))).toBe(false);
+    }
+    expect(
+      isSelectablePlayer(createPlayer({ type: PlayerType.PROTOCOL })),
+    ).toBe(true);
+    expect(isSelectablePlayer(createPlayer({ type: PlayerType.GROUP }))).toBe(
+      true,
+    );
+  });
+
   it("rejects a player that still needs setup", () => {
     expect(
       isSelectablePlayer(createPlayer({ available: false, needs_setup: true })),

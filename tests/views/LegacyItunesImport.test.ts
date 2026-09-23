@@ -574,6 +574,51 @@ describe("legacy iTunes XML import", () => {
       wrapper.find('[data-testid="itunes-apply-uncertain"]').exists(),
     ).toBe(true);
     expect(wrapper.text()).toContain("Creation outcome uncertain");
+    expect(
+      wrapper.get('[data-testid="itunes-apply"]').attributes("disabled"),
+    ).toBeDefined();
+    await wrapper.get('[data-testid="itunes-apply"]').trigger("click");
+    expect(calls("itunes_apply")).toHaveLength(1);
+  });
+
+  it.each([
+    "Source changed since preview",
+    "Filesystem provider disappeared since preview",
+  ])("keeps a rejected preview from being applied when %s", async (reason) => {
+    mocks.sendCommand.mockImplementation(async (command: string) => {
+      if (command === "library_enrichment/capabilities")
+        return applyCapabilities;
+      if (command === "library_enrichment/itunes_inspect")
+        return structuredClone(inspection);
+      if (command === "library_enrichment/itunes_preview")
+        return structuredClone(applicablePreview);
+      if (command === "library_enrichment/itunes_apply")
+        throw new Error(reason);
+      if (command === "library_enrichment/itunes_apply_status")
+        return structuredClone({ ...appliedStatus, state: "not_started" });
+      throw new Error(`Unexpected command ${command}`);
+    });
+    const wrapper = mountPage();
+    await flushPromises();
+    await inspect(wrapper);
+    await wrapper.get('[data-testid="itunes-playlist"]').setValue(true);
+    await wrapper.get('[data-testid="itunes-preview"]').trigger("click");
+    await flushPromises();
+    await wrapper.get('[data-testid="itunes-apply-confirm"]').setValue(true);
+    await wrapper.get('[data-testid="itunes-apply"]').trigger("click");
+    await flushPromises();
+
+    expect(calls("itunes_apply")).toHaveLength(1);
+    expect(calls("itunes_apply_status")).toHaveLength(1);
+    expect(wrapper.text()).toContain(reason);
+    expect(
+      wrapper.get('[data-testid="itunes-apply"]').attributes("disabled"),
+    ).toBeDefined();
+    await wrapper.get('[data-testid="itunes-apply"]').trigger("click");
+    expect(calls("itunes_apply")).toHaveLength(1);
+    expect(
+      wrapper.find('[data-testid="itunes-apply-uncertain"]').exists(),
+    ).toBe(false);
   });
 
   it("uses stacked, full-width mobile controls", async () => {

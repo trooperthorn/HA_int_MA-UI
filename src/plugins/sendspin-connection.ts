@@ -13,6 +13,17 @@ import { store } from "@/plugins/store";
 
 const OriginalWebSocket = window.WebSocket;
 
+export function sendspinProxyAuthMessage(
+  token: string,
+  clientId: string | null,
+): string {
+  return JSON.stringify({
+    type: "auth",
+    token,
+    ...(clientId ? { client_id: clientId } : {}),
+  });
+}
+
 /**
  * Build the WebSocket URL for the sendspin proxy endpoint.
  */
@@ -29,7 +40,9 @@ function getSendspinProxyUrl(): string {
  * In ingress mode, no auth message is needed (HA handles auth via headers).
  * Otherwise, sends auth message with token and client_id.
  */
-function createProxyWebSocket(): Promise<WebSocket | null> {
+function createProxyWebSocket(
+  clientIdOverride?: string | null,
+): Promise<WebSocket | null> {
   const url = getSendspinProxyUrl();
   const isIngress = store.isIngressSession;
 
@@ -67,10 +80,20 @@ function createProxyWebSocket(): Promise<WebSocket | null> {
         ready = true;
         resolve(ws);
       } else {
+        if (!token) {
+          ws.close();
+          resolve(null);
+          return;
+        }
         // Send auth message with token
-        const clientId = readSendspinPlayerId() || "";
+        // A separate browser client supplies its own identity here. Null
+        // intentionally omits the session player binding entirely.
+        const clientId =
+          clientIdOverride === undefined
+            ? readSendspinPlayerId()
+            : clientIdOverride;
         console.debug("[Sendspin] Sending auth to proxy");
-        ws.send(JSON.stringify({ type: "auth", token, client_id: clientId }));
+        ws.send(sendspinProxyAuthMessage(token, clientId));
       }
     };
 
@@ -258,7 +281,9 @@ export function resetSendspinConnection(): void {
  * Creates a Sendspin connection.
  * Priority: 1) DataChannel (remote mode), 2) Proxy WebSocket
  */
-export async function createSendspinConnection(): Promise<SendspinWebSocketBridge> {
+export async function createSendspinConnection(
+  clientIdOverride?: string | null,
+): Promise<SendspinWebSocketBridge> {
   console.debug("[Sendspin] Creating connection...");
 
   if (api.isRemoteConnection.value) {
@@ -272,7 +297,7 @@ export async function createSendspinConnection(): Promise<SendspinWebSocketBridg
   }
 
   console.debug("[Sendspin] Trying proxy WebSocket...");
-  const proxyWs = await createProxyWebSocket();
+  const proxyWs = await createProxyWebSocket(clientIdOverride);
   if (proxyWs) {
     console.info("[Sendspin] Using proxy WebSocket connection");
     _isDirectConnection = true;

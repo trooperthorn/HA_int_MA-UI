@@ -30,7 +30,7 @@
           type="button"
           class="player-select-action focus-visible:ring-ring absolute inset-0 z-0 rounded-md text-left outline-none focus-visible:ring-2"
           :disabled="
-            (!player.available && !player.needs_setup) || isInformationalSource
+            (!player.available && !player.needs_setup) || isInformationalClient
           "
           @click="emit('click', player)"
         >
@@ -38,8 +38,8 @@
             {{
               player.needs_setup
                 ? $t("configure_player")
-                : isInformationalSource
-                  ? $t("player_type.source")
+                : isInformationalClient
+                  ? $t(`player_type.${player.type}`)
                   : $t("tooltip.select_player")
             }}:
             {{ accessiblePlayerLabel }}
@@ -133,6 +133,13 @@
                 class="text-muted-foreground truncate text-xs"
               >
                 {{ mediaByline }}
+              </p>
+              <p
+                v-if="castStatusKey"
+                class="text-muted-foreground truncate text-xs"
+                role="status"
+              >
+                {{ $t(castStatusKey) }}
               </p>
             </div>
           </div>
@@ -243,10 +250,15 @@ import {
   canEditPlayerGroup,
   getPlayerGroupMemberCount,
   isBuiltinPlayer,
+  isSelectablePlayer,
 } from "@/helpers/players";
 import { isQueueEnded } from "@/helpers/queue_position";
 import { nowPlayingImageUrl } from "@/helpers/now_playing_image";
 import { getPlayerName } from "@/helpers/utils";
+import {
+  getCastReceiverFailure,
+  getCastReceiverState,
+} from "@/helpers/cast_receiver_status";
 import api from "@/plugins/api";
 import { resolvePlayerQueue } from "@/plugins/api/helpers";
 import {
@@ -296,10 +308,22 @@ const artworkFailed = ref(false);
 const { activeSource } = useActiveSource(toRef(props, "player"));
 
 const playerQueue = computed(() => resolvePlayerQueue(props.player));
+const castReceiverState = computed(() =>
+  getCastReceiverState(props.player, api.players),
+);
+const castStatusKey = computed(() => {
+  if (!castReceiverState.value) return undefined;
+  const failure =
+    castReceiverState.value === "error"
+      ? getCastReceiverFailure(props.player, api.players)
+      : undefined;
+  return `player_select.cast_receiver_${failure ?? castReceiverState.value}`;
+});
 
-// a set-up audio input can't be selected for playback; its row only informs
-const isInformationalSource = computed(
-  () => props.player.type === PlayerType.SOURCE && !props.player.needs_setup,
+// A non-audio client can remain in the list for discovery and group controls,
+// but its card must not offer an audio player selection action.
+const isInformationalClient = computed(
+  () => !isSelectablePlayer(props.player) && !props.player.needs_setup,
 );
 
 const artworkUrl = computed(() => {

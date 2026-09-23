@@ -29,7 +29,15 @@
           @touchstart.passive="onTouchStart"
           @click.capture="swallowClickAfterHold"
         >
-          <h2 class="artist-top-tracks__title">{{ $t("artist_toptracks") }}</h2>
+          <h2 class="artist-top-tracks__title">
+            {{
+              $t(
+                recentLibrary
+                  ? "artist_recent_library_tracks"
+                  : "artist_toptracks",
+              )
+            }}
+          </h2>
           <span v-if="sourceLabel" class="artist-top-tracks__source">
             <ProviderIcon
               v-if="sourceDomain"
@@ -153,6 +161,7 @@ export interface Props {
   sourceLabel?: string;
   // provider domain behind `sourceLabel`, for its icon
   sourceDomain?: string;
+  recentLibrary?: boolean;
   libraryTrackCount?: number;
   latestRelease?: Album;
 }

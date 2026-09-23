@@ -16,7 +16,7 @@
         <Button
           data-testid="archive-provenance-refresh"
           variant="outline"
-          :disabled="loading"
+          :disabled="loading || mutating"
           @click="refresh"
           >{{ $t("settings.archives.provenance_refresh") }}</Button
         >
@@ -87,7 +87,7 @@
               class="rounded border p-2"
               data-testid="archive-provenance-field"
             >
-              <p class="font-medium">{{ name }}</p>
+              <p class="font-medium">{{ displayFieldName(String(name)) }}</p>
               <p>
                 {{
                   field.override
@@ -124,6 +124,67 @@
                   })
                 }}
               </p>
+              <div
+                v-if="canOverride && field.observation"
+                class="mt-2 space-y-2"
+              >
+                <Button
+                  variant="outline"
+                  :disabled="loading || mutating"
+                  @click="
+                    beginEdit(
+                      item.source_item_id,
+                      String(name),
+                      field.observation.value,
+                    )
+                  "
+                  >{{ $t("settings.archives.provenance_correct") }}</Button
+                >
+                <Button
+                  v-if="field.override"
+                  variant="outline"
+                  :disabled="loading || mutating"
+                  @click="
+                    changeOverride(
+                      item.source_item_id,
+                      String(name),
+                      field.revision,
+                      true,
+                    )
+                  "
+                  >{{ $t("settings.archives.provenance_clear") }}</Button
+                >
+                <div
+                  v-if="editingKey === `${item.source_item_id}:${String(name)}`"
+                  class="space-y-2"
+                >
+                  <label
+                    class="block text-sm"
+                    :for="`provenance-${item.position}-${String(name)}`"
+                  >
+                    {{ $t("settings.archives.provenance_json_value") }}
+                  </label>
+                  <textarea
+                    :id="`provenance-${item.position}-${String(name)}`"
+                    v-model="editValue"
+                    class="w-full rounded border bg-background p-2 font-mono text-sm"
+                    rows="2"
+                    :disabled="mutating"
+                  ></textarea>
+                  <Button
+                    :disabled="mutating || loading"
+                    @click="
+                      changeOverride(
+                        item.source_item_id,
+                        String(name),
+                        field.revision,
+                        false,
+                      )
+                    "
+                    >{{ $t("settings.archives.provenance_save") }}</Button
+                  >
+                </div>
+              </div>
             </div>
           </template>
         </article>
@@ -151,15 +212,26 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { Button } from "@/components/ui/button";
-import type { ArchiveProvenancePage } from "@/library-manager/enrichment";
+import type {
+  ArchiveProvenanceField,
+  ArchiveProvenancePage,
+} from "@/library-manager/enrichment";
 import { api } from "@/plugins/api";
 import { Scope } from "@/plugins/api/interfaces";
 import { authManager } from "@/plugins/auth";
 import { $t } from "@/plugins/i18n";
 
-const props = defineProps<{ versionId: string; pageSize: number }>();
+const props = withDefaults(
+  defineProps<{ versionId: string; pageSize: number; canOverride?: boolean }>(),
+  {
+    canOverride: false,
+  },
+);
 const opened = ref(false);
 const loading = ref(false);
+const mutating = ref(false);
+const editingKey = ref("");
+const editValue = ref("");
 const error = ref("");
 const page = ref<ArchiveProvenancePage>();
 let generation = 0;
@@ -224,6 +296,16 @@ function displayValue(value: unknown) {
   return rendered.length > 300 ? `${rendered.slice(0, 297)}…` : rendered;
 }
 
+function displayFieldName(name: string) {
+  const labels: Record<string, string> = {
+    ma_label: "settings.archives.provenance_label",
+    ma_album_barcode: "settings.archives.provenance_album_barcode",
+    ma_artwork_sources: "settings.archives.provenance_artwork_sources",
+    ma_audio_formats: "settings.archives.provenance_audio_formats",
+  };
+  return labels[name] ? $t(labels[name]) : name;
+}
+
 function validPage(result: ArchiveProvenancePage, offset: number) {
   return (
     result.api_version === 1 &&
@@ -255,7 +337,7 @@ function validPage(result: ArchiveProvenancePage, offset: number) {
 }
 
 async function load(offset: number) {
-  if (!canRead.value || loading.value || !alive) return;
+  if (!canRead.value || loading.value || mutating.value || !alive) return;
   const token = ++generation;
   loading.value = true;
   error.value = "";
@@ -283,6 +365,92 @@ function open() {
 function refresh() {
   void load(page.value?.offset ?? 0);
 }
+function beginEdit(
+  sourceItemId: string,
+  fieldName: string,
+  currentValue: unknown,
+) {
+  editingKey.value = `${sourceItemId}:${fieldName}`;
+  editValue.value = JSON.stringify(currentValue ?? null, null, 2);
+}
+async function changeOverride(
+  sourceItemId: string,
+  fieldName: string,
+  revision: number,
+  clear: boolean,
+) {
+  if (
+    !props.canOverride ||
+    !canRead.value ||
+    mutating.value ||
+    loading.value ||
+    !page.value
+  )
+    return;
+  let value: unknown;
+  if (!clear) {
+    try {
+      value = JSON.parse(editValue.value);
+    } catch {
+      error.value = $t("settings.archives.provenance_invalid_json");
+      return;
+    }
+  }
+  const token = ++generation;
+  mutating.value = true;
+  error.value = "";
+  try {
+    const response = await api.sendCommand<unknown>(
+      clear
+        ? "library_enrichment/clear_provenance_override"
+        : "library_enrichment/set_provenance_override",
+      {
+        version_id: props.versionId,
+        source_item_id: sourceItemId,
+        field_name: fieldName,
+        expected_revision: revision,
+        ...(!clear ? { value } : {}),
+      },
+      { suppressGlobalError: true },
+    );
+    if (!alive || token !== generation) return;
+    if (
+      !isRecord(response) ||
+      !isRecord(response.subject) ||
+      response.subject.source_item_id !== sourceItemId ||
+      !isRecord(response.fields) ||
+      !validFields(response.fields) ||
+      !isRecord(response.fields[fieldName]) ||
+      response.fields[fieldName].revision !== revision + 1
+    ) {
+      throw new Error($t("settings.archives.provenance_invalid_response"));
+    }
+    if (page.value) {
+      page.value = {
+        ...page.value,
+        items: page.value.items.map((item) =>
+          item.source_item_id === sourceItemId && item.provenance
+            ? {
+                ...item,
+                provenance: {
+                  ...item.provenance,
+                  fields: response.fields as Record<
+                    string,
+                    ArchiveProvenanceField
+                  >,
+                },
+              }
+            : item,
+        ),
+      };
+    }
+    editingKey.value = "";
+  } catch (value) {
+    if (alive && token === generation) error.value = errorText(value);
+  } finally {
+    if (alive && token === generation) mutating.value = false;
+  }
+}
 function previousPage() {
   if (page.value) void load(Math.max(0, page.value.offset - props.pageSize));
 }
@@ -298,6 +466,8 @@ watch(
     error.value = "";
     opened.value = false;
     loading.value = false;
+    mutating.value = false;
+    editingKey.value = "";
   },
 );
 onBeforeUnmount(() => {
