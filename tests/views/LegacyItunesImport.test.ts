@@ -574,6 +574,11 @@ describe("legacy iTunes XML import", () => {
       wrapper.find('[data-testid="itunes-apply-uncertain"]').exists(),
     ).toBe(true);
     expect(wrapper.text()).toContain("Creation outcome uncertain");
+    expect(
+      wrapper.get('[data-testid="itunes-apply"]').attributes("disabled"),
+    ).toBeDefined();
+    await wrapper.get('[data-testid="itunes-apply"]').trigger("click");
+    expect(calls("itunes_apply")).toHaveLength(1);
   });
 
   it.each([
@@ -606,6 +611,11 @@ describe("legacy iTunes XML import", () => {
     expect(calls("itunes_apply")).toHaveLength(1);
     expect(calls("itunes_apply_status")).toHaveLength(1);
     expect(wrapper.text()).toContain(reason);
+    expect(
+      wrapper.get('[data-testid="itunes-apply"]').attributes("disabled"),
+    ).toBeDefined();
+    await wrapper.get('[data-testid="itunes-apply"]').trigger("click");
+    expect(calls("itunes_apply")).toHaveLength(1);
     expect(
       wrapper.find('[data-testid="itunes-apply-uncertain"]').exists(),
     ).toBe(false);
