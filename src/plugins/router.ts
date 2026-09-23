@@ -168,6 +168,11 @@ export const routes: RouteRecordRaw[] = [
           import(/* webpackChunkName: "discover" */ "@/views/HomeView.vue"),
       },
       {
+        path: "/sendspin-display",
+        name: "sendspin-display",
+        component: () => import("@/views/SendspinDisplayView.vue"),
+      },
+      {
         path: "/ai-radio",
         name: "ai-radio",
         component: () =>

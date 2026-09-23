@@ -76,6 +76,12 @@ omitted `progress` field clears the prior track position. The client translates
 server timestamps with its current clock estimate. This also supports a
 metadata-only client without advertising an audio player.
 
+The frontend's `#/sendspin-display` view uses that metadata-only role. It
+keeps a separate persisted identity from the browser audio player, pairs it to
+the signed-in account, and joins a compatible Sendspin player through Music
+Assistant's HTTP command API. It displays the ordinary metadata artwork URL;
+binary `artwork@v1` channels remain a separate protocol extension.
+
 **Clock-synchronized readiness** (`dist/core/protocol-handler.js`,
 `dist/core/time-sync-manager.js`, `dist/core/core.js`). A player reports
 `available: false` until its first successful clock-sync burst, then sends
