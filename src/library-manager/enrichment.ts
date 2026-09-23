@@ -25,6 +25,7 @@ export interface ArchiveCapabilities {
   item_provenance_api_version?: number;
   provenance_read?: boolean;
   provenance_api_version?: number;
+  provenance_override_api_version?: number;
   max_provenance_page?: number;
   raw_payload_inline?: boolean;
   itunes_import?: boolean;

@@ -409,6 +409,9 @@
                   v-if="provenancePageSize"
                   :version-id="version.id"
                   :page-size="provenancePageSize"
+                  :can-override="
+                    capabilities?.provenance_override_api_version === 1
+                  "
                 />
               </div>
               <Button
