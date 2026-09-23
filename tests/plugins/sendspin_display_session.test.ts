@@ -9,6 +9,11 @@ const mocks = vi.hoisted(() => {
     connect: ReturnType<typeof vi.fn>;
     disconnect: ReturnType<typeof vi.fn>;
     onConnectionClose?: () => void;
+    onArtworkStreamStart?: (config: {
+      channels: Array<{ source: string; format: string }>;
+    }) => void;
+    onArtworkFrame?: (frame: Uint8Array) => void;
+    onArtworkStreamEnd?: () => void;
   }> = [];
   return {
     instances,
@@ -63,7 +68,7 @@ afterEach(() => {
 });
 
 describe("Sendspin browser display", () => {
-  it("keeps its identity separate and pairs a metadata-only client", async () => {
+  it("keeps its identity separate and pairs a metadata and artwork display", async () => {
     const scoped = displayStorage(storage);
     scoped.setItem("identity", "display-identity");
     expect(storage.getItem("identity")).toBeNull();
@@ -76,7 +81,8 @@ describe("Sendspin browser display", () => {
     await session.start();
     expect(mocks.connection).toHaveBeenCalledWith("display-client");
     const core = mocks.instances[0];
-    expect(core.config.supportedRoles).toEqual(["metadata@v1"]);
+    expect(core.config.supportedRoles).toEqual(["metadata@v1", "artwork@v1"]);
+    expect(core.config.artworkWireMode).toBe("legacy");
     expect(core.config.unpairedAccess).toBe(false);
     expect(core.config.productName).toBe("Music Assistant Display");
     expect(mocks.sendCommand).toHaveBeenCalledWith(
@@ -105,6 +111,33 @@ describe("Sendspin browser display", () => {
     await session.retryPairing();
     expect(mocks.instances).toHaveLength(1);
     expect(session.snapshot.status).toBe("ready");
+    session.stop();
+  });
+
+  it("shows timed binary album art and revokes it when the stream ends", async () => {
+    vi.useFakeTimers();
+    const createObjectURL = vi.fn(() => "blob:album-art");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
+    const session = new SendspinDisplaySession(() => undefined);
+    await session.start();
+    const core = mocks.instances[0];
+    core.onArtworkStreamStart?.({
+      channels: [{ source: "album", format: "jpeg" }],
+    });
+    const frame = new Uint8Array(11);
+    frame[0] = 8;
+    new DataView(frame.buffer).setBigInt64(1, 600_000n, false);
+    frame.set([0xff, 0xd8], 9);
+    core.onArtworkFrame?.(frame);
+    expect(session.snapshot.artworkUrls[0]).toBeNull();
+    vi.advanceTimersByTime(99);
+    expect(session.snapshot.artworkUrls[0]).toBeNull();
+    vi.advanceTimersByTime(1);
+    expect(session.snapshot.artworkUrls[0]).toBe("blob:album-art");
+    core.onArtworkStreamEnd?.();
+    expect(session.snapshot.artworkUrls[0]).toBeNull();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:album-art");
     session.stop();
   });
 });

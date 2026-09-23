@@ -6,6 +6,7 @@ import {
 } from "@sendspin/sendspin-js";
 import { api } from "@/plugins/api";
 import { createSendspinConnection } from "@/plugins/sendspin-connection";
+import { SendspinArtworkFramer } from "@/plugins/sendspin-artwork";
 
 export type DisplayConnectionState =
   | "connecting"
@@ -18,6 +19,7 @@ export interface DisplaySnapshot {
   status: DisplayConnectionState;
   clientId: string | null;
   metadata: ServerStateMetadata | null;
+  artworkUrls: Array<string | null>;
   error: string | null;
 }
 
@@ -40,10 +42,17 @@ export class SendspinDisplaySession {
   private connecting = false;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private retryDelayMs = 1000;
+  private readonly artworkFramer = new SendspinArtworkFramer("legacy");
+  private artworkChannels: Array<{ source: string; format?: string }> = [];
+  private artworkPending = new Map<
+    number,
+    { timer: ReturnType<typeof setTimeout>; url: string | null }
+  >();
   readonly snapshot: DisplaySnapshot = {
     status: "disconnected",
     clientId: null,
     metadata: null,
+    artworkUrls: [null, null],
     error: null,
   };
 
@@ -58,6 +67,60 @@ export class SendspinDisplaySession {
     this.onChange({ ...this.snapshot });
   }
 
+  private clearArtwork(): void {
+    this.artworkFramer.reset();
+    for (const pending of this.artworkPending.values()) {
+      clearTimeout(pending.timer);
+      if (pending.url) URL.revokeObjectURL(pending.url);
+    }
+    this.artworkPending.clear();
+    for (const url of this.snapshot.artworkUrls)
+      if (url) URL.revokeObjectURL(url);
+    this.artworkChannels = [];
+    this.publish({ artworkUrls: [null, null] });
+  }
+
+  private receiveArtwork(frame: Uint8Array, core: SendspinCore): void {
+    try {
+      const event = this.artworkFramer.push(frame);
+      if (!event) return;
+      const pending = this.artworkPending.get(event.channel);
+      if (pending) {
+        clearTimeout(pending.timer);
+        if (pending.url) URL.revokeObjectURL(pending.url);
+        this.artworkPending.delete(event.channel);
+      }
+      if (event.kind === "cancel") return;
+      const format = this.artworkChannels[event.channel]?.format;
+      const mime = format === "png" ? "image/png" : "image/jpeg";
+      const url = event.bytes.length
+        ? URL.createObjectURL(
+            new Blob([new Uint8Array(event.bytes)], { type: mime }),
+          )
+        : null;
+      const apply = () => {
+        this.artworkPending.delete(event.channel);
+        const artworkUrls = [...this.snapshot.artworkUrls];
+        const previous = artworkUrls[event.channel];
+        if (previous) URL.revokeObjectURL(previous);
+        artworkUrls[event.channel] = url;
+        this.publish({ artworkUrls });
+      };
+      const waitMs = Math.max(
+        0,
+        (event.timestampUs - core.getCurrentServerTimeUs()) / 1000,
+      );
+      if (waitMs <= 0) apply();
+      else {
+        const timer = setTimeout(apply, Math.min(waitMs, 2147483647));
+        this.artworkPending.set(event.channel, { timer, url });
+      }
+    } catch (error) {
+      this.publish({ error: `Invalid Sendspin artwork: ${String(error)}` });
+      core.disconnect("restart");
+    }
+  }
+
   async start(): Promise<void> {
     this.stopped = false;
     await this.connect();
@@ -66,6 +129,7 @@ export class SendspinDisplaySession {
   private async connect(): Promise<void> {
     if (this.stopped || this.connecting) return;
     this.connecting = true;
+    this.clearArtwork();
     this.publish({ status: "connecting", metadata: null, error: null });
     try {
       const storage = displayStorage(localStorage);
@@ -80,7 +144,12 @@ export class SendspinDisplaySession {
       const core = new SendspinCore({
         webSocket: bridge as WebSocket,
         storage,
-        supportedRoles: ["metadata@v1"],
+        supportedRoles: ["metadata@v1", "artwork@v1"],
+        artworkWireMode: "legacy",
+        artworkChannels: [
+          { source: "album", format: "jpeg", width: 640, height: 640 },
+          { source: "artist", format: "jpeg", width: 320, height: 320 },
+        ],
         clientName: "Music Assistant Display",
         productName: "Music Assistant Display",
         unpairedAccess: false,
@@ -90,9 +159,22 @@ export class SendspinDisplaySession {
         },
       });
       this.core = core;
+      core.onArtworkStreamStart = (config) => {
+        if (this.core !== core || this.stopped) return;
+        this.clearArtwork();
+        this.artworkChannels = config.channels;
+      };
+      core.onArtworkFrame = (frame) => {
+        if (this.core === core && !this.stopped)
+          this.receiveArtwork(frame, core);
+      };
+      core.onArtworkStreamEnd = () => {
+        if (this.core === core && !this.stopped) this.clearArtwork();
+      };
       core.onConnectionClose = () => {
         if (this.core !== core || this.stopped) return;
         this.core = null;
+        this.clearArtwork();
         this.publish({ status: "disconnected", metadata: null });
         this.scheduleRetry();
       };
@@ -166,6 +248,7 @@ export class SendspinDisplaySession {
     const core = this.core;
     this.core = null;
     core?.disconnect("user_request");
+    this.clearArtwork();
     this.publish({ status: "disconnected", metadata: null });
   }
 }

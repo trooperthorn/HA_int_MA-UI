@@ -2852,6 +2852,7 @@
     "follow": "Follow",
     "leave": "Leave group",
     "artwork_alt": "Current track artwork",
+    "artist_artwork_alt": "Current artist artwork",
     "waiting": "Waiting for a track",
     "progress": "Track progress"
   },

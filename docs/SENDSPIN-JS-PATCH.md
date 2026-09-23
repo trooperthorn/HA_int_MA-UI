@@ -76,11 +76,19 @@ omitted `progress` field clears the prior track position. The client translates
 server timestamps with its current clock estimate. This also supports a
 metadata-only client without advertising an audio player.
 
-The frontend's `#/sendspin-display` view uses that metadata-only role. It
+The frontend's `#/sendspin-display` view uses metadata and artwork roles. It
 keeps a separate persisted identity from the browser audio player, pairs it to
 the signed-in account, and joins a compatible Sendspin player through Music
-Assistant's HTTP command API. It displays the ordinary metadata artwork URL;
-binary `artwork@v1` channels remain a separate protocol extension.
+Assistant's HTTP command API. It requests album and artist artwork as separate
+binary channels, displays each image at its server timestamp, revokes old
+image URLs on replacement or stream end, and uses the metadata artwork URL as
+a fallback. The pinned aiosendspin 9.1.1 server requires channel preferences
+in `client/hello` and sends a single 9-byte-header image frame. The newer
+Sendspin spec instead declares channels in `client/state` and transfers an
+image through announce and part frames. The SDK patch supports both explicit
+wire modes; this view selects the pinned server's legacy mode. Switching this
+view to current-spec framing requires a server version that accepts the newer
+channel declaration and emits the newer frames.
 
 **Clock-synchronized readiness** (`dist/core/protocol-handler.js`,
 `dist/core/time-sync-manager.js`, `dist/core/core.js`). A player reports

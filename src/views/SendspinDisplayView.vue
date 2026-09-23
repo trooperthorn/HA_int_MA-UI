@@ -51,12 +51,24 @@
     </div>
 
     <section class="display-page__now-playing" aria-live="polite">
-      <img
-        v-if="snapshot.metadata?.artwork_url"
-        class="display-page__artwork"
-        :src="snapshot.metadata.artwork_url"
-        :alt="$t('sendspin_display.artwork_alt')"
-      />
+      <div class="display-page__images">
+        <img
+          v-if="snapshot.artworkUrls[0] || snapshot.metadata?.artwork_url"
+          class="display-page__artwork"
+          :src="
+            snapshot.artworkUrls[0] ||
+            snapshot.metadata?.artwork_url ||
+            undefined
+          "
+          :alt="$t('sendspin_display.artwork_alt')"
+        />
+        <img
+          v-if="snapshot.artworkUrls[1]"
+          class="display-page__artist-artwork"
+          :src="snapshot.artworkUrls[1]"
+          :alt="$t('sendspin_display.artist_artwork_alt')"
+        />
+      </div>
       <div class="display-page__track">
         <h2>
           {{ snapshot.metadata?.title || $t("sendspin_display.waiting") }}
@@ -87,6 +99,7 @@ const snapshot = ref<DisplaySnapshot>({
   status: "disconnected",
   clientId: null,
   metadata: null,
+  artworkUrls: [null, null],
   error: null,
 });
 const session = new SendspinDisplaySession((next) => (snapshot.value = next));
@@ -224,6 +237,19 @@ onBeforeUnmount(() => {
   aspect-ratio: 1;
   object-fit: contain;
   border-radius: 1rem;
+}
+.display-page__images {
+  position: relative;
+}
+.display-page__artist-artwork {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: min(35%, 140px);
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 1rem;
+  border: 3px solid rgb(var(--v-theme-surface));
 }
 .display-page__track h2 {
   font-size: clamp(1.75rem, 4vw, 3rem);
