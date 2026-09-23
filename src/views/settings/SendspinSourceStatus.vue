@@ -74,6 +74,50 @@
                 <dd>{{ source.last_pcm_age_ms }} ms</dd>
               </div>
             </dl>
+            <div class="mt-3 flex flex-wrap items-end gap-2">
+              <label class="min-w-48 flex-1 text-xs">
+                {{ $t("settings.sendspin_source_status.route_to") }}
+                <select
+                  v-model="destinations[source.client_id]"
+                  :aria-label="$t('settings.sendspin_source_status.route_to')"
+                  class="border-input bg-background mt-1 w-full rounded-md border px-2 py-2 text-sm"
+                >
+                  <option value="">
+                    {{ $t("settings.sendspin_source_status.choose_player") }}
+                  </option>
+                  <option
+                    v-for="player in audioPlayers"
+                    :key="player.player_id"
+                    :value="player.player_id"
+                  >
+                    {{ player.name }}
+                  </option>
+                </select>
+              </label>
+              <Button
+                :disabled="
+                  !destinations[source.client_id] || busy === source.client_id
+                "
+                @click="startSource(source)"
+              >
+                {{ $t("settings.sendspin_source_status.start") }}
+              </Button>
+              <Button
+                v-if="source.playback_session_id"
+                variant="outline"
+                :disabled="busy === source.client_id"
+                @click="stopSource(source)"
+              >
+                {{ $t("settings.sendspin_source_status.stop") }}
+              </Button>
+            </div>
+            <p
+              v-if="actionErrors[source.client_id]"
+              role="alert"
+              class="mt-2 text-destructive"
+            >
+              {{ actionErrors[source.client_id] }}
+            </p>
           </li>
         </ul>
       </template>
@@ -94,15 +138,20 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { api } from "@/plugins/api";
-import { onMounted, ref } from "vue";
+import { isSelectablePlayer } from "@/helpers/players";
+import { QueueOption } from "@/plugins/api/interfaces";
+import { computed, onMounted, reactive, ref } from "vue";
 
 interface SourceStatus {
   target_latency_ms: number;
   sources: {
     client_id: string;
     name: string;
+    source_uri: string;
     signal: string | null;
     selected_player_id: string | null;
+    owner_player_id: string | null;
+    playback_session_id: string | null;
     receiving_pcm: boolean;
     last_pcm_age_ms: number | null;
   }[];
@@ -111,6 +160,16 @@ interface SourceStatus {
 const status = ref<SourceStatus>();
 const error = ref("");
 const loading = ref(false);
+const busy = ref<string>();
+const destinations = reactive<Record<string, string>>({});
+const actionErrors = reactive<Record<string, string>>({});
+const audioPlayers = computed(() =>
+  Object.values(api.players)
+    .filter(isSelectablePlayer)
+    .sort((a, b) => a.name.localeCompare(b.name)),
+);
+
+type Source = SourceStatus["sources"][number];
 
 function playerName(playerId: string) {
   return api.players[playerId]?.name ?? playerId;
@@ -123,11 +182,48 @@ async function refresh() {
     status.value = await api.sendCommand<SourceStatus>(
       "sendspin_source/status",
     );
+    for (const source of status.value.sources) {
+      destinations[source.client_id] ||= source.owner_player_id ?? "";
+    }
   } catch (err) {
     status.value = undefined;
     error.value = String(err);
   } finally {
     loading.value = false;
+  }
+}
+
+async function startSource(source: Source) {
+  const queueId = destinations[source.client_id];
+  if (!queueId || !isSelectablePlayer(api.players[queueId])) return;
+  busy.value = source.client_id;
+  actionErrors[source.client_id] = "";
+  try {
+    await api.playMedia(source.source_uri, QueueOption.PLAY, {
+      queue_id: queueId,
+    });
+    await refresh();
+  } catch (err) {
+    actionErrors[source.client_id] = String(err);
+  } finally {
+    busy.value = undefined;
+  }
+}
+
+async function stopSource(source: Source) {
+  if (!source.playback_session_id) return;
+  busy.value = source.client_id;
+  actionErrors[source.client_id] = "";
+  try {
+    await api.sendCommand("sendspin_source/stop", {
+      client_id: source.client_id,
+      playback_session_id: source.playback_session_id,
+    });
+    await refresh();
+  } catch (err) {
+    actionErrors[source.client_id] = String(err);
+  } finally {
+    busy.value = undefined;
   }
 }
 

@@ -975,7 +975,7 @@
     },
     "sendspin_source_status": {
       "title": "Sendspin input status",
-      "description": "Signal and PCM activity reported by connected source clients. The latency value is a configured target, not a measured end-to-end delay. Play an input from Live Inputs to route it to a player.",
+      "description": "Route connected Sendspin inputs to a player and inspect their signal and PCM activity. The latency value is a configured target, not a measured end-to-end delay.",
       "loading": "Checking Sendspin inputs…",
       "unavailable": "Input diagnostics are unavailable. Update the Music Assistant app if this command is not supported.",
       "target_latency": "Configured buffer target",
@@ -988,7 +988,11 @@
       "none_selected": "Not selected",
       "receiving": "Receiving",
       "idle": "Idle",
-      "refresh": "Refresh status"
+      "refresh": "Refresh status",
+      "route_to": "Play input on",
+      "choose_player": "Choose a player",
+      "start": "Play input",
+      "stop": "Stop input"
     },
     "sendspin_discovery": {
       "title": "Sendspin discovery status",
