@@ -7,13 +7,17 @@ const apiMock = vi.hoisted(() => ({
     sendspin: { domain: "sendspin" },
     airplay: { domain: "airplay" },
   },
+  players: {} as Record<string, { extra_attributes: Record<string, unknown> }>,
   getPlayerConfigEntries: vi.fn(),
   getPlayerConfigValue: vi.fn(),
   savePlayerConfig: vi.fn(),
 }));
 
 vi.mock("@/plugins/api", () => ({ default: apiMock, api: apiMock }));
-vi.mock("@/plugins/i18n", () => ({ $t: (key: string) => key }));
+vi.mock("@/plugins/i18n", () => ({
+  $t: (key: string, args?: unknown[]) =>
+    args ? `${key} ${args.join(",")}` : key,
+}));
 vi.mock("vue-sonner", () => ({ toast: { error: vi.fn() } }));
 vi.mock("@/components/ui/button", () => ({
   Button: {
@@ -31,12 +35,20 @@ vi.mock("@/components/ui/slider", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
+  for (const key of Object.keys(apiMock.players)) delete apiMock.players[key];
   apiMock.getPlayerConfigValue.mockResolvedValue(0);
   apiMock.savePlayerConfig.mockResolvedValue({});
 });
 
 describe("audio delay menu", () => {
   it("uses the Sendspin setting only when the player offers delay control", async () => {
+    apiMock.players.kitchen = {
+      extra_attributes: {
+        sendspin_output_delay_ms: 250,
+        sendspin_startup_lead_ms: 125,
+        sendspin_min_buffer_ms: 80,
+      },
+    };
     apiMock.getPlayerConfigEntries.mockResolvedValue([
       { key: "sendspin_static_delay", default_value: 0 },
     ]);
@@ -54,6 +66,11 @@ describe("audio delay menu", () => {
     expect(wrapper.find(".test-slider").attributes("data-min")).toBe("0");
     expect(wrapper.find(".test-slider").attributes("data-max")).toBe("5000");
     expect(wrapper.text()).toContain("250 ms");
+    expect(wrapper.text()).toContain(
+      "player_select.sendspin_delay_reported 250",
+    );
+    expect(wrapper.text()).toContain("player_select.sendspin_startup_lead 125");
+    expect(wrapper.text()).toContain("player_select.sendspin_min_buffer 80");
 
     const plusTen = wrapper
       .findAll("button")
@@ -73,6 +90,7 @@ describe("audio delay menu", () => {
     await flushPromises();
 
     expect(wrapper.text()).toContain("player_select.sync_adjust_unavailable");
+    expect(wrapper.text()).toContain("player_select.sendspin_delay_unreported");
     expect(apiMock.getPlayerConfigValue).not.toHaveBeenCalled();
     expect(
       wrapper
@@ -88,6 +106,9 @@ describe("audio delay menu", () => {
     await flushPromises();
 
     expect(apiMock.getPlayerConfigEntries).not.toHaveBeenCalled();
+    expect(
+      wrapper.find('[data-testid="sendspin-reported-delay"]').exists(),
+    ).toBe(false);
     expect(wrapper.find(".test-slider").attributes("data-min")).toBe("-500");
     expect(wrapper.find(".test-slider").attributes("data-max")).toBe("500");
     const minusTen = wrapper

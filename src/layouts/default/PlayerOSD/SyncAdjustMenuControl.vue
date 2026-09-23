@@ -47,13 +47,33 @@
     <p class="sync-adjust-menu__hint">
       {{ $t(statusMessage || config.hint) }}
     </p>
+    <div
+      v-if="config.key === SENDSPIN_DELAY_KEY"
+      class="sync-adjust-menu__timing"
+    >
+      <p data-testid="sendspin-reported-delay">
+        {{
+          reportedTiming.delay === undefined
+            ? $t("player_select.sendspin_delay_unreported")
+            : $t("player_select.sendspin_delay_reported", [
+                reportedTiming.delay,
+              ])
+        }}
+      </p>
+      <p v-if="reportedTiming.lead !== undefined">
+        {{ $t("player_select.sendspin_startup_lead", [reportedTiming.lead]) }}
+      </p>
+      <p v-if="reportedTiming.buffer !== undefined">
+        {{ $t("player_select.sendspin_min_buffer", [reportedTiming.buffer]) }}
+      </p>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { getAudioDelayConfig } from "@/helpers/sync_adjust";
+import { getAudioDelayConfig, SENDSPIN_DELAY_KEY } from "@/helpers/sync_adjust";
 import { api } from "@/plugins/api";
 import { $t } from "@/plugins/i18n";
 import { Timer } from "@lucide/vue";
@@ -74,6 +94,24 @@ const loaded = ref(false);
 const available = ref(false);
 const saving = ref(false);
 const statusMessage = ref("");
+
+const reportedTiming = computed(() => {
+  const attrs = api.players[props.playerId]?.extra_attributes;
+  const readMs = (key: string, max: number) => {
+    const value = attrs?.[key];
+    return typeof value === "number" &&
+      Number.isInteger(value) &&
+      value >= 0 &&
+      value <= max
+      ? value
+      : undefined;
+  };
+  return {
+    delay: readMs("sendspin_output_delay_ms", 5000),
+    lead: readMs("sendspin_startup_lead_ms", 60000),
+    buffer: readMs("sendspin_min_buffer_ms", 60000),
+  };
+});
 
 const valueLabel = computed(() =>
   !loaded.value
