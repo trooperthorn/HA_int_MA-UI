@@ -16,6 +16,12 @@ export interface AudioDelayConfig {
   requiresCapability: boolean;
 }
 
+export interface AudioDelayTarget {
+  playerId: string;
+  provider: string;
+  name: string;
+}
+
 const syncAdjustConfig: AudioDelayConfig = {
   key: SYNC_ADJUST_KEY,
   min: SYNC_ADJUST_MIN,
@@ -47,4 +53,32 @@ export const supportsSyncAdjust = (
   player: Pick<Player, "provider">,
 ): boolean => {
   return getAudioDelayConfig(player) !== undefined;
+};
+
+/** Return the real protocol players that own the delay setting.
+ *
+ * A universal player only delegates playback. In particular, Sendspin over
+ * AirPlay uses the AirPlay bridge's signed sync_adjust; its derived Sendspin
+ * player does not implement set_static_delay.
+ */
+export const getAudioDelayTargets = (
+  player: Pick<Player, "player_id" | "provider" | "output_protocols">,
+): AudioDelayTarget[] => {
+  if (supportsSyncAdjust(player)) {
+    return [
+      { playerId: player.player_id, provider: player.provider, name: "" },
+    ];
+  }
+  const targets: AudioDelayTarget[] = [];
+  for (const protocol of player.output_protocols ?? []) {
+    if (protocol.output_protocol_id === "native" || protocol.derived_from)
+      continue;
+    if (!getAudioDelayConfig({ provider: protocol.protocol_domain })) continue;
+    targets.push({
+      playerId: protocol.output_protocol_id,
+      provider: protocol.protocol_domain,
+      name: protocol.name,
+    });
+  }
+  return targets;
 };
