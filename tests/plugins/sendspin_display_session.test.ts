@@ -140,4 +140,45 @@ describe("Sendspin browser display", () => {
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:album-art");
     session.stop();
   });
+
+  it("retains an unchanged artwork channel when the other channel is reconfigured", async () => {
+    let serial = 0;
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", {
+      createObjectURL: vi.fn(() => `blob:image-${++serial}`),
+      revokeObjectURL,
+    });
+    const session = new SendspinDisplaySession(() => undefined);
+    await session.start();
+    const core = mocks.instances[0];
+    core.onArtworkStreamStart?.({
+      channels: [
+        { source: "album", format: "jpeg" },
+        { source: "artist", format: "jpeg" },
+      ],
+    });
+    const frame = (channel: number) => {
+      const bytes = new Uint8Array(10);
+      bytes[0] = 8 + channel;
+      new DataView(bytes.buffer).setBigInt64(1, 500_000n, false);
+      bytes[9] = channel;
+      return bytes;
+    };
+    core.onArtworkFrame?.(frame(0));
+    core.onArtworkFrame?.(frame(1));
+    expect(session.snapshot.artworkUrls).toEqual([
+      "blob:image-1",
+      "blob:image-2",
+    ]);
+    core.onArtworkStreamStart?.({
+      channels: [
+        { source: "album", format: "jpeg" },
+        { source: "artist", format: "png" },
+      ],
+    });
+    expect(session.snapshot.artworkUrls).toEqual(["blob:image-1", null]);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:image-2");
+    expect(revokeObjectURL).not.toHaveBeenCalledWith("blob:image-1");
+    session.stop();
+  });
 });

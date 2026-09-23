@@ -43,7 +43,12 @@ export class SendspinDisplaySession {
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private retryDelayMs = 1000;
   private readonly artworkFramer = new SendspinArtworkFramer("legacy");
-  private artworkChannels: Array<{ source: string; format?: string }> = [];
+  private artworkChannels: Array<{
+    source: string;
+    format?: string;
+    width?: number;
+    height?: number;
+  }> = [];
   private artworkPending = new Map<
     number,
     { timer: ReturnType<typeof setTimeout>; url: string | null }
@@ -78,6 +83,42 @@ export class SendspinDisplaySession {
       if (url) URL.revokeObjectURL(url);
     this.artworkChannels = [];
     this.publish({ artworkUrls: [null, null] });
+  }
+
+  private startArtworkStream(
+    channels: Array<{
+      source: string;
+      format?: string;
+      width?: number;
+      height?: number;
+    }>,
+  ): void {
+    const artworkUrls = [...this.snapshot.artworkUrls];
+    let changed = false;
+    for (
+      let channel = 0;
+      channel < Math.max(this.artworkChannels.length, channels.length);
+      channel++
+    ) {
+      if (
+        JSON.stringify(this.artworkChannels[channel]) ===
+        JSON.stringify(channels[channel])
+      )
+        continue;
+      this.artworkFramer.resetChannel(channel);
+      const pending = this.artworkPending.get(channel);
+      if (pending) {
+        clearTimeout(pending.timer);
+        if (pending.url) URL.revokeObjectURL(pending.url);
+        this.artworkPending.delete(channel);
+      }
+      const previous = artworkUrls[channel];
+      if (previous) URL.revokeObjectURL(previous);
+      artworkUrls[channel] = null;
+      changed = true;
+    }
+    this.artworkChannels = channels;
+    if (changed) this.publish({ artworkUrls });
   }
 
   private receiveArtwork(frame: Uint8Array, core: SendspinCore): void {
@@ -161,8 +202,7 @@ export class SendspinDisplaySession {
       this.core = core;
       core.onArtworkStreamStart = (config) => {
         if (this.core !== core || this.stopped) return;
-        this.clearArtwork();
-        this.artworkChannels = config.channels;
+        this.startArtworkStream(config.channels);
       };
       core.onArtworkFrame = (frame) => {
         if (this.core === core && !this.stopped)

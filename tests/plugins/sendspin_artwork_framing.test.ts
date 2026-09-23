@@ -76,4 +76,16 @@ describe("Sendspin artwork framing", () => {
     expect(() => framer.push(new Uint8Array([8, 0, 1]))).toThrow();
     expect(() => framer.push(new Uint8Array([8, 4]))).toThrow();
   });
+
+  it("keeps a transfer on an unchanged channel when another channel is reset", () => {
+    const framer = new SendspinArtworkFramer("announce-parts");
+    framer.push(announce(0, 100n, 1));
+    framer.resetChannel(1);
+    expect(framer.push(new Uint8Array([8, 0, 5]))).toEqual({
+      kind: "image",
+      channel: 0,
+      timestampUs: 100,
+      bytes: new Uint8Array([5]),
+    });
+  });
 });

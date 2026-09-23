@@ -41,6 +41,10 @@ export class SendspinArtworkFramer {
     this.transfer = null;
   }
 
+  resetChannel(channel: number): void {
+    if (this.transfer?.channel === channel) this.transfer = null;
+  }
+
   push(frame: Uint8Array): ArtworkFrameEvent | null {
     if (frame.length < 1) throw new Error("Empty artwork frame");
     const channel = frame[0] - MIN_CHANNEL_TYPE;
