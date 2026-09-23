@@ -18,6 +18,7 @@ export default mergeConfig(
       setupFiles: [
         "./tests/setup/blockNetworkAccess.ts",
         "./tests/setup/failOnUnhandledErrors.ts",
+        "./tests/setup/pwaRegister.ts",
       ],
       // Errors that escape a test must never be silently dropped; the
       // failOnUnhandledErrors setup file additionally surfaces them in the

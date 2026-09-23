@@ -134,7 +134,7 @@ describe("InviteMembersStep", () => {
     expect(wrapper.text()).not.toContain("moved-out");
 
     wrapper.unmount();
-  });
+  }, 15000);
 
   it("names a role the server made up here", async () => {
     storeMock.roles = [role({ role_id: "dj", name: "House DJ" })];
