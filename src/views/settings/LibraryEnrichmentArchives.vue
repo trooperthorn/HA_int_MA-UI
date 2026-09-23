@@ -369,6 +369,14 @@
               :modes="playbackModes"
               :can-detach="capabilities.playback_detach === true"
             />
+            <ArchiveMirror
+              v-if="
+                capabilities.mirror_apply && subscription.committed_version_id
+              "
+              :key="`mirror:${subscription.committed_version_id}`"
+              :subscription-id="subscription.id"
+              :version-id="subscription.committed_version_id"
+            />
             <Button
               v-if="capabilities.version_listing"
               variant="outline"
@@ -436,6 +444,7 @@ import { $t } from "@/plugins/i18n";
 import ArchivePlaylistApply from "./ArchivePlaylistApply.vue";
 import ArchiveMatchReview from "./ArchiveMatchReview.vue";
 import ArchivePlaybackPolicy from "./ArchivePlaybackPolicy.vue";
+import ArchiveMirror from "./ArchiveMirror.vue";
 import ArchiveSyncPolicy from "./ArchiveSyncPolicy.vue";
 import ArchiveVersionProvenance from "./ArchiveVersionProvenance.vue";
 import type {

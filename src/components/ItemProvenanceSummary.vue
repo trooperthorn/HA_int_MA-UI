@@ -51,6 +51,9 @@ const KNOWN_STATES = new Set<ItemProvenanceState>([
   "source_changed",
   "capture_pending",
   "capture_failed",
+  "mirror_conflict",
+  "mirror_uncertain",
+  "mirror_detached",
   "unknown",
 ]);
 const STATE_LABEL_KEYS: Record<ItemProvenanceState, string> = {
@@ -58,6 +61,9 @@ const STATE_LABEL_KEYS: Record<ItemProvenanceState, string> = {
   source_changed: "item_provenance.states.source_changed",
   capture_pending: "item_provenance.states.capture_pending",
   capture_failed: "item_provenance.states.capture_failed",
+  mirror_conflict: "item_provenance.states.mirror_conflict",
+  mirror_uncertain: "item_provenance.states.mirror_uncertain",
+  mirror_detached: "item_provenance.states.mirror_detached",
   unknown: "item_provenance.states.unknown",
 };
 
