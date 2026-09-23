@@ -172,6 +172,19 @@
           @click="detachProjection"
           >{{ $t("settings.archives.playback_detach") }}</Button
         >
+        <ArchiveDestinationRebind
+          v-if="
+            canRebind &&
+            status.state === 'applied' &&
+            status.destination &&
+            status.destination_content_digest
+          "
+          kind="playback"
+          :subscription-id="subscriptionId"
+          :old-item-id="status.destination.item_id"
+          :content-digest="status.destination_content_digest"
+          @rebound="refresh"
+        />
       </div>
       <p v-if="detachedDestination" role="status">
         {{
@@ -189,6 +202,7 @@ import { api } from "@/plugins/api";
 import { Scope } from "@/plugins/api/interfaces";
 import { authManager } from "@/plugins/auth";
 import { $t } from "@/plugins/i18n";
+import ArchiveDestinationRebind from "./ArchiveDestinationRebind.vue";
 import type {
   ArchivePlaybackPolicy,
   ArchivePlaybackPolicyMode,
@@ -202,6 +216,7 @@ const props = defineProps<{
   versionId: string;
   modes: ArchivePlaybackPolicyMode[];
   canDetach?: boolean;
+  canRebind?: boolean;
 }>();
 const allowed = computed(
   () =>

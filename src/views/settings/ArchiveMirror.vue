@@ -76,6 +76,20 @@
             >{{ $t("settings.archives.mirror_detach") }}</Button
           >
         </div>
+        <ArchiveDestinationRebind
+          v-if="
+            canRebind &&
+            status.state === 'applied' &&
+            status.destination_item_id &&
+            status.destination_content_digest
+          "
+          kind="mirror"
+          :subscription-id="subscriptionId"
+          :old-item-id="status.destination_item_id"
+          :content-digest="status.destination_content_digest"
+          :revision="status.revision"
+          @rebound="refresh"
+        />
       </div>
       <div
         v-if="preview"
@@ -201,6 +215,7 @@ import { api } from "@/plugins/api";
 import { Scope } from "@/plugins/api/interfaces";
 import { authManager } from "@/plugins/auth";
 import { $t } from "@/plugins/i18n";
+import ArchiveDestinationRebind from "./ArchiveDestinationRebind.vue";
 import type {
   ArchiveMirrorPreview,
   ArchiveMirrorRecoveryPreview,
@@ -211,6 +226,7 @@ const props = defineProps<{
   subscriptionId: string;
   versionId: string;
   canReconcile?: boolean;
+  canRebind?: boolean;
 }>();
 const allowed = computed(
   () =>

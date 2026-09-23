@@ -8,6 +8,7 @@ export interface ArchiveCapabilities {
   archive_apply?: boolean;
   mirror_apply?: boolean;
   mirror_api_version?: number;
+  destination_rebind_api_version?: number;
   subscription_sync?: boolean;
   sync_policy_api_version?: number;
   interval_bounds?: { min: number; max: number };
@@ -272,6 +273,17 @@ export interface ArchiveMirrorStatus {
   destination_item_id?: string | null;
   destination_content_digest?: string | null;
   error?: string | null;
+}
+
+export interface ArchiveDestinationRebindReview {
+  kind: "mirror" | "playback";
+  subscription_id: string;
+  old_item_id: string;
+  candidate_item_id: string;
+  expected_content_digest: string;
+  observed_content_digest: string;
+  revision: number | null;
+  classification: "exact_content" | "mismatch";
 }
 
 export interface ArchiveMirrorRecoveryPreview {

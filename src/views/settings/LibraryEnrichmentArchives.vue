@@ -369,6 +369,7 @@
               :version-id="subscription.committed_version_id"
               :modes="playbackModes"
               :can-detach="capabilities.playback_detach === true"
+              :can-rebind="capabilities.destination_rebind_api_version === 1"
             />
             <ArchiveMirror
               v-if="
@@ -378,6 +379,7 @@
               :subscription-id="subscription.id"
               :version-id="subscription.committed_version_id"
               :can-reconcile="(capabilities.mirror_api_version ?? 0) >= 2"
+              :can-rebind="capabilities.destination_rebind_api_version === 1"
             />
             <Button
               v-if="capabilities.version_listing"
