@@ -43,6 +43,7 @@ describe("Sendspin input diagnostics", () => {
           playback_session_id: "session-1",
           receiving_pcm: true,
           last_pcm_age_ms: 52,
+          bridge_buffer_ms: 73,
         },
       ],
     });
@@ -59,6 +60,10 @@ describe("Sendspin input diagnostics", () => {
     expect(wrapper.text()).toContain("present");
     expect(wrapper.text()).toContain("Living Room");
     expect(wrapper.text()).toContain("52 ms");
+    expect(wrapper.text()).toContain("73 ms");
+    expect(wrapper.text()).toContain(
+      "settings.sendspin_source_status.bridge_buffer_hint",
+    );
   });
 
   it("routes through the native queue command and stops only the observed session", async () => {

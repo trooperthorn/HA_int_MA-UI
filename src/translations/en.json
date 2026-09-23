@@ -988,6 +988,8 @@
       "destination": "Selected destination",
       "pcm": "Audio data",
       "last_pcm": "Last audio received",
+      "bridge_buffer": "Current input buffer",
+      "bridge_buffer_hint": "Measured inside Music Assistant. Speaker output delay is not included.",
       "unknown": "Not reported",
       "none_selected": "Not selected",
       "receiving": "Receiving",

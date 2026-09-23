@@ -73,7 +73,19 @@
                 </dt>
                 <dd>{{ source.last_pcm_age_ms }} ms</dd>
               </div>
+              <div v-if="source.bridge_buffer_ms != null">
+                <dt class="font-medium">
+                  {{ $t("settings.sendspin_source_status.bridge_buffer") }}
+                </dt>
+                <dd>{{ source.bridge_buffer_ms }} ms</dd>
+              </div>
             </dl>
+            <p
+              v-if="source.bridge_buffer_ms != null"
+              class="mt-2 text-xs text-muted-foreground"
+            >
+              {{ $t("settings.sendspin_source_status.bridge_buffer_hint") }}
+            </p>
             <div class="mt-3 flex flex-wrap items-end gap-2">
               <label class="min-w-48 flex-1 text-xs">
                 {{ $t("settings.sendspin_source_status.route_to") }}
@@ -154,6 +166,7 @@ interface SourceStatus {
     playback_session_id: string | null;
     receiving_pcm: boolean;
     last_pcm_age_ms: number | null;
+    bridge_buffer_ms?: number | null;
   }[];
 }
 
