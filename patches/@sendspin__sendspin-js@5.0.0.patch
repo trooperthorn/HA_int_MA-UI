@@ -351,7 +351,7 @@ index a8fddcc..067cd55 100644
 \ No newline at end of file
 +//# sourceMappingURL=protocol-handler.d.ts.map
 diff --git a/dist/core/protocol-handler.js b/dist/core/protocol-handler.js
-index a77a065..31a679b 100644
+index a77a065..ff32a28 100644
 --- a/dist/core/protocol-handler.js
 +++ b/dist/core/protocol-handler.js
 @@ -25,8 +25,17 @@ export class ProtocolHandler {
@@ -476,10 +476,12 @@ index a77a065..31a679b 100644
              },
          };
          // Reset so the first client/state after connect is a full snapshot.
-@@ -251,6 +288,23 @@ export class ProtocolHandler {
+@@ -251,8 +288,25 @@ export class ProtocolHandler {
          this.minBufferMs = minBufferMs;
          this.sendStateUpdate();
      }
+-    // Send state update. The first send after a (re)connect is a full snapshot;
+-    // later sends are deltas carrying only changed fields, which the server merges.
 +    setPreferredFormat(format) {
 +        if (format === null) {
 +            this.preferredFormat = null;
@@ -497,10 +499,12 @@ index a77a065..31a679b 100644
 +        if (this.activated)
 +            this.sendStateUpdate();
 +    }
-     // Send state update. The first send after a (re)connect is a full snapshot;
-     // later sends are deltas carrying only changed fields, which the server merges.
++    // Every included player object is a full state snapshot. Omitting format
++    // after a preference was set clears that preference on current-spec servers.
      // When skipHardwareRead is true, use stateManager values instead of reading from hardware.
-@@ -266,31 +320,37 @@ export class ProtocolHandler {
+     // This avoids race conditions when responding to volume commands.
+     sendStateUpdate(skipHardwareRead = false) {
+@@ -266,41 +320,28 @@ export class ProtocolHandler {
              muted = externalVol.muted;
          }
          const syncDelayMs = this.streamHandler.getSyncDelayMs();
@@ -525,37 +529,38 @@ index a77a065..31a679b 100644
                  required_lead_time_ms: this.requiredLeadTimeMs,
                  min_buffer_ms: this.minBufferMs,
 +                ...(this.preferredFormat ? { format: this.preferredFormat } : {}),
++            };
++            payload.player = {
++                ...current,
++                supported_commands: ["volume", "mute", "set_output_delay"],
              };
-             const last = this.lastSentPlayer;
-             if (last === null) {
+-            const last = this.lastSentPlayer;
+-            if (last === null) {
 -                // Full state: every field plus the static supported_commands.
-+                // Full state: current-spec commands are declared in client/state.
-                 payload.player = {
-                     ...current,
+-                payload.player = {
+-                    ...current,
 -                    supported_commands: ["set_static_delay"],
-+                    supported_commands: ["volume", "mute", "set_output_delay"],
-                 };
-             }
-             else {
-                 // Delta: only changed fields.
-                 const player = {};
+-                };
+-            }
+-            else {
+-                // Delta: only changed fields.
+-                const player = {};
 -                if (current.static_delay_ms !== last.static_delay_ms)
 -                    player.static_delay_ms = current.static_delay_ms;
-+                if (current.output_delay_ms !== last.output_delay_ms)
-+                    player.output_delay_ms = current.output_delay_ms;
-                 if (current.volume !== last.volume)
-                     player.volume = current.volume;
-                 if (current.muted !== last.muted)
-@@ -299,6 +359,8 @@ export class ProtocolHandler {
-                     player.required_lead_time_ms = current.required_lead_time_ms;
-                 if (current.min_buffer_ms !== last.min_buffer_ms)
-                     player.min_buffer_ms = current.min_buffer_ms;
-+                if (JSON.stringify(current.format) !== JSON.stringify(last.format))
-+                    player.format = current.format ?? null;
-                 payload.player = player;
-             }
+-                if (current.volume !== last.volume)
+-                    player.volume = current.volume;
+-                if (current.muted !== last.muted)
+-                    player.muted = current.muted;
+-                if (current.required_lead_time_ms !== last.required_lead_time_ms)
+-                    player.required_lead_time_ms = current.required_lead_time_ms;
+-                if (current.min_buffer_ms !== last.min_buffer_ms)
+-                    player.min_buffer_ms = current.min_buffer_ms;
+-                payload.player = player;
+-            }
              this.lastSentPlayer = current;
-@@ -309,6 +371,20 @@ export class ProtocolHandler {
+         }
+         const message = {
+@@ -309,6 +350,20 @@ export class ProtocolHandler {
          };
          this.sender.sendControl(message);
      }
@@ -576,7 +581,7 @@ index a77a065..31a679b 100644
      // Send goodbye message before disconnecting
      sendGoodbye(reason) {
          this.sender.sendControl({
-@@ -333,4 +409,4 @@ export class ProtocolHandler {
+@@ -333,4 +388,4 @@ export class ProtocolHandler {
          });
      }
  }

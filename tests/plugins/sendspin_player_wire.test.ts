@@ -51,7 +51,13 @@ describe("patched Sendspin player wire", () => {
     });
     expect(send.mock.lastCall?.[0].payload.player.format.codec).toBe("pcm");
     core.setPreferredFormat(null);
-    expect(send.mock.lastCall?.[0].payload.player.format).toBeNull();
+    expect(send.mock.lastCall?.[0].payload.player).not.toHaveProperty("format");
+    expect(send.mock.lastCall?.[0].payload.player).toMatchObject({
+      output_delay_ms: expect.any(Number),
+      required_lead_time_ms: expect.any(Number),
+      min_buffer_ms: expect.any(Number),
+      supported_commands: ["volume", "mute", "set_output_delay"],
+    });
     expect(() =>
       core.setPreferredFormat({
         codec: "opus",
