@@ -250,6 +250,43 @@ describe("PlayerCard", () => {
     store.deviceType = "desktop";
   });
 
+  it("shows a Cast receiver failure on its combined player card", () => {
+    apiMock.players["sendspin-cast"] = createPlayer({
+      player_id: "sendspin-cast",
+      provider: "sendspin",
+      type: PlayerType.PROTOCOL,
+      extra_attributes: { sendspin_cast_state: "error" },
+    });
+    const player = createPlayer({
+      provider: "universal_player",
+      output_protocols: [
+        {
+          output_protocol_id: "cast-base",
+          name: "Google Cast",
+          protocol_domain: "chromecast",
+          priority: 10,
+          is_native: false,
+          available: true,
+          derived_from: null,
+        },
+        {
+          output_protocol_id: "sendspin-cast",
+          name: "Sendspin (over Cast)",
+          protocol_domain: "sendspin",
+          priority: 20,
+          is_native: false,
+          available: true,
+          derived_from: "cast-base",
+        },
+      ],
+    });
+
+    const wrapper = mountPlayerCard(player);
+    expect(wrapper.find('[role="status"]').text()).toContain(
+      "player_select.cast_receiver_error",
+    );
+  });
+
   it("uses a primary border for the active player", () => {
     const wrapper = mountPlayerCard(
       createPlayer({

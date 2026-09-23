@@ -2924,6 +2924,12 @@
   "player_select": {
     "active_player_volume_only": "Only show volume sliders for active players",
     "and_more": "...and {0} more",
+    "cast_receiver_connecting": "Starting Cast receiver",
+    "cast_receiver_connected": "Cast receiver ready",
+    "cast_receiver_playing": "Sendspin playing on Cast",
+    "cast_receiver_stopped": "Cast receiver ready",
+    "cast_receiver_error": "Cast receiver failed",
+    "cast_receiver_disconnected": "Cast receiver disconnected",
     "disable_player_confirmation": "This player will be hidden until it is enabled again in player settings.",
     "disable_player_title": "Disable {0}?",
     "display_options": "Display options",
