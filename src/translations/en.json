@@ -973,6 +973,25 @@
       "apply_uncertain": "Music Assistant may have created the playlist, but verification did not finish. Refresh status before trying again.",
       "invalid_response": "The server returned an incompatible iTunes import response."
     },
+    "sendspin_discovery": {
+      "title": "Sendspin discovery status",
+      "description": "Read-only listener, advertisement, discovery, and client status. Refresh after changing network or player settings.",
+      "loading": "Checking Sendspin discovery…",
+      "unavailable": "Discovery diagnostics are unavailable. Update the Music Assistant app if this command is not supported.",
+      "listener": "Listener",
+      "advertising": "Server advertisement",
+      "discovery": "Client discovery",
+      "clients": "Connected / known clients",
+      "legacy": "Legacy clients allowed",
+      "manual": "Manual client addresses",
+      "services": "Discovered services",
+      "none": "None reported",
+      "valid": "valid",
+      "invalid": "invalid",
+      "active": "Active",
+      "inactive": "Inactive",
+      "refresh": "Refresh status"
+    },
     "archives": {
       "title": "Selected Spotify archives",
       "sync_title": "Subscription synchronization",
