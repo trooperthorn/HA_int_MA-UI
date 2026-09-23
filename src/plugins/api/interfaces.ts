@@ -999,6 +999,9 @@ export interface MediaItemMetadata {
   description?: string | null;
   // ISO 639-1 language code of `description`
   description_language?: string | null;
+  // Unix seconds when Music Assistant last collected the full metadata record;
+  // this is not the creation or update time of an individual biography.
+  last_refresh?: number | null;
   review?: string | null;
   explicit?: boolean | null;
   images?: MediaItemImage[] | null;

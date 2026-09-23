@@ -2841,6 +2841,7 @@
   "artist_bio_language": "Language: {language}",
   "artist_bio_language_unknown": "not reported",
   "artist_bio_freshness_unknown": "Last updated: not reported",
+  "artist_bio_metadata_checked": "Music Assistant metadata checked: {date}. The biography itself may be older.",
   "author": "Author",
   "narrator": "Narrator",
   "artist_entity_type": {

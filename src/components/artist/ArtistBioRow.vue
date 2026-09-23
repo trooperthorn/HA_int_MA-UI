@@ -36,6 +36,9 @@
           ·
           {{ $t("artist_bio_freshness_unknown") }}
         </p>
+        <p v-if="metadataCheckedAt" class="text-muted-foreground text-xs">
+          {{ $t("artist_bio_metadata_checked", { date: metadataCheckedAt }) }}
+        </p>
         <DialogFooter>
           <Button @click="showFullInfo = false">{{ $t("close") }}</Button>
         </DialogFooter>
@@ -70,6 +73,13 @@ const emit = defineEmits<{
 const showFullInfo = ref(false);
 
 const description = computed(() => props.item.metadata?.description || "");
+const metadataCheckedAt = computed(() => {
+  const seconds = props.item.metadata?.last_refresh;
+  if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds <= 0)
+    return undefined;
+  const date = new Date(seconds * 1000);
+  return Number.isNaN(date.getTime()) ? undefined : date.toLocaleString();
+});
 
 const { onHold, onTouchStart, swallowClickAfterHold } = useHoldToOpenMenu(() =>
   emit("edit-rows"),
