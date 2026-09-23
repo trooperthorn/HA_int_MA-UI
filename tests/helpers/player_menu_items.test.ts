@@ -316,6 +316,41 @@ describe("getPlayerMenuItems audio delay", () => {
     });
   });
 
+  it("offers the Cast receiver delay on its derived Sendspin player", () => {
+    const player = makePlayer({
+      provider: "universal_player",
+      output_protocols: [
+        {
+          output_protocol_id: "cast-kitchen",
+          name: "Google Cast",
+          is_native: false,
+          protocol_domain: "chromecast",
+          priority: 10,
+          available: true,
+          derived_from: null,
+        },
+        {
+          output_protocol_id: "sendspin-cast-kitchen",
+          name: "Sendspin (over Cast)",
+          is_native: false,
+          protocol_domain: "sendspin",
+          priority: 20,
+          available: false,
+          derived_from: "cast-kitchen",
+        },
+      ],
+    });
+    const items = getPlayerMenuItems(player, undefined, {
+      context: "player",
+    }).filter((item) => item.menuId?.startsWith("audio_delay"));
+
+    expect(items).toHaveLength(1);
+    expect(items[0].componentProps).toEqual({
+      playerId: "sendspin-cast-kitchen",
+      provider: "sendspin",
+    });
+  });
+
   it("names each independent protocol when multiple delay controls exist", () => {
     const player = makePlayer({
       provider: "universal_player",

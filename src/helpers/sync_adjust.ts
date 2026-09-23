@@ -58,8 +58,8 @@ export const supportsSyncAdjust = (
 /** Return the real protocol players that own the delay setting.
  *
  * A universal player only delegates playback. In particular, Sendspin over
- * AirPlay uses the AirPlay bridge's signed sync_adjust; its derived Sendspin
- * player does not implement set_static_delay.
+ * AirPlay uses the AirPlay bridge's signed sync_adjust. Cast has a separate
+ * Sendspin receiver delay, saved on its derived Sendspin player.
  */
 export const getAudioDelayTargets = (
   player: Pick<Player, "player_id" | "provider" | "output_protocols">,
@@ -70,9 +70,20 @@ export const getAudioDelayTargets = (
     ];
   }
   const targets: AudioDelayTarget[] = [];
-  for (const protocol of player.output_protocols ?? []) {
-    if (protocol.output_protocol_id === "native" || protocol.derived_from)
-      continue;
+  const protocols = player.output_protocols ?? [];
+  const byId = new Map(
+    protocols.map((item) => [item.output_protocol_id, item]),
+  );
+  for (const protocol of protocols) {
+    if (protocol.output_protocol_id === "native") continue;
+    if (protocol.derived_from) {
+      const base = byId.get(protocol.derived_from);
+      if (
+        protocol.protocol_domain !== "sendspin" ||
+        base?.protocol_domain !== "chromecast"
+      )
+        continue;
+    }
     if (!getAudioDelayConfig({ provider: protocol.protocol_domain })) continue;
     targets.push({
       playerId: protocol.output_protocol_id,
