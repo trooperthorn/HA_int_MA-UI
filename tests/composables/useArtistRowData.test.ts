@@ -206,6 +206,20 @@ describe("useArtistRowData", () => {
 
     expect(mockLoadArtistTopTracks).toHaveBeenCalledTimes(1);
     expect(itemIds(page.topTracksItems.value)).toEqual(["newer", "older"]);
+    expect(page.topTracksAreRecentLibrary.value).toBe(true);
+  });
+
+  it("retains the top-tracks label when a provider supplies a ranking", async () => {
+    const page = setupRowData({ rows: ["top_tracks"] });
+    mockLoadArtistTopTracks.mockResolvedValue([track({ item_id: "ranked" })]);
+    mockLoadArtistLibraryTracks.mockResolvedValue([
+      track({ item_id: "local" }),
+    ]);
+
+    await showArtist(page, libraryArtist());
+
+    expect(itemIds(page.topTracksItems.value)).toEqual(["ranked"]);
+    expect(page.topTracksAreRecentLibrary.value).toBe(false);
   });
 
   it("shares one request between the rows fed by the library and the appearances", async () => {

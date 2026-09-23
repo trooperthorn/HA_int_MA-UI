@@ -108,6 +108,15 @@ export function useArtistRowData(
     return libraryTracks.value && newestLibraryTracks(libraryTracks.value);
   });
 
+  const topTracksAreRecentLibrary = computed(() => {
+    const items = sourceItems(topTracks.value, topTracksSource.value);
+    return (
+      items !== undefined &&
+      items.length === 0 &&
+      libraryTracks.value !== undefined
+    );
+  });
+
   const similarArtistItems = computed(() =>
     sourceItems(similarArtists.value, similarArtistsSource.value),
   );
@@ -202,6 +211,7 @@ export function useArtistRowData(
   return {
     libraryTracks,
     topTracksItems,
+    topTracksAreRecentLibrary,
     albumItems,
     singleItems,
     appearsOnItems,

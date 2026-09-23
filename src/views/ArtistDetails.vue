@@ -16,8 +16,15 @@
           v-else-if="rowId === 'top_tracks' && showRow(topTracksItems)"
           :artist="itemDetails"
           :tracks="topTracksItems"
-          :source-label="topTracksProvider?.name"
-          :source-domain="topTracksProvider?.domain"
+          :source-label="
+            topTracksAreRecentLibrary
+              ? $t('music_assistant_library')
+              : topTracksProvider?.name
+          "
+          :source-domain="
+            topTracksAreRecentLibrary ? undefined : topTracksProvider?.domain
+          "
+          :recent-library="topTracksAreRecentLibrary"
           :library-track-count="libraryTracks?.length"
           :latest-release="latestRelease"
           @edit-rows="rowsEditorOpen = true"
@@ -226,6 +233,7 @@ const visibleRows = computed(() => {
 const {
   libraryTracks,
   topTracksItems,
+  topTracksAreRecentLibrary,
   albumItems,
   singleItems,
   appearsOnItems,

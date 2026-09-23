@@ -24,6 +24,18 @@
           class="max-w-none text-sm leading-relaxed"
           style="max-height: 60vh; overflow-y: auto"
         />
+        <p class="text-muted-foreground text-xs">
+          {{ $t("artist_bio_source_unknown") }} ·
+          {{
+            $t("artist_bio_language", {
+              language:
+                item.metadata?.description_language ||
+                $t("artist_bio_language_unknown"),
+            })
+          }}
+          ·
+          {{ $t("artist_bio_freshness_unknown") }}
+        </p>
         <DialogFooter>
           <Button @click="showFullInfo = false">{{ $t("close") }}</Button>
         </DialogFooter>
