@@ -67,6 +67,13 @@ authorized. Revoked metadata and controller state is discarded immediately;
 revoking the player role also stops and clears its audio. When the player
 role returns, its next state is a full snapshot.
 
+**Clock-synchronized readiness** (`dist/core/protocol-handler.js`,
+`dist/core/time-sync-manager.js`, `dist/core/core.js`). A player reports
+`available: false` until its first successful clock-sync burst, then sends
+an updated state with `available: true`. A transport loss resets that clock
+estimate, so reconnecting cannot advertise a player as ready using stale
+timing. Controller-only clients remain available without audio clock sync.
+
 ## Changing or refreshing it
 
 ```bash
@@ -92,3 +99,5 @@ server-bounded seek commands.
 `tests/plugins/sendspin_player_wire.test.ts` checks the current hello/state
 layout, output-delay acknowledgement, the legacy command fallback, and role
 activation and revocation.
+The same fixture covers player readiness before and after clock sync and
+after a transport loss.

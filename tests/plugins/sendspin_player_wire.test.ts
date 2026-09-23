@@ -15,6 +15,48 @@ type CoreInternals = {
 afterEach(() => vi.useRealTimers());
 
 describe("patched Sendspin player wire", () => {
+  it("offers player output only after a successful clock-sync burst", () => {
+    vi.useFakeTimers();
+    const core = new SendspinCore({ storage: null });
+    const internals = core as unknown as CoreInternals;
+    const send = vi.fn();
+    internals.transport.sendControl = send;
+    internals.routeControl({
+      type: "server/activate",
+      payload: { active_roles: ["player@v1"] },
+    });
+    const states = () =>
+      send.mock.calls
+        .map(([message]) => message)
+        .filter((message) => message.type === "client/state");
+    expect(states()[0].payload.available).toBe(false);
+
+    for (let index = 0; index < 8; index++) {
+      const time = send.mock.calls
+        .map(([message]) => message)
+        .filter((message) => message.type === "client/time")[index];
+      expect(time).toBeDefined();
+      vi.advanceTimersByTime(10);
+      const transmitted = time.payload.client_transmitted;
+      internals.routeControl({
+        type: "server/time",
+        payload: {
+          client_transmitted: transmitted,
+          server_received: transmitted + 1000,
+          server_transmitted: transmitted + 1100,
+        },
+      });
+    }
+    expect(states().at(-1)?.payload.available).toBe(true);
+
+    (core as unknown as { onTransportClose: () => void }).onTransportClose();
+    internals.routeControl({
+      type: "server/activate",
+      payload: { active_roles: ["player@v1"] },
+    });
+    expect(states().at(-1)?.payload.available).toBe(false);
+  });
+
   it("accepts an omitted first role list and clears roles after trust drops", () => {
     vi.useFakeTimers();
     const core = new SendspinCore({ storage: null });

@@ -214,7 +214,7 @@ index 9a9ed04..ed3e6b0 100644
      get volume(): number;
      get muted(): boolean;
 diff --git a/dist/core/core.js b/dist/core/core.js
-index 45f85ba..d0ea34e 100644
+index 45f85ba..ba71d83 100644
 --- a/dist/core/core.js
 +++ b/dist/core/core.js
 @@ -90,6 +90,7 @@ export class SendspinCore {
@@ -225,7 +225,15 @@ index 45f85ba..d0ea34e 100644
              productName: config.productName,
              codecs: config.codecs,
              bufferCapacity: config.bufferCapacity,
-@@ -301,12 +302,29 @@ export class SendspinCore {
+@@ -138,6 +139,7 @@ export class SendspinCore {
+         this.handshakeInfo = null;
+         this.protocolHandler.stopTimeSync();
+         this.protocolHandler.resetActivation();
++        this.timeFilter.reset();
+         this.pairing.reset();
+         // Stop periodic state-update sends so they don't spam
+         // "WebSocket not connected" warnings after the transport is gone.
+@@ -301,12 +303,29 @@ export class SendspinCore {
      // ========================================
      sendCommand(command, params) {
          const supportedCommands = this.stateManager.serverState.controller?.supported_commands;
@@ -257,6 +265,13 @@ index 45f85ba..d0ea34e 100644
      // ========================================
      // State getters
      // ========================================
+@@ -407,4 +426,4 @@ export class SendspinCore {
+         return this.timeFilter;
+     }
+ }
+-//# sourceMappingURL=core.js.map
+\ No newline at end of file
++//# sourceMappingURL=core.js.map
 diff --git a/dist/core/protocol-handler.d.ts b/dist/core/protocol-handler.d.ts
 index a8fddcc..616ab49 100644
 --- a/dist/core/protocol-handler.d.ts
@@ -288,7 +303,7 @@ index a8fddcc..616ab49 100644
      sendCommand<T extends ControllerCommand>(command: T, params: ControllerCommands[T]): void;
  }
 diff --git a/dist/core/protocol-handler.js b/dist/core/protocol-handler.js
-index a77a065..47078d2 100644
+index a77a065..05415dd 100644
 --- a/dist/core/protocol-handler.js
 +++ b/dist/core/protocol-handler.js
 @@ -25,6 +25,14 @@ export class ProtocolHandler {
@@ -306,6 +321,15 @@ index a77a065..47078d2 100644
          this.productName = config.productName;
          this.codecs = config.codecs ?? ["opus", "flac", "pcm"];
          // Left undefined so the capacity is derived from the formats actually
+@@ -39,7 +47,7 @@ export class ProtocolHandler {
+         this.onVolumeCommand = config.onVolumeCommand;
+         this.onDelayCommand = config.onDelayCommand;
+         this.getExternalVolume = config.getExternalVolume;
+-        this.timeSyncManager = new TimeSyncManager(sender, stateManager, timeFilter);
++        this.timeSyncManager = new TimeSyncManager(sender, stateManager, timeFilter, () => this.sendStateUpdate());
+     }
+     // Handle server messages
+     handleServerMessage(message) {
 @@ -66,7 +74,15 @@ export class ProtocolHandler {
                  this.handleServerCommand(message);
                  break;
@@ -399,7 +423,7 @@ index a77a065..47078d2 100644
              },
          };
          // Reset so the first client/state after connect is a full snapshot.
-@@ -266,31 +300,32 @@ export class ProtocolHandler {
+@@ -266,31 +300,36 @@ export class ProtocolHandler {
              muted = externalVol.muted;
          }
          const syncDelayMs = this.streamHandler.getSyncDelayMs();
@@ -407,7 +431,11 @@ index a77a065..47078d2 100644
 +        const outputDelayMs = clampSyncDelayMs(syncDelayMs);
          const payload = {
 -            available: true,
-+            available: this.available,
++            // Player output must not be offered until its clock has a measured
++            // relationship to the server clock. Controller-only clients do not
++            // render timestamped audio and may become available immediately.
++            available: this.available &&
++                (!this.activeRoles?.has("player@v1") || this.timeFilter.is_synchronized),
          };
 -        if (this.activeRoles === null || this.activeRoles.has("player@v1")) {
 +        if (this.supportedRoles.includes("player@v1") &&
@@ -440,7 +468,7 @@ index a77a065..47078d2 100644
                  if (current.volume !== last.volume)
                      player.volume = current.volume;
                  if (current.muted !== last.muted)
-@@ -309,6 +344,20 @@ export class ProtocolHandler {
+@@ -309,6 +348,20 @@ export class ProtocolHandler {
          };
          this.sender.sendControl(message);
      }
@@ -461,7 +489,7 @@ index a77a065..47078d2 100644
      // Send goodbye message before disconnecting
      sendGoodbye(reason) {
          this.sender.sendControl({
-@@ -333,4 +382,4 @@ export class ProtocolHandler {
+@@ -333,4 +386,4 @@ export class ProtocolHandler {
          });
      }
  }
@@ -510,6 +538,67 @@ index 931c5f8..7935b00 100644
 -//# sourceMappingURL=state-manager.js.map
 \ No newline at end of file
 +//# sourceMappingURL=state-manager.js.map
+diff --git a/dist/core/time-sync-manager.d.ts b/dist/core/time-sync-manager.d.ts
+index 912ac2d..6f2b772 100644
+--- a/dist/core/time-sync-manager.d.ts
++++ b/dist/core/time-sync-manager.d.ts
+@@ -6,12 +6,13 @@ export declare class TimeSyncManager {
+     private sender;
+     private stateManager;
+     private timeFilter;
++    private onSynchronized;
+     private timeSyncBurstActive;
+     private timeSyncBurstSentCount;
+     private timeSyncInFlightClientTransmitted;
+     private timeSyncInFlightTimeout;
+     private timeSyncBurstSamples;
+-    constructor(sender: MessageSender, stateManager: StateManager, timeFilter: SendspinTimeFilter);
++    constructor(sender: MessageSender, stateManager: StateManager, timeFilter: SendspinTimeFilter, onSynchronized?: () => void);
+     startAndSchedule(): void;
+     private scheduleNextTimeSyncBurstTick;
+     private startTimeSyncBurstIfIdle;
+@@ -26,4 +27,4 @@ export declare class TimeSyncManager {
+     handleServerTime(message: ServerTime): void;
+     sendTimeSync(clientTimeUs?: number): number;
+ }
+-//# sourceMappingURL=time-sync-manager.d.ts.map
+\ No newline at end of file
++//# sourceMappingURL=time-sync-manager.d.ts.map
+diff --git a/dist/core/time-sync-manager.js b/dist/core/time-sync-manager.js
+index bf87d25..7da4290 100644
+--- a/dist/core/time-sync-manager.js
++++ b/dist/core/time-sync-manager.js
+@@ -3,10 +3,11 @@ const TIME_SYNC_BURST_INTERVAL_MS = 10000;
+ const TIME_SYNC_REQUEST_TIMEOUT_MS = 2000;
+ const TIME_SYNC_ROBUST_SELECTION_COUNT = 3;
+ export class TimeSyncManager {
+-    constructor(sender, stateManager, timeFilter) {
++    constructor(sender, stateManager, timeFilter, onSynchronized) {
+         this.sender = sender;
+         this.stateManager = stateManager;
+         this.timeFilter = timeFilter;
++        this.onSynchronized = onSynchronized;
+         this.timeSyncBurstActive = false;
+         this.timeSyncBurstSentCount = 0;
+         this.timeSyncInFlightClientTransmitted = null;
+@@ -75,7 +76,10 @@ export class TimeSyncManager {
+         this.clearTimeSyncProbeTimeout();
+         const candidate = this.selectTimeSyncBurstCandidate();
+         if (candidate) {
++            const wasSynchronized = this.timeFilter.is_synchronized;
+             this.timeFilter.update(candidate.measurement, candidate.maxError, candidate.t4);
++            if (!wasSynchronized && this.timeFilter.is_synchronized)
++                this.onSynchronized?.();
+         }
+         this.timeSyncBurstActive = false;
+         this.timeSyncBurstSentCount = 0;
+@@ -150,4 +154,4 @@ export class TimeSyncManager {
+         return clientTimeUs;
+     }
+ }
+-//# sourceMappingURL=time-sync-manager.js.map
+\ No newline at end of file
++//# sourceMappingURL=time-sync-manager.js.map
 diff --git a/dist/core/transport.js b/dist/core/transport.js
 index 5758d9e..1a23fe6 100644
 --- a/dist/core/transport.js
