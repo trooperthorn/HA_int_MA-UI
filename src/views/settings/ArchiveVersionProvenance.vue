@@ -87,7 +87,7 @@
               class="rounded border p-2"
               data-testid="archive-provenance-field"
             >
-              <p class="font-medium">{{ name }}</p>
+              <p class="font-medium">{{ displayFieldName(String(name)) }}</p>
               <p>
                 {{
                   field.override
@@ -294,6 +294,16 @@ function displayValue(value: unknown) {
         ? String(value)
         : JSON.stringify(value);
   return rendered.length > 300 ? `${rendered.slice(0, 297)}…` : rendered;
+}
+
+function displayFieldName(name: string) {
+  const labels: Record<string, string> = {
+    ma_label: "settings.archives.provenance_label",
+    ma_album_barcode: "settings.archives.provenance_album_barcode",
+    ma_artwork_sources: "settings.archives.provenance_artwork_sources",
+    ma_audio_formats: "settings.archives.provenance_audio_formats",
+  };
+  return labels[name] ? $t(labels[name]) : name;
 }
 
 function validPage(result: ArchiveProvenancePage, offset: number) {
