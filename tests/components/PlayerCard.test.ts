@@ -244,6 +244,19 @@ function mountPlayerCard(
 }
 
 describe("PlayerCard", () => {
+  it("keeps non-audio clients visible without offering audio selection", () => {
+    for (const type of [
+      PlayerType.SOURCE,
+      PlayerType.DISPLAY,
+      PlayerType.VISUALIZER,
+      PlayerType.LIGHT,
+    ]) {
+      const wrapper = mountPlayerCard(createPlayer({ type }));
+      expect(
+        wrapper.find(".player-select-action").attributes("disabled"),
+      ).toBeDefined();
+    }
+  });
   beforeEach(() => {
     apiMock.players = {};
     apiMock.queues = {};

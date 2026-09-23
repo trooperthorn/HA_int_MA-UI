@@ -81,8 +81,8 @@ export const playerVisible = function (
 /**
  * Check if the player may become the active playback target.
  *
- * Capture-only audio inputs are listed for discoverability but never render
- * audio, so they can never be selected.
+ * Only audio renderers can be selected as playback targets. Display, visualizer,
+ * and light clients may join a group, but cannot own the audio queue.
  */
 export const isSelectablePlayer = function (
   player: Player | null | undefined,
@@ -91,7 +91,12 @@ export const isSelectablePlayer = function (
     player?.enabled &&
     player.available &&
     !player.needs_setup &&
-    player.type !== PlayerType.SOURCE,
+    [
+      PlayerType.PLAYER,
+      PlayerType.STEREO_PAIR,
+      PlayerType.GROUP,
+      PlayerType.PROTOCOL,
+    ].includes(player.type),
   );
 };
 

@@ -124,7 +124,12 @@ vi.mock("@/helpers/players", () => ({
       player?.enabled &&
       player.available &&
       !player.needs_setup &&
-      player.type !== PlayerType.SOURCE,
+      [
+        PlayerType.PLAYER,
+        PlayerType.STEREO_PAIR,
+        PlayerType.GROUP,
+        PlayerType.PROTOCOL,
+      ].includes(player.type),
     ),
   playerVisible: () => true,
 }));
@@ -700,6 +705,21 @@ describe("PlayerSelect", () => {
     expect(store.activePlayerId).toBeUndefined();
   });
 
+  it("does not select a non-audio Sendspin display", async () => {
+    const display = createPlayer("sendspin-display", "Kitchen Display");
+    display.type = PlayerType.DISPLAY;
+    api.players = { [display.player_id]: display };
+    const wrapper = mountPlayerSelect();
+
+    expect(wrapper.find('[data-player-id="sendspin-display"]').exists()).toBe(
+      true,
+    );
+    expect(store.activePlayerId).toBeUndefined();
+
+    await wrapper.find(".select-player").trigger("click");
+    expect(store.activePlayerId).toBeUndefined();
+  });
+
   it("starts setup instead of selecting a setup-required player", async () => {
     const player = createPlayer("kitchen", "Kitchen");
     player.available = false;
@@ -734,6 +754,10 @@ describe("PlayerSelect", () => {
       const event = emitEvent.mock.calls.at(-1)?.[1] as {
         onFlowEnded: (finished: boolean) => void;
       };
+      if (finished) {
+        player.available = true;
+        player.needs_setup = false;
+      }
       event.onFlowEnded(finished);
 
       expect(store.activePlayerId).toBe(selected);
@@ -750,6 +774,7 @@ describe("PlayerSelect", () => {
     const event = emitEvent.mock.calls.at(-1)?.[1] as {
       onFlowEnded: (finished: boolean) => void;
     };
+    player.needs_setup = false;
     event.onFlowEnded(true);
 
     expect(setPreference).toHaveBeenCalledWith(
