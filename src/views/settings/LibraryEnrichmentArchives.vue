@@ -376,6 +376,7 @@
               :key="`mirror:${subscription.committed_version_id}`"
               :subscription-id="subscription.id"
               :version-id="subscription.committed_version_id"
+              :can-reconcile="(capabilities.mirror_api_version ?? 0) >= 2"
             />
             <Button
               v-if="capabilities.version_listing"

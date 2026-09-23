@@ -125,6 +125,71 @@
           }}</Button
         >
       </div>
+      <div
+        v-if="locked && canReconcile && status?.state === 'uncertain'"
+        data-testid="archive-mirror-recovery"
+        class="space-y-2 rounded-lg border p-3"
+      >
+        <p>{{ $t("settings.archives.mirror_recovery_description") }}</p>
+        <label class="block space-y-1">
+          <span>{{ $t("settings.archives.mirror_candidate_id") }}</span>
+          <input
+            v-model.trim="recoveryCandidate"
+            class="archive-input"
+            type="text"
+            maxlength="128"
+            data-testid="archive-mirror-candidate"
+            :disabled="busy"
+            @input="recovery = undefined"
+          />
+        </label>
+        <Button
+          variant="outline"
+          data-testid="archive-mirror-inspect"
+          :disabled="busy || !recoveryCandidate"
+          @click="inspectRecovery"
+        >
+          {{ $t("settings.archives.mirror_inspect") }}
+        </Button>
+        <div v-if="recovery" data-testid="archive-mirror-recovery-result">
+          <p>
+            {{
+              $t(
+                `settings.archives.mirror_recovery_${recovery.classification}`,
+                {
+                  observed: recovery.observed_count,
+                  target: recovery.target_count,
+                },
+              )
+            }}
+          </p>
+          <Button
+            v-if="recovery.classification !== 'mismatch'"
+            data-testid="archive-mirror-reconcile"
+            :disabled="busy"
+            @click="reconcile"
+          >
+            {{ $t("settings.archives.mirror_accept_recovery") }}
+          </Button>
+        </div>
+        <label class="flex items-start gap-2">
+          <input
+            v-model="abandonConsent"
+            type="checkbox"
+            data-testid="archive-mirror-abandon-consent"
+            :disabled="busy"
+          />
+          <span>{{ $t("settings.archives.mirror_abandon_consent") }}</span>
+        </label>
+        <Button
+          variant="outline"
+          data-testid="archive-mirror-abandon"
+          :disabled="busy || !abandonConsent"
+          @click="abandonUncertain"
+        >
+          {{ $t("settings.archives.mirror_abandon") }}
+        </Button>
+      </div>
     </template>
   </section>
 </template>
@@ -138,10 +203,15 @@ import { authManager } from "@/plugins/auth";
 import { $t } from "@/plugins/i18n";
 import type {
   ArchiveMirrorPreview,
+  ArchiveMirrorRecoveryPreview,
   ArchiveMirrorStatus,
 } from "@/library-manager/enrichment";
 
-const props = defineProps<{ subscriptionId: string; versionId: string }>();
+const props = defineProps<{
+  subscriptionId: string;
+  versionId: string;
+  canReconcile?: boolean;
+}>();
 const allowed = computed(
   () =>
     authManager.hasScope(Scope.CONFIG_PROVIDERS_WRITE) &&
@@ -153,6 +223,9 @@ const error = ref("");
 const status = ref<ArchiveMirrorStatus>();
 const preview = ref<ArchiveMirrorPreview>();
 const partialConsent = ref(false);
+const recoveryCandidate = ref("");
+const recovery = ref<ArchiveMirrorRecoveryPreview>();
+const abandonConsent = ref(false);
 const locked = computed(
   () =>
     status.value?.state === "writing" || status.value?.state === "uncertain",
@@ -210,6 +283,9 @@ async function refresh() {
     if (!current(token)) return;
     validateStatus(result);
     status.value = result;
+    recoveryCandidate.value = result.destination_item_id ?? "";
+    recovery.value = undefined;
+    abandonConsent.value = false;
   } catch (err) {
     if (current(token)) error.value = errorText(err);
   } finally {
@@ -290,6 +366,7 @@ async function apply() {
         if (current(token)) {
           validateStatus(latest);
           status.value = latest;
+          recoveryCandidate.value = latest.destination_item_id ?? "";
         }
       } catch {
         // Keep the original write error visible; the next explicit refresh can reconcile status.
@@ -316,6 +393,117 @@ async function disable() {
     validateStatus(result);
     status.value = result;
     preview.value = undefined;
+  } catch (err) {
+    if (current(token)) error.value = errorText(err);
+  } finally {
+    if (current(token)) busy.value = false;
+  }
+}
+
+function validateRecovery(value: ArchiveMirrorRecoveryPreview) {
+  if (
+    value.subscription_id !== props.subscriptionId ||
+    value.candidate_item_id !== recoveryCandidate.value ||
+    value.revision !== status.value?.revision ||
+    value.target_digest !== status.value?.target_digest ||
+    !["matches_target", "unchanged_previous", "mismatch"].includes(
+      value.classification,
+    ) ||
+    !value.observed_content_digest
+  )
+    throw new Error($t("settings.archives.mirror_invalid_response"));
+}
+async function inspectRecovery() {
+  if (
+    !props.canReconcile ||
+    !locked.value ||
+    !recoveryCandidate.value ||
+    busy.value
+  )
+    return;
+  const token = generation;
+  busy.value = true;
+  error.value = "";
+  recovery.value = undefined;
+  try {
+    const result = await request<ArchiveMirrorRecoveryPreview>(
+      "mirror_reconcile_preview",
+      {
+        subscription_id: props.subscriptionId,
+        candidate_item_id: recoveryCandidate.value,
+      },
+    );
+    if (!current(token)) return;
+    validateRecovery(result);
+    recovery.value = result;
+  } catch (err) {
+    if (current(token)) error.value = errorText(err);
+  } finally {
+    if (current(token)) busy.value = false;
+  }
+}
+async function reconcile() {
+  const reviewed = recovery.value;
+  if (
+    !props.canReconcile ||
+    !locked.value ||
+    !reviewed ||
+    reviewed.classification === "mismatch" ||
+    busy.value
+  )
+    return;
+  const token = generation;
+  busy.value = true;
+  error.value = "";
+  try {
+    const result = await request<ArchiveMirrorStatus>("mirror_reconcile", {
+      subscription_id: props.subscriptionId,
+      candidate_item_id: reviewed.candidate_item_id,
+      expected_revision: reviewed.revision,
+      expected_target_digest: reviewed.target_digest,
+      expected_observed_content_digest: reviewed.observed_content_digest,
+    });
+    if (!current(token)) return;
+    validateStatus(result);
+    status.value = result;
+    recovery.value = undefined;
+    abandonConsent.value = false;
+  } catch (err) {
+    if (current(token)) {
+      error.value = errorText(err);
+      recovery.value = undefined;
+    }
+  } finally {
+    if (current(token)) busy.value = false;
+  }
+}
+async function abandonUncertain() {
+  const saved = status.value;
+  if (
+    !props.canReconcile ||
+    !locked.value ||
+    !saved?.target_digest ||
+    !abandonConsent.value ||
+    busy.value
+  )
+    return;
+  const token = generation;
+  busy.value = true;
+  error.value = "";
+  try {
+    const result = await request<ArchiveMirrorStatus>(
+      "mirror_abandon_uncertain",
+      {
+        subscription_id: props.subscriptionId,
+        expected_revision: saved.revision,
+        expected_target_digest: saved.target_digest,
+      },
+    );
+    if (!current(token)) return;
+    validateStatus(result);
+    status.value = result;
+    recovery.value = undefined;
+    abandonConsent.value = false;
   } catch (err) {
     if (current(token)) error.value = errorText(err);
   } finally {
@@ -354,6 +542,9 @@ watch(
     status.value = undefined;
     preview.value = undefined;
     partialConsent.value = false;
+    recoveryCandidate.value = "";
+    recovery.value = undefined;
+    abandonConsent.value = false;
   },
   { flush: "sync" },
 );
@@ -362,3 +553,14 @@ onBeforeUnmount(() => {
   generation++;
 });
 </script>
+
+<style scoped>
+.archive-input {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  padding: 0.5rem;
+  background: var(--background);
+}
+</style>

@@ -264,9 +264,23 @@ export interface ArchiveMirrorStatus {
     | "conflict"
     | "detached";
   applied_version_id?: string | null;
+  target_version_id?: string | null;
+  target_digest?: string | null;
   destination_item_id?: string | null;
   destination_content_digest?: string | null;
   error?: string | null;
+}
+
+export interface ArchiveMirrorRecoveryPreview {
+  subscription_id: string;
+  candidate_item_id: string;
+  target_version_id: string;
+  target_digest: string;
+  revision: number;
+  observed_content_digest: string;
+  classification: "matches_target" | "unchanged_previous" | "mismatch";
+  observed_count: number;
+  target_count: number;
 }
 
 export interface ArchiveMirrorPreview {
