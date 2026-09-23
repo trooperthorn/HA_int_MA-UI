@@ -58,7 +58,7 @@ describe("patched Sendspin controller contract", () => {
       type: "server/state",
       payload: {
         controller: {
-          supported_commands: ["seek", "seek_relative"],
+          supported_commands: ["seek", "seek_relative", "switch"],
           seek_max_ms: 180000,
         },
       },
@@ -74,6 +74,11 @@ describe("patched Sendspin controller contract", () => {
     expect(() => core.sendCommand("seek_relative", { offset_ms: 1.5 })).toThrow(
       RangeError,
     );
+    core.sendCommand("switch", undefined);
+    expect(send.mock.lastCall?.[0]).toEqual({
+      type: "client/command",
+      payload: { controller: { command: "switch" } },
+    });
     expect(() => core.sendCommand("play", undefined)).toThrow(/not supported/);
   });
 });
