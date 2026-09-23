@@ -1116,6 +1116,8 @@
       "playback_save": "Save policy",
       "playback_preview": "Preview playback",
       "playback_apply": "Apply previewed playback",
+      "playback_detach": "Keep playlist and detach from archive",
+      "playback_detached": "Playlist {id} was kept in Music Assistant. This archive will create a new destination on its next explicit apply.",
       "playback_counts": "{source} archived occurrences · {local} local · {spotify} Spotify · {omitted} omitted",
       "playback_gaps": "These archived occurrences cannot be selected under this policy:",
       "playback_gap": "Source position {position}: {reason}",

@@ -221,4 +221,52 @@ describe("Archive playback policy", () => {
       wrapper.find('[data-testid="archive-playback-apply"]').exists(),
     ).toBe(false);
   });
+
+  it("detaches an edited destination only on an explicit click and keeps its ID visible", async () => {
+    mocks.sendCommand.mockImplementation(async (command: string) => {
+      if (command === "library_enrichment/playback_status")
+        return {
+          policy,
+          projection: {
+            state: "failed",
+            destination: {
+              item_id: "playlist-1",
+              uri: "library://playlist/playlist-1",
+            },
+            destination_content_digest: "b".repeat(64),
+          },
+        };
+      if (command === "library_enrichment/playback_detach")
+        return {
+          subscription_id: "sub-1",
+          state: "not_applied",
+          detached_destination: { item_id: "playlist-1" },
+        };
+      throw new Error(`Unexpected command: ${command}`);
+    });
+    const wrapper = mount(PlaybackPolicy, {
+      props: {
+        subscriptionId: "sub-1",
+        versionId: "version-1",
+        modes: [...modes],
+        canDetach: true,
+      },
+    });
+    await wrapper.get('[data-testid="archive-playback-open"]').trigger("click");
+    await flushPromises();
+    expect(calls("playback_detach")).toHaveLength(0);
+    await wrapper
+      .get('[data-testid="archive-playback-detach"]')
+      .trigger("click");
+    await flushPromises();
+    expect(calls("playback_detach")[0][1]).toEqual({
+      subscription_id: "sub-1",
+      expected_destination_item_id: "playlist-1",
+      expected_content_digest: "b".repeat(64),
+    });
+    expect(wrapper.text()).toContain("playlist-1");
+    expect(
+      wrapper.find('[data-testid="archive-playback-detach"]').exists(),
+    ).toBe(false);
+  });
 });

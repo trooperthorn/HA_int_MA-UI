@@ -15,6 +15,7 @@ export interface ArchiveCapabilities {
   max_match_approvals?: number;
   playback_policy?: boolean;
   playback_policy_api_version?: number;
+  playback_detach?: boolean;
   playback_policy_modes?: ArchivePlaybackPolicyMode[];
   playback_strict_signal?: string;
   item_provenance?: boolean;
@@ -234,6 +235,7 @@ export interface ArchivePlaybackProjectionStatus {
   projected_count?: number;
   omitted_count?: number;
   projection_digest?: string;
+  destination_content_digest?: string | null;
   version_id?: string;
   gaps?: ArchivePlaybackPreviewGap[];
   destination?: ArchiveDestination | null;

@@ -367,6 +367,7 @@
               :subscription-id="subscription.id"
               :version-id="subscription.committed_version_id"
               :modes="playbackModes"
+              :can-detach="capabilities.playback_detach === true"
             />
             <Button
               v-if="capabilities.version_listing"

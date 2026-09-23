@@ -164,7 +164,20 @@
         <p v-if="status.error" role="alert" class="text-destructive">
           {{ status.error }}
         </p>
+        <Button
+          v-if="canDetach && status.destination && !locked"
+          data-testid="archive-playback-detach"
+          variant="outline"
+          :disabled="reading || writing"
+          @click="detachProjection"
+          >{{ $t("settings.archives.playback_detach") }}</Button
+        >
       </div>
+      <p v-if="detachedDestination" role="status">
+        {{
+          $t("settings.archives.playback_detached", { id: detachedDestination })
+        }}
+      </p>
     </template>
   </section>
 </template>
@@ -188,6 +201,7 @@ const props = defineProps<{
   subscriptionId: string;
   versionId: string;
   modes: ArchivePlaybackPolicyMode[];
+  canDetach?: boolean;
 }>();
 const allowed = computed(
   () =>
@@ -204,6 +218,7 @@ const selectedMode = ref<ArchivePlaybackPolicyMode>("prefer_spotify");
 const preview = ref<ArchivePlaybackPreview>();
 const status = ref<ArchivePlaybackProjectionStatus>();
 const partialConsent = ref(false);
+const detachedDestination = ref("");
 const dirty = computed(
   () => !!policy.value && selectedMode.value !== policy.value.mode,
 );
@@ -287,6 +302,7 @@ async function refresh() {
   error.value = "";
   preview.value = undefined;
   partialConsent.value = false;
+  detachedDestination.value = "";
   try {
     await load(token);
   } catch (err) {
@@ -393,6 +409,46 @@ async function applyProjection() {
     if (current(token)) writing.value = false;
   }
 }
+
+async function detachProjection() {
+  const destination = status.value?.destination;
+  if (
+    !props.canDetach ||
+    !destination ||
+    reading.value ||
+    writing.value ||
+    locked.value
+  )
+    return;
+  const token = generation;
+  writing.value = true;
+  error.value = "";
+  try {
+    const result = await request<{
+      subscription_id: string;
+      state: "not_applied";
+      detached_destination: { item_id: string };
+    }>("playback_detach", {
+      subscription_id: props.subscriptionId,
+      expected_destination_item_id: destination.item_id,
+      expected_content_digest: status.value?.destination_content_digest ?? null,
+    });
+    if (!current(token)) return;
+    if (
+      result.subscription_id !== props.subscriptionId ||
+      result.state !== "not_applied" ||
+      result.detached_destination?.item_id !== destination.item_id
+    )
+      throw new Error($t("settings.archives.playback_invalid_response"));
+    status.value = { state: "not_applied" };
+    preview.value = undefined;
+    detachedDestination.value = destination.item_id;
+  } catch (err) {
+    if (current(token)) error.value = errorText(err);
+  } finally {
+    if (current(token)) writing.value = false;
+  }
+}
 watch(
   [() => props.subscriptionId, () => props.versionId, allowed],
   () => {
@@ -405,6 +461,7 @@ watch(
     policy.value = undefined;
     preview.value = undefined;
     status.value = undefined;
+    detachedDestination.value = "";
   },
   { flush: "sync" },
 );
