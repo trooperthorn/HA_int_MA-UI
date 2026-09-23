@@ -103,6 +103,10 @@ export const getAudioDelayTargets = (
         base?.protocol_domain !== "chromecast"
       )
         continue;
+      // Universal players can advertise a possible Sendspin-over-Cast route
+      // while its experimental receiver is disabled. Only an actual derived
+      // player has a config endpoint for the delay control.
+      if (!api.players[protocol.output_protocol_id]) continue;
     }
     if (!getAudioDelayConfig({ provider: protocol.protocol_domain })) continue;
     targets.push({

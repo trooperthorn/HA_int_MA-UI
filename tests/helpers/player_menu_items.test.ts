@@ -277,6 +277,8 @@ describe("getPlayerMenuItems power", () => {
 describe("getPlayerMenuItems audio delay", () => {
   beforeEach(() => {
     hasScope.mockImplementation(scopeChecker(BUILTIN_ROLE_SCOPES.admin));
+    for (const playerId of Object.keys(api.players))
+      delete api.players[playerId];
   });
 
   it("targets AirPlay beneath a universal Sendspin bridge", () => {
@@ -317,6 +319,10 @@ describe("getPlayerMenuItems audio delay", () => {
   });
 
   it("offers the Cast receiver delay on its derived Sendspin player", () => {
+    api.players["sendspin-cast-kitchen"] = makePlayer({
+      player_id: "sendspin-cast-kitchen",
+      provider: "sendspin",
+    });
     const player = makePlayer({
       provider: "universal_player",
       output_protocols: [
@@ -349,6 +355,37 @@ describe("getPlayerMenuItems audio delay", () => {
       playerId: "sendspin-cast-kitchen",
       provider: "sendspin",
     });
+  });
+
+  it("omits an advertised Cast receiver that has no registered Sendspin player", () => {
+    const player = makePlayer({
+      provider: "universal_player",
+      output_protocols: [
+        {
+          output_protocol_id: "cast-kitchen",
+          name: "Google Cast",
+          is_native: false,
+          protocol_domain: "chromecast",
+          priority: 10,
+          available: true,
+          derived_from: null,
+        },
+        {
+          output_protocol_id: "sendspin-cast-kitchen",
+          name: "Sendspin (over Cast)",
+          is_native: false,
+          protocol_domain: "sendspin",
+          priority: 20,
+          available: false,
+          derived_from: "cast-kitchen",
+        },
+      ],
+    });
+    const items = getPlayerMenuItems(player, undefined, {
+      context: "player",
+    }).filter((item) => item.menuId?.startsWith("audio_delay"));
+
+    expect(items).toHaveLength(0);
   });
 
   it("names each independent protocol when multiple delay controls exist", () => {
