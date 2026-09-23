@@ -55,6 +55,8 @@ describe("Sendspin discovery diagnostics", () => {
     mocks.sendCommand.mockResolvedValue({ api_version: 0 });
     const wrapper = mountStatus();
     await flushPromises();
-    expect(wrapper.find('[data-testid="sendspin-discovery-status"]').exists()).toBe(false);
+    expect(
+      wrapper.find('[data-testid="sendspin-discovery-status"]').exists(),
+    ).toBe(false);
   });
 });

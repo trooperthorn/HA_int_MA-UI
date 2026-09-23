@@ -176,16 +176,17 @@ export class SendspinDisplaySession {
     try {
       // The frontend wheel is released before the matching app image. Do not
       // register a display with an older server that cannot pair it privately.
-      let capabilities: { api_version?: number; browser_display_pairing?: boolean };
+      let capabilities: {
+        api_version?: number;
+        browser_display_pairing?: boolean;
+      };
       try {
         capabilities = await api.sendCommand<{
           api_version?: number;
           browser_display_pairing?: boolean;
-        }>(
-          "sendspin/display_capabilities",
-          undefined,
-          { suppressGlobalError: true },
-        );
+        }>("sendspin/display_capabilities", undefined, {
+          suppressGlobalError: true,
+        });
       } catch {
         if (!this.stopped) this.publish({ status: "unsupported" });
         return;

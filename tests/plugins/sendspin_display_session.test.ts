@@ -18,7 +18,10 @@ const mocks = vi.hoisted(() => {
   return {
     instances,
     connection: vi.fn(async () => ({ readyState: 1, close: vi.fn() })),
-    sendCommand: vi.fn(async (_command: string, ..._args: unknown[]): Promise<unknown> => undefined),
+    sendCommand: vi.fn(
+      async (_command: string, ..._args: unknown[]): Promise<unknown> =>
+        undefined,
+    ),
   };
 });
 

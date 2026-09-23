@@ -122,7 +122,9 @@ describe("Sendspin input diagnostics", () => {
       global: { mocks: { $t: (key: string) => key } },
     });
     await flushPromises();
-    expect(wrapper.find('[data-testid="sendspin-source-status"]').exists()).toBe(false);
+    expect(
+      wrapper.find('[data-testid="sendspin-source-status"]').exists(),
+    ).toBe(false);
     expect(mocks.playMedia).not.toHaveBeenCalled();
   });
 });
