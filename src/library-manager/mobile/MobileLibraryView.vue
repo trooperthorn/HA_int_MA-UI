@@ -357,6 +357,21 @@ function openMainMenu(event: MouseEvent) {
     },
     // what this browser's player runs with right now
     { label: webPlayerStatusLabel(), disabled: true },
+    ...(webPlayerStatus.connected &&
+    webPlayerStatus.healthSampledAt !== null &&
+    Date.now() - webPlayerStatus.healthSampledAt < 10000
+      ? [
+          {
+            label: "library_manager.mobile.web_player.health",
+            labelArgs: {
+              sync: webPlayerStatus.syncErrorMs ?? "?",
+              resyncs: webPlayerStatus.resyncCount ?? "?",
+              latency: webPlayerStatus.outputLatencyMs ?? "?",
+            },
+            disabled: true,
+          },
+        ]
+      : []),
     {
       label: "library_manager.mobile.web_player.buffer",
       icon: Gauge,

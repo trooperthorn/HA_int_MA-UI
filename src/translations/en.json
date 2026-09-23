@@ -3253,6 +3253,7 @@
         "adaptive_on": "On",
         "adaptive_off": "Off",
         "rung": "Adaptive mode: step {rung} down (0 is your own settings)",
+        "health": "Sync error {sync} ms · resyncs {resyncs} · output latency {latency} ms",
         "log": "Web player log",
         "log_copy": "Copy ({count} lines)",
         "log_share": "Share",

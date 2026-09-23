@@ -169,4 +169,15 @@ export const webPlayerStatus = reactive({
   // adaptive mode: whether it is watching, and the rung it is on
   adaptive: false,
   rung: 0,
+  syncErrorMs: null as number | null,
+  resyncCount: null as number | null,
+  outputLatencyMs: null as number | null,
+  healthSampledAt: null as number | null,
 });
+
+export function clearWebPlayerHealth() {
+  webPlayerStatus.syncErrorMs = null;
+  webPlayerStatus.resyncCount = null;
+  webPlayerStatus.outputLatencyMs = null;
+  webPlayerStatus.healthSampledAt = null;
+}

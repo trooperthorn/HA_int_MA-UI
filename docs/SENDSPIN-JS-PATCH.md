@@ -36,6 +36,18 @@ power-friendly buffer survives the WebView being throttled; the SDK's
 output-latency tracker measures and compensates the added latency, so sync
 is unaffected.
 
+**Controller and device lifecycle contract** (`dist/core/core.js`,
+`dist/core/protocol-handler.js`, `dist/index.js`, and declarations). A client
+may advertise only its implemented roles, including a controller without a
+player role. A controller-only hello omits `player@v1_support`, so Music
+Assistant does not mistake it for an audio destination. Controller commands
+require an advertised server capability; absolute seek also requires a safe
+integer within `seek_max_ms`, and relative seek requires a signed safe
+integer. The patch exposes `setAvailable(boolean)` for non-interruptible
+external activity and `leaveGroup()` for interruptible activity. Returning to
+available does not automatically rejoin a former group; the client must send
+the server-advertised `switch` command or use Music Assistant group controls.
+
 ## Changing or refreshing it
 
 ```bash
@@ -55,3 +67,6 @@ bump is the moment to check whether upstream has taken either change.
 fake `AudioDecoder` and checks that a FLAC chunk configures it with the
 header as the description; `tests/components/SendspinPlayer.test.ts` checks
 that a phone passes `latencyHint: "playback"`.
+`tests/plugins/sendspin_controller_contract.test.ts` exercises the patched
+package with a controller-only hello, availability and leave messages, and
+server-bounded seek commands.
