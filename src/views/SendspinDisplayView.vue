@@ -10,11 +10,17 @@
         $t(`sendspin_display.status_${snapshot.status}`)
       }}</span>
       <button
-        v-if="snapshot.status === 'failed'"
+        v-if="snapshot.status === 'failed' || snapshot.status === 'unsupported'"
         type="button"
         @click="retryPairing"
       >
-        {{ $t("sendspin_display.retry_pairing") }}
+        {{
+          $t(
+            snapshot.status === "unsupported"
+              ? "sendspin_display.check_again"
+              : "sendspin_display.retry_pairing",
+          )
+        }}
       </button>
       <p v-if="snapshot.error" class="display-page__error">
         {{ snapshot.error }}

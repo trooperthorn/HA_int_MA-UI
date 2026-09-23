@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => {
   return {
     instances,
     connection: vi.fn(async () => ({ readyState: 1, close: vi.fn() })),
-    sendCommand: vi.fn(async () => undefined),
+    sendCommand: vi.fn(async (_command: string, ..._args: unknown[]): Promise<unknown> => undefined),
   };
 });
 
@@ -60,7 +60,12 @@ beforeEach(() => {
   vi.stubGlobal("localStorage", storage);
   mocks.instances.length = 0;
   mocks.connection.mockClear();
-  mocks.sendCommand.mockClear();
+  mocks.sendCommand.mockReset();
+  mocks.sendCommand.mockImplementation(async (command: string) =>
+    command === "sendspin/display_capabilities"
+      ? { api_version: 1, browser_display_pairing: true }
+      : undefined,
+  );
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -79,6 +84,11 @@ describe("Sendspin browser display", () => {
       changes.push(snapshot),
     );
     await session.start();
+    expect(mocks.sendCommand).toHaveBeenCalledWith(
+      "sendspin/display_capabilities",
+      undefined,
+      { suppressGlobalError: true },
+    );
     expect(mocks.connection).toHaveBeenCalledWith("display-client");
     const core = mocks.instances[0];
     expect(core.config.supportedRoles).toEqual(["metadata@v1", "artwork@v1"]);
@@ -103,6 +113,10 @@ describe("Sendspin browser display", () => {
   });
 
   it("retains a connected client after a pairing failure for explicit retry", async () => {
+    mocks.sendCommand.mockImplementationOnce(async () => ({
+      api_version: 1,
+      browser_display_pairing: true,
+    }));
     mocks.sendCommand.mockRejectedValueOnce(new Error("pairing unavailable"));
     const session = new SendspinDisplaySession(() => undefined);
     await session.start();
@@ -110,6 +124,18 @@ describe("Sendspin browser display", () => {
     expect(mocks.instances).toHaveLength(1);
     await session.retryPairing();
     expect(mocks.instances).toHaveLength(1);
+    expect(session.snapshot.status).toBe("ready");
+    session.stop();
+  });
+
+  it("does not create a display client before the app advertises pairing support", async () => {
+    mocks.sendCommand.mockResolvedValueOnce({ api_version: 0 });
+    const session = new SendspinDisplaySession(() => undefined);
+    await session.start();
+    expect(session.snapshot.status).toBe("unsupported");
+    expect(mocks.connection).not.toHaveBeenCalled();
+    expect(mocks.instances).toHaveLength(0);
+    await session.retryPairing();
     expect(session.snapshot.status).toBe("ready");
     session.stop();
   });

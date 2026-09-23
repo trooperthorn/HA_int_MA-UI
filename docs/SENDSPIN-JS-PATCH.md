@@ -94,6 +94,9 @@ The Sendspin discovery and source settings panels require an `api_version: 1`
 response from their read-only app endpoints. A frontend wheel released before
 its matching app image keeps those panels hidden and suppresses the expected
 missing-command error; the controls appear once the app advertises them.
+The display view also checks `sendspin/display_capabilities` before it creates
+a client, so an older app cannot register a browser display without private
+pairing support. The view offers a manual recheck after the app is updated.
 
 **Clock-synchronized readiness** (`dist/core/protocol-handler.js`,
 `dist/core/time-sync-manager.js`, `dist/core/core.js`). A player reports

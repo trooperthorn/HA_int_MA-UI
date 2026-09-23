@@ -13,6 +13,7 @@ export type DisplayConnectionState =
   | "pairing"
   | "ready"
   | "disconnected"
+  | "unsupported"
   | "failed";
 
 export interface DisplaySnapshot {
@@ -173,6 +174,30 @@ export class SendspinDisplaySession {
     this.clearArtwork();
     this.publish({ status: "connecting", metadata: null, error: null });
     try {
+      // The frontend wheel is released before the matching app image. Do not
+      // register a display with an older server that cannot pair it privately.
+      let capabilities: { api_version?: number; browser_display_pairing?: boolean };
+      try {
+        capabilities = await api.sendCommand<{
+          api_version?: number;
+          browser_display_pairing?: boolean;
+        }>(
+          "sendspin/display_capabilities",
+          undefined,
+          { suppressGlobalError: true },
+        );
+      } catch {
+        if (!this.stopped) this.publish({ status: "unsupported" });
+        return;
+      }
+      if (this.stopped) return;
+      if (
+        capabilities?.api_version !== 1 ||
+        capabilities.browser_display_pairing !== true
+      ) {
+        this.publish({ status: "unsupported" });
+        return;
+      }
       const storage = displayStorage(localStorage);
       // Register this display's own identity with the authenticated proxy. It
       // must never claim the separate browser audio player's client id.
