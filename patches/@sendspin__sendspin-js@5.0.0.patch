@@ -201,31 +201,52 @@ index b06314d..defae28 100644
          const audioElement = this.audioElement;
          if (this.outputMode === "direct") {
 diff --git a/dist/core/core.d.ts b/dist/core/core.d.ts
-index 9a9ed04..ed3e6b0 100644
+index 9a9ed04..eb49ffe 100644
 --- a/dist/core/core.d.ts
 +++ b/dist/core/core.d.ts
-@@ -66,6 +66,8 @@ export declare class SendspinCore implements StreamHandler {
+@@ -8,7 +8,7 @@
+  */
+ import { StateManager } from "./state-manager";
+ import { SendspinTimeFilter } from "./time-filter";
+-import type { SendspinCoreConfig, DecodedAudioChunk, StreamFormat, GoodbyeReason, PlayerState, ControllerCommand, ControllerCommands } from "../types";
++import type { SendspinCoreConfig, DecodedAudioChunk, StreamFormat, GoodbyeReason, PlayerState, ControllerCommand, ControllerCommands, PreferredFormat } from "../types";
+ import type { StreamHandler } from "../internal-types";
+ export declare class SendspinCore implements StreamHandler {
+     private wsManager;
+@@ -65,7 +65,10 @@ export declare class SendspinCore implements StreamHandler {
+     setSyncDelay(delayMs: number): void;
      setRequiredLeadTimeMs(leadTimeMs: number): void;
      setMinBufferMs(minBufferMs: number): void;
++    setPreferredFormat(format: PreferredFormat | null): void;
      sendCommand<T extends ControllerCommand>(command: T, params: ControllerCommands[T]): void;
 +    setAvailable(available: boolean): void;
 +    leaveGroup(): void;
      get isPlaying(): boolean;
      get volume(): number;
      get muted(): boolean;
+@@ -103,4 +106,4 @@ export declare class SendspinCore implements StreamHandler {
+     /** @internal */
+     get _timeFilter(): SendspinTimeFilter;
+ }
+-//# sourceMappingURL=core.d.ts.map
+\ No newline at end of file
++//# sourceMappingURL=core.d.ts.map
 diff --git a/dist/core/core.js b/dist/core/core.js
-index 45f85ba..ba71d83 100644
+index 45f85ba..b8ba856 100644
 --- a/dist/core/core.js
 +++ b/dist/core/core.js
-@@ -90,6 +90,7 @@ export class SendspinCore {
+@@ -90,8 +90,10 @@ export class SendspinCore {
          this.protocolHandler = new ProtocolHandler(this.transport, helloContext, this, // this class implements StreamHandler
          this.stateManager, this.timeFilter, {
              clientName,
 +            supportedRoles: config.supportedRoles,
              productName: config.productName,
              codecs: config.codecs,
++            preferredFormat: config.preferredFormat,
              bufferCapacity: config.bufferCapacity,
-@@ -138,6 +139,7 @@ export class SendspinCore {
+             requiredLeadTimeMs: config.requiredLeadTimeMs,
+             minBufferMs: config.minBufferMs,
+@@ -138,6 +140,7 @@ export class SendspinCore {
          this.handshakeInfo = null;
          this.protocolHandler.stopTimeSync();
          this.protocolHandler.resetActivation();
@@ -233,7 +254,15 @@ index 45f85ba..ba71d83 100644
          this.pairing.reset();
          // Stop periodic state-update sends so they don't spam
          // "WebSocket not connected" warnings after the transport is gone.
-@@ -301,12 +303,29 @@ export class SendspinCore {
+@@ -296,17 +299,37 @@ export class SendspinCore {
+     setMinBufferMs(minBufferMs) {
+         this.protocolHandler.setMinBufferMs(minBufferMs);
+     }
++    setPreferredFormat(format) {
++        this.protocolHandler.setPreferredFormat(format);
++    }
+     // ========================================
+     // Controller commands
      // ========================================
      sendCommand(command, params) {
          const supportedCommands = this.stateManager.serverState.controller?.supported_commands;
@@ -265,7 +294,7 @@ index 45f85ba..ba71d83 100644
      // ========================================
      // State getters
      // ========================================
-@@ -407,4 +426,4 @@ export class SendspinCore {
+@@ -407,4 +430,4 @@ export class SendspinCore {
          return this.timeFilter;
      }
  }
@@ -273,10 +302,17 @@ index 45f85ba..ba71d83 100644
 \ No newline at end of file
 +//# sourceMappingURL=core.js.map
 diff --git a/dist/core/protocol-handler.d.ts b/dist/core/protocol-handler.d.ts
-index a8fddcc..616ab49 100644
+index a8fddcc..067cd55 100644
 --- a/dist/core/protocol-handler.d.ts
 +++ b/dist/core/protocol-handler.d.ts
-@@ -12,6 +12,7 @@ export interface HelloContext {
+@@ -1,5 +1,5 @@
+ import type { SendspinTimeFilter } from "./time-filter";
+-import type { Codec, ControllerCommand, ControllerCommands, GoodbyeReason, PairMethodDescriptor, ServerMessage } from "../types";
++import type { Codec, ControllerCommand, ControllerCommands, GoodbyeReason, PairMethodDescriptor, PreferredFormat, ServerMessage } from "../types";
+ import type { StreamHandler } from "../internal-types";
+ import type { StateManager } from "./state-manager";
+ export interface MessageSender {
+@@ -12,9 +12,11 @@ export interface HelloContext {
      unpairedAccess: boolean;
  }
  export interface ProtocolHandlerConfig {
@@ -284,7 +320,11 @@ index a8fddcc..616ab49 100644
      clientName?: string;
      productName?: string;
      codecs?: Codec[];
-@@ -33,6 +34,8 @@ export declare class ProtocolHandler {
++    preferredFormat?: PreferredFormat;
+     bufferCapacity?: number;
+     requiredLeadTimeMs?: number;
+     minBufferMs?: number;
+@@ -33,8 +35,11 @@ export declare class ProtocolHandler {
      private stateManager;
      private timeFilter;
      private clientName;
@@ -292,21 +332,29 @@ index a8fddcc..616ab49 100644
 +    private available;
      private productName?;
      private codecs;
++    private preferredFormat;
      private bufferCapacity;
-@@ -68,6 +71,8 @@ export declare class ProtocolHandler {
+     private requiredLeadTimeMs;
+     private minBufferMs;
+@@ -67,8 +72,11 @@ export declare class ProtocolHandler {
+     sendClientHello(): void;
      setRequiredLeadTimeMs(leadTimeMs: number): void;
      setMinBufferMs(minBufferMs: number): void;
++    setPreferredFormat(format: PreferredFormat | null): void;
      sendStateUpdate(skipHardwareRead?: boolean): void;
 +    setAvailable(available: boolean): void;
 +    leaveGroup(): void;
      sendGoodbye(reason: GoodbyeReason): void;
      sendCommand<T extends ControllerCommand>(command: T, params: ControllerCommands[T]): void;
  }
+-//# sourceMappingURL=protocol-handler.d.ts.map
+\ No newline at end of file
++//# sourceMappingURL=protocol-handler.d.ts.map
 diff --git a/dist/core/protocol-handler.js b/dist/core/protocol-handler.js
-index a77a065..05415dd 100644
+index a77a065..31a679b 100644
 --- a/dist/core/protocol-handler.js
 +++ b/dist/core/protocol-handler.js
-@@ -25,6 +25,14 @@ export class ProtocolHandler {
+@@ -25,8 +25,17 @@ export class ProtocolHandler {
          // full again.
          this.lastSentPlayer = null;
          this.clientName = config.clientName ?? "Sendspin Player";
@@ -320,17 +368,22 @@ index a77a065..05415dd 100644
 +        this.available = true;
          this.productName = config.productName;
          this.codecs = config.codecs ?? ["opus", "flac", "pcm"];
++        this.preferredFormat = null;
          // Left undefined so the capacity is derived from the formats actually
-@@ -39,7 +47,7 @@ export class ProtocolHandler {
+         // advertised in client/hello (see sendClientHello).
+         this.bufferCapacity = config.bufferCapacity;
+@@ -39,7 +48,9 @@ export class ProtocolHandler {
          this.onVolumeCommand = config.onVolumeCommand;
          this.onDelayCommand = config.onDelayCommand;
          this.getExternalVolume = config.getExternalVolume;
 -        this.timeSyncManager = new TimeSyncManager(sender, stateManager, timeFilter);
 +        this.timeSyncManager = new TimeSyncManager(sender, stateManager, timeFilter, () => this.sendStateUpdate());
++        if (config.preferredFormat)
++            this.setPreferredFormat(config.preferredFormat);
      }
      // Handle server messages
      handleServerMessage(message) {
-@@ -66,7 +74,15 @@ export class ProtocolHandler {
+@@ -66,7 +77,15 @@ export class ProtocolHandler {
                  this.handleServerCommand(message);
                  break;
              case "server/state":
@@ -347,7 +400,7 @@ index a77a065..05415dd 100644
                  break;
              case "group/update":
                  this.stateManager.updateGroupState(message.payload);
-@@ -84,8 +100,22 @@ export class ProtocolHandler {
+@@ -84,8 +103,22 @@ export class ProtocolHandler {
      handleServerActivate(message) {
          this.pairingSuspended = false;
          let rolesChanged = false;
@@ -372,7 +425,7 @@ index a77a065..05415dd 100644
              rolesChanged =
                  this.activeRoles === null ||
                      nextRoles.size !== this.activeRoles.size ||
-@@ -134,6 +164,8 @@ export class ProtocolHandler {
+@@ -134,6 +167,8 @@ export class ProtocolHandler {
          this.stateManager.clearStateUpdateInterval();
      }
      handleStreamStart(message) {
@@ -381,7 +434,7 @@ index a77a065..05415dd 100644
          const isFormatUpdate = this.stateManager.currentStreamFormat !== null;
          this.stateManager.currentStreamFormat = message.payload.player;
          console.log(isFormatUpdate
-@@ -198,8 +230,10 @@ export class ProtocolHandler {
+@@ -198,8 +233,10 @@ export class ProtocolHandler {
                      }
                  }
                  break;
@@ -393,7 +446,7 @@ index a77a065..05415dd 100644
                  if (typeof delay === "number" && isFinite(delay)) {
                      const clamped = clampSyncDelayMs(delay);
                      this.streamHandler.handleSyncDelayChange(clamped);
-@@ -215,12 +249,13 @@ export class ProtocolHandler {
+@@ -215,12 +252,13 @@ export class ProtocolHandler {
      }
      // client_id and version live in client/init, not the hello.
      sendClientHello() {
@@ -409,7 +462,7 @@ index a77a065..05415dd 100644
                  trust_level: this.helloContext.trustLevel(),
                  supported_pair_methods: this.helloContext.pairMethods(),
                  unpaired_access: { enabled: this.helloContext.unpairedAccess },
-@@ -230,11 +265,10 @@ export class ProtocolHandler {
+@@ -230,11 +268,10 @@ export class ProtocolHandler {
                      software_version: (typeof navigator !== "undefined" && navigator.userAgent) ||
                          "Unknown",
                  },
@@ -423,7 +476,31 @@ index a77a065..05415dd 100644
              },
          };
          // Reset so the first client/state after connect is a full snapshot.
-@@ -266,31 +300,36 @@ export class ProtocolHandler {
+@@ -251,6 +288,23 @@ export class ProtocolHandler {
+         this.minBufferMs = minBufferMs;
+         this.sendStateUpdate();
+     }
++    setPreferredFormat(format) {
++        if (format === null) {
++            this.preferredFormat = null;
++        }
++        else {
++            const supported = getSupportedFormats(this.codecs);
++            const selected = supported.find((candidate) => candidate.codec === format?.codec &&
++                candidate.sample_rate === format?.sample_rate &&
++                candidate.channels === format?.channels &&
++                candidate.bit_depth === format?.bit_depth);
++            if (!selected)
++                throw new RangeError("preferredFormat must be an advertised Sendspin format");
++            this.preferredFormat = { ...selected };
++        }
++        if (this.activated)
++            this.sendStateUpdate();
++    }
+     // Send state update. The first send after a (re)connect is a full snapshot;
+     // later sends are deltas carrying only changed fields, which the server merges.
+     // When skipHardwareRead is true, use stateManager values instead of reading from hardware.
+@@ -266,31 +320,37 @@ export class ProtocolHandler {
              muted = externalVol.muted;
          }
          const syncDelayMs = this.streamHandler.getSyncDelayMs();
@@ -447,6 +524,7 @@ index a77a065..05415dd 100644
 +                output_delay_ms: outputDelayMs,
                  required_lead_time_ms: this.requiredLeadTimeMs,
                  min_buffer_ms: this.minBufferMs,
++                ...(this.preferredFormat ? { format: this.preferredFormat } : {}),
              };
              const last = this.lastSentPlayer;
              if (last === null) {
@@ -468,7 +546,16 @@ index a77a065..05415dd 100644
                  if (current.volume !== last.volume)
                      player.volume = current.volume;
                  if (current.muted !== last.muted)
-@@ -309,6 +348,20 @@ export class ProtocolHandler {
+@@ -299,6 +359,8 @@ export class ProtocolHandler {
+                     player.required_lead_time_ms = current.required_lead_time_ms;
+                 if (current.min_buffer_ms !== last.min_buffer_ms)
+                     player.min_buffer_ms = current.min_buffer_ms;
++                if (JSON.stringify(current.format) !== JSON.stringify(last.format))
++                    player.format = current.format ?? null;
+                 payload.player = player;
+             }
+             this.lastSentPlayer = current;
+@@ -309,6 +371,20 @@ export class ProtocolHandler {
          };
          this.sender.sendControl(message);
      }
@@ -489,7 +576,7 @@ index a77a065..05415dd 100644
      // Send goodbye message before disconnecting
      sendGoodbye(reason) {
          this.sender.sendControl({
-@@ -333,4 +386,4 @@ export class ProtocolHandler {
+@@ -333,4 +409,4 @@ export class ProtocolHandler {
          });
      }
  }
@@ -656,10 +743,25 @@ index 5758d9e..1a23fe6 100644
 \ No newline at end of file
 +//# sourceMappingURL=transport.js.map
 diff --git a/dist/index.d.ts b/dist/index.d.ts
-index 8627437..e0bac02 100644
+index 8627437..9e3d7de 100644
 --- a/dist/index.d.ts
 +++ b/dist/index.d.ts
-@@ -48,6 +48,10 @@ export declare class SendspinPlayer {
+@@ -1,4 +1,4 @@
+-import type { SendspinPlayerConfig, PlayerState, StreamFormat, GoodbyeReason, ControllerCommand, ControllerCommands, CorrectionMode } from "./types";
++import type { SendspinPlayerConfig, PlayerState, StreamFormat, GoodbyeReason, ControllerCommand, ControllerCommands, CorrectionMode, PreferredFormat } from "./types";
+ declare function detectIsAndroid(): boolean;
+ declare function detectIsIOS(): boolean;
+ declare function detectIsMobile(): boolean;
+@@ -40,6 +40,8 @@ export declare class SendspinPlayer {
+      * number.
+      */
+     setMinBufferMs(minBufferMs: number): void;
++    /** Prefer one advertised audio format, or clear the preference. */
++    setPreferredFormat(format: PreferredFormat | null): void;
+     /**
+      * Set the sync correction mode at runtime.
+      */
+@@ -48,6 +50,10 @@ export declare class SendspinPlayer {
       * Send a controller command to the server.
       */
      sendCommand<T extends ControllerCommand>(command: T, params: ControllerCommands[T]): void;
@@ -670,11 +772,18 @@ index 8627437..e0bac02 100644
      get isPlaying(): boolean;
      get volume(): number;
      get muted(): boolean;
+@@ -105,4 +111,4 @@ export type { SendspinClientIdentity } from "./client-identity";
+ export { SendspinDecoder } from "./audio/decoder";
+ export { AudioScheduler } from "./audio/scheduler";
+ export { detectIsAndroid, detectIsIOS, detectIsMobile, detectIsCastRuntime };
+-//# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
++//# sourceMappingURL=index.d.ts.map
 diff --git a/dist/index.js b/dist/index.js
-index 1e4ff4c..164ca98 100644
+index 1e4ff4c..bd97400 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -52,6 +52,7 @@ export class SendspinPlayer {
+@@ -52,9 +52,11 @@ export class SendspinPlayer {
          this.core = new SendspinCore({
              baseUrl: config.baseUrl,
              clientName: config.clientName,
@@ -682,7 +791,11 @@ index 1e4ff4c..164ca98 100644
              productName: config.productName,
              webSocket: config.webSocket,
              codecs: config.codecs,
-@@ -92,6 +93,7 @@ export class SendspinPlayer {
++            preferredFormat: config.preferredFormat,
+             bufferCapacity: config.bufferCapacity,
+             syncDelay: config.syncDelay,
+             defaultSyncDelay: config.defaultSyncDelay,
+@@ -92,6 +94,7 @@ export class SendspinPlayer {
              syncDelayMs: syncDelay,
              useHardwareVolume: config.useHardwareVolume ?? false,
              correctionMode: config.correctionMode ?? "sync",
@@ -690,7 +803,18 @@ index 1e4ff4c..164ca98 100644
              storage,
              useOutputLatencyCompensation: config.useOutputLatencyCompensation ?? true,
              correctionThresholds: config.correctionThresholds,
-@@ -236,6 +238,12 @@ export class SendspinPlayer {
+@@ -221,6 +224,10 @@ export class SendspinPlayer {
+     setMinBufferMs(minBufferMs) {
+         this.core.setMinBufferMs(minBufferMs);
+     }
++    /** Prefer one advertised audio format, or clear the preference. */
++    setPreferredFormat(format) {
++        this.core.setPreferredFormat(format);
++    }
+     /**
+      * Set the sync correction mode at runtime.
+      */
+@@ -236,6 +243,12 @@ export class SendspinPlayer {
      sendCommand(command, params) {
          this.core.sendCommand(command, params);
      }
@@ -703,8 +827,15 @@ index 1e4ff4c..164ca98 100644
      // Getters for reactive state
      get isPlaying() {
          return this.core.isPlaying;
+@@ -317,4 +330,4 @@ export { SendspinDecoder } from "./audio/decoder";
+ export { AudioScheduler } from "./audio/scheduler";
+ // Export platform detection utilities
+ export { detectIsAndroid, detectIsIOS, detectIsMobile, detectIsCastRuntime };
+-//# sourceMappingURL=index.js.map
+\ No newline at end of file
++//# sourceMappingURL=index.js.map
 diff --git a/dist/types.d.ts b/dist/types.d.ts
-index a809128..86dff23 100644
+index a809128..95e8878 100644
 --- a/dist/types.d.ts
 +++ b/dist/types.d.ts
 @@ -6,6 +6,7 @@ export declare enum MessageType {
@@ -736,7 +867,7 @@ index a809128..86dff23 100644
          };
      };
  }
-@@ -103,7 +109,7 @@ export interface ClientState {
+@@ -103,12 +109,13 @@ export interface ClientState {
      payload: {
          available: boolean;
          player?: {
@@ -745,7 +876,13 @@ index a809128..86dff23 100644
              volume?: number;
              muted?: boolean;
              required_lead_time_ms?: number;
-@@ -118,6 +124,10 @@ export interface ClientGoodbye {
+             min_buffer_ms?: number;
+             supported_commands?: string[];
++            format?: PreferredFormat | null;
+         };
+     };
+ }
+@@ -118,6 +125,10 @@ export interface ClientGoodbye {
          reason: GoodbyeReason;
      };
  }
@@ -756,7 +893,7 @@ index a809128..86dff23 100644
  export interface ClientCommand {
      type: MessageType.CLIENT_COMMAND;
      payload: {
-@@ -125,6 +135,8 @@ export interface ClientCommand {
+@@ -125,6 +136,8 @@ export interface ClientCommand {
              command: ControllerCommand;
              volume?: number;
              mute?: boolean;
@@ -765,7 +902,7 @@ index a809128..86dff23 100644
          };
      };
  }
-@@ -160,6 +172,7 @@ export interface ServerStateController {
+@@ -160,6 +173,7 @@ export interface ServerStateController {
      supported_commands?: string[];
      volume?: number;
      muted?: boolean;
@@ -773,7 +910,7 @@ index a809128..86dff23 100644
  }
  export interface ServerStatePlayer {
  }
-@@ -200,10 +213,11 @@ export interface ServerCommand {
+@@ -200,10 +214,11 @@ export interface ServerCommand {
      type: MessageType.SERVER_COMMAND;
      payload: {
          player: {
@@ -786,7 +923,7 @@ index a809128..86dff23 100644
          };
      };
  }
-@@ -339,7 +353,7 @@ export interface ServerUnpair {
+@@ -339,7 +354,7 @@ export interface ServerUnpair {
      payload: Record<string, unknown>;
  }
  export type ServerMessage = ServerHello | ServerInit | NoiseHandshake | ServerActivate | ServerPairInit | ServerPairAuth | ServerPairConfirm | ServerPairFinalize | ServerUnpair | PairAbort | ServerTime | ServerState | StreamStart | StreamClear | StreamEnd | ServerCommand | GroupUpdate;
@@ -795,7 +932,20 @@ index a809128..86dff23 100644
  export type StreamFormat = {
      codec: string;
      sample_rate: number;
-@@ -420,6 +434,13 @@ export interface SendspinPlayerConfig extends SendspinCoreConfig {
+@@ -350,6 +365,12 @@ export type StreamFormat = {
+ export type PlayerState = "synchronized" | "error";
+ export type AudioOutputMode = "direct" | "media-element";
+ export type Codec = "pcm" | "opus" | "flac";
++export type PreferredFormat = {
++    codec: Codec;
++    sample_rate: number;
++    channels: number;
++    bit_depth: number;
++};
+ /**
+  * Audio sync correction mode:
+  * - "sync": Multi-device sync, may use small playback-rate adjustments (capped at ±0.5%, inaudible) for faster convergence.
+@@ -420,6 +441,13 @@ export interface SendspinPlayerConfig extends SendspinCoreConfig {
       * Default: true
       */
      useOutputLatencyCompensation?: boolean;
@@ -809,7 +959,7 @@ index a809128..86dff23 100644
  }
  /**
   * A decoded audio chunk with raw PCM samples.
-@@ -483,6 +504,8 @@ export interface ReconnectConfig {
+@@ -483,6 +511,8 @@ export interface ReconnectConfig {
   * Configuration for SendspinCore (protocol + decoding, no playback).
   */
  export interface SendspinCoreConfig {
@@ -818,7 +968,16 @@ index a809128..86dff23 100644
      /**
       * Base URL of the Sendspin server (e.g., "http://192.168.1.100:8095").
       * Required unless webSocket is provided.
-@@ -532,7 +555,7 @@ export interface SendspinCoreConfig {
+@@ -503,6 +533,8 @@ export interface SendspinCoreConfig {
+      * Default: ["opus", "flac", "pcm"]
+      */
+     codecs?: Codec[];
++    /** Must match a format advertised in client/hello. Can be changed at runtime. */
++    preferredFormat?: PreferredFormat;
+     /**
+      * Buffer capacity in bytes, advertised to the server as the amount of
+      * not-yet-played encoded audio it may send ahead.
+@@ -532,7 +564,7 @@ export interface SendspinCoreConfig {
       * a Bluetooth link), not for browser output latency, which is measured and
       * compensated automatically via `useOutputLatencyCompensation`.
       *
@@ -827,7 +986,7 @@ index a809128..86dff23 100644
       * restored on the next connect. Passing `syncDelay` explicitly overrides any
       * persisted value for that connect.
       */
-@@ -579,7 +602,7 @@ export interface SendspinCoreConfig {
+@@ -579,7 +611,7 @@ export interface SendspinCoreConfig {
       */
      onVolumeCommand?: (volume: number, muted: boolean) => void;
      /**
@@ -836,7 +995,7 @@ index a809128..86dff23 100644
       * Called with the new static delay in milliseconds (0-5000).
       * The SDK persists the value via `storage` before invoking this callback.
       */
-@@ -674,4 +697,4 @@ export interface SendspinStorage {
+@@ -674,4 +706,4 @@ export interface SendspinStorage {
      getItem(key: string): string | null;
      setItem(key: string, value: string): void;
  }

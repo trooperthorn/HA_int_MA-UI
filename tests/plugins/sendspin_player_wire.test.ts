@@ -15,6 +15,53 @@ type CoreInternals = {
 afterEach(() => vi.useRealTimers());
 
 describe("patched Sendspin player wire", () => {
+  it("sends only advertised preferred formats and clears the preference", () => {
+    vi.useFakeTimers();
+    const core = new SendspinCore({
+      storage: null,
+      codecs: ["flac", "pcm"],
+      preferredFormat: {
+        codec: "flac",
+        sample_rate: 48000,
+        channels: 2,
+        bit_depth: 16,
+      },
+    });
+    const internals = core as unknown as CoreInternals;
+    const send = vi.fn();
+    internals.transport.sendControl = send;
+    internals.routeControl({
+      type: "server/activate",
+      payload: { active_roles: ["player@v1"] },
+    });
+    expect(
+      send.mock.calls.find(([message]) => message.type === "client/state")?.[0]
+        .payload.player.format,
+    ).toEqual({
+      codec: "flac",
+      sample_rate: 48000,
+      channels: 2,
+      bit_depth: 16,
+    });
+    core.setPreferredFormat({
+      codec: "pcm",
+      sample_rate: 44100,
+      channels: 2,
+      bit_depth: 16,
+    });
+    expect(send.mock.lastCall?.[0].payload.player.format.codec).toBe("pcm");
+    core.setPreferredFormat(null);
+    expect(send.mock.lastCall?.[0].payload.player.format).toBeNull();
+    expect(() =>
+      core.setPreferredFormat({
+        codec: "opus",
+        sample_rate: 48000,
+        channels: 2,
+        bit_depth: 16,
+      }),
+    ).toThrow(RangeError);
+  });
+
   it("offers player output only after a successful clock-sync burst", () => {
     vi.useFakeTimers();
     const core = new SendspinCore({ storage: null });

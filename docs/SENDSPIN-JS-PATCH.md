@@ -74,6 +74,14 @@ an updated state with `available: true`. A transport loss resets that clock
 estimate, so reconnecting cannot advertise a player as ready using stale
 timing. Controller-only clients remain available without audio clock sync.
 
+**Client format preference** (`dist/core/protocol-handler.js`,
+`dist/core/core.js`, `dist/index.js`, and declarations). A player may request
+one of the formats it advertised in `client/hello` through
+`preferredFormat` or `setPreferredFormat()`. The SDK rejects a format it
+did not advertise. Runtime changes send a player-state delta; passing
+`null` clears the preference. Music Assistant's player configuration can
+still override the request when its encoding policy requires it.
+
 ## Changing or refreshing it
 
 ```bash
@@ -101,3 +109,5 @@ layout, output-delay acknowledgement, the legacy command fallback, and role
 activation and revocation.
 The same fixture covers player readiness before and after clock sync and
 after a transport loss.
+It also verifies preferred-format selection, runtime change, rejection of
+unsupported formats, and clearing the preference.
