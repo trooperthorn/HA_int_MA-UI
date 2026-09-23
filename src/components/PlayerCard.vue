@@ -254,7 +254,10 @@ import {
 import { isQueueEnded } from "@/helpers/queue_position";
 import { nowPlayingImageUrl } from "@/helpers/now_playing_image";
 import { getPlayerName } from "@/helpers/utils";
-import { getCastReceiverState } from "@/helpers/cast_receiver_status";
+import {
+  getCastReceiverFailure,
+  getCastReceiverState,
+} from "@/helpers/cast_receiver_status";
 import api from "@/plugins/api";
 import { resolvePlayerQueue } from "@/plugins/api/helpers";
 import {
@@ -307,11 +310,14 @@ const playerQueue = computed(() => resolvePlayerQueue(props.player));
 const castReceiverState = computed(() =>
   getCastReceiverState(props.player, api.players),
 );
-const castStatusKey = computed(() =>
-  castReceiverState.value
-    ? `player_select.cast_receiver_${castReceiverState.value}`
-    : undefined,
-);
+const castStatusKey = computed(() => {
+  if (!castReceiverState.value) return undefined;
+  const failure =
+    castReceiverState.value === "error"
+      ? getCastReceiverFailure(props.player, api.players)
+      : undefined;
+  return `player_select.cast_receiver_${failure ?? castReceiverState.value}`;
+});
 
 // a set-up audio input can't be selected for playback; its row only informs
 const isInformationalSource = computed(

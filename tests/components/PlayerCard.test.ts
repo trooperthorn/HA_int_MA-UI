@@ -255,7 +255,10 @@ describe("PlayerCard", () => {
       player_id: "sendspin-cast",
       provider: "sendspin",
       type: PlayerType.PROTOCOL,
-      extra_attributes: { sendspin_cast_state: "error" },
+      extra_attributes: {
+        sendspin_cast_state: "error",
+        sendspin_cast_failure: "launch_timeout",
+      },
     });
     const player = createPlayer({
       provider: "universal_player",
@@ -283,7 +286,7 @@ describe("PlayerCard", () => {
 
     const wrapper = mountPlayerCard(player);
     expect(wrapper.find('[role="status"]').text()).toContain(
-      "player_select.cast_receiver_error",
+      "player_select.cast_receiver_launch_timeout",
     );
   });
 
