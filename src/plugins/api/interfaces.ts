@@ -999,6 +999,10 @@ export interface MediaItemMetadata {
   description?: string | null;
   // ISO 639-1 language code of `description`
   description_language?: string | null;
+  // Set by the pinned app patch after Music Assistant selects an artist bio.
+  // This identifies the provider that supplied the observed text, not its author.
+  description_source?: string | null;
+  description_observed_at?: number | null;
   // Unix seconds when Music Assistant last collected the full metadata record;
   // this is not the creation or update time of an individual biography.
   last_refresh?: number | null;

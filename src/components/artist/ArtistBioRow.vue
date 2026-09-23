@@ -25,7 +25,12 @@
           style="max-height: 60vh; overflow-y: auto"
         />
         <p class="text-muted-foreground text-xs">
-          {{ $t("artist_bio_source_unknown") }} ·
+          {{
+            sourceName
+              ? $t("artist_bio_source", { source: sourceName })
+              : $t("artist_bio_source_unknown")
+          }}
+          ·
           {{
             $t("artist_bio_language", {
               language:
@@ -35,6 +40,9 @@
           }}
           ·
           {{ $t("artist_bio_freshness_unknown") }}
+        </p>
+        <p v-if="bioObservedAt" class="text-muted-foreground text-xs">
+          {{ $t("artist_bio_observed", { date: bioObservedAt }) }}
         </p>
         <p v-if="metadataCheckedAt" class="text-muted-foreground text-xs">
           {{ $t("artist_bio_metadata_checked", { date: metadataCheckedAt }) }}
@@ -59,12 +67,15 @@ import {
 } from "@/components/ui/dialog";
 import { useHoldToOpenMenu } from "@/composables/useHoldToOpenMenu";
 import type { Artist } from "@/plugins/api/interfaces";
+import { api } from "@/plugins/api";
 import { computed, ref } from "vue";
+import { useI18n } from "vue-i18n";
 
 export interface Props {
   item: Artist;
 }
 const props = defineProps<Props>();
+const { t } = useI18n();
 
 const emit = defineEmits<{
   (e: "edit-rows"): void;
@@ -73,12 +84,22 @@ const emit = defineEmits<{
 const showFullInfo = ref(false);
 
 const description = computed(() => props.item.metadata?.description || "");
-const metadataCheckedAt = computed(() => {
-  const seconds = props.item.metadata?.last_refresh;
+const sourceName = computed(() => {
+  const source = props.item.metadata?.description_source;
+  if (source === "manual") return t("artist_bio_manual_source");
+  return source ? api.providers[source]?.name || source : undefined;
+});
+const formatUnixSeconds = (seconds?: number | null): string | undefined => {
   if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds <= 0)
     return undefined;
   const date = new Date(seconds * 1000);
   return Number.isNaN(date.getTime()) ? undefined : date.toLocaleString();
+};
+const bioObservedAt = computed(() =>
+  formatUnixSeconds(props.item.metadata?.description_observed_at),
+);
+const metadataCheckedAt = computed(() => {
+  return formatUnixSeconds(props.item.metadata?.last_refresh);
 });
 
 const { onHold, onTouchStart, swallowClickAfterHold } = useHoldToOpenMenu(() =>
