@@ -48,6 +48,16 @@ external activity and `leaveGroup()` for interruptible activity. Returning to
 available does not automatically rejoin a former group; the client must send
 the server-advertised `switch` command or use Music Assistant group controls.
 
+**Current player delay wire** (`dist/core/protocol-handler.js`, declarations).
+The browser player reports `output_delay_ms` and advertises `volume`, `mute`,
+and `set_output_delay` in its initial `client/state`, as the current Sendspin
+player specification requires. Its hello carries formats and buffer capacity,
+without the legacy command list. It accepts a current `set_output_delay`
+command and retains a receive-only `set_static_delay` fallback for older
+servers. The Music Assistant image's pinned aiosendspin 9.1.1 requires the
+corresponding output-delay compatibility patch before this browser wire is
+deployed; the old app image continues to pin its prior frontend wheel.
+
 ## Changing or refreshing it
 
 ```bash
@@ -70,3 +80,5 @@ that a phone passes `latencyHint: "playback"`.
 `tests/plugins/sendspin_controller_contract.test.ts` exercises the patched
 package with a controller-only hello, availability and leave messages, and
 server-bounded seek commands.
+`tests/plugins/sendspin_player_wire.test.ts` checks the current hello/state
+layout, output-delay acknowledgement, and the legacy command fallback.
