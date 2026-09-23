@@ -24,21 +24,21 @@
       :title="$t('tracks')"
       :refresh-on-parent-update="true"
     />
+    <br />
+    <ItemsListing
+      v-if="itemDetails"
+      itemtype="albumversions"
+      :parent-item="itemDetails"
+      :show-provider="true"
+      :show-favorites-only-filter="false"
+      :show-refresh-button="false"
+      :load-items="loadAlbumVersions"
+      :sort-keys="['provider', 'name', 'year']"
+      :title="$t('other_versions')"
+      :hide-on-empty="true"
+      :refresh-on-parent-update="true"
+    />
     <template v-if="!isPhoneSizedScreen()">
-      <br />
-      <ItemsListing
-        v-if="itemDetails"
-        itemtype="albumversions"
-        :parent-item="itemDetails"
-        :show-provider="true"
-        :show-favorites-only-filter="false"
-        :show-refresh-button="false"
-        :load-items="loadAlbumVersions"
-        :sort-keys="['provider', 'name', 'year']"
-        :title="$t('other_versions')"
-        :hide-on-empty="true"
-        :refresh-on-parent-update="true"
-      />
       <br />
       <!-- media images -->
       <MediaItemImages
