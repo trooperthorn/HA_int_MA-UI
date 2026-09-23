@@ -22,6 +22,26 @@ export interface AudioDelayTarget {
   name: string;
 }
 
+/** Positive offset means this player is heard after the reference room. */
+export function suggestCalibratedDelay(
+  config: AudioDelayConfig,
+  currentMs: number,
+  measuredOffsetMs: number,
+): { value: number; limited: boolean } | undefined {
+  if (
+    (config.key !== SENDSPIN_DELAY_KEY && config.key !== SYNC_ADJUST_KEY) ||
+    !Number.isInteger(currentMs) ||
+    !Number.isInteger(measuredOffsetMs) ||
+    Math.abs(measuredOffsetMs) > 5000
+  )
+    return undefined;
+  const delta =
+    config.key === SENDSPIN_DELAY_KEY ? measuredOffsetMs : -measuredOffsetMs;
+  const requested = currentMs + delta;
+  const value = Math.min(config.max, Math.max(config.min, requested));
+  return { value, limited: value !== requested };
+}
+
 const syncAdjustConfig: AudioDelayConfig = {
   key: SYNC_ADJUST_KEY,
   min: SYNC_ADJUST_MIN,

@@ -1,4 +1,5 @@
 import SyncAdjustMenuControl from "@/layouts/default/PlayerOSD/SyncAdjustMenuControl.vue";
+import { PlayerType, type Player } from "@/plugins/api/interfaces";
 import { flushPromises, mount } from "@vue/test-utils";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -7,7 +8,7 @@ const apiMock = vi.hoisted(() => ({
     sendspin: { domain: "sendspin" },
     airplay: { domain: "airplay" },
   },
-  players: {} as Record<string, { extra_attributes: Record<string, unknown> }>,
+  players: {} as Record<string, Partial<Player>>,
   getPlayerConfigEntries: vi.fn(),
   getPlayerConfigValue: vi.fn(),
   savePlayerConfig: vi.fn(),
@@ -119,5 +120,39 @@ describe("audio delay menu", () => {
     expect(apiMock.savePlayerConfig).toHaveBeenCalledWith("bedroom", {
       sync_adjust: -10,
     });
+  });
+
+  it("applies a measured late-room offset in the AirPlay direction", async () => {
+    apiMock.players.reference = {
+      player_id: "reference",
+      name: "Living Room",
+      type: PlayerType.PLAYER,
+      available: true,
+      enabled: true,
+      hide_in_ui: false,
+      private: false,
+    };
+    const wrapper = mount(SyncAdjustMenuControl, {
+      props: { playerId: "bedroom", provider: "airplay" },
+    });
+    await flushPromises();
+
+    expect(
+      wrapper.get('[data-testid="calibration-apply"]').attributes("disabled"),
+    ).toBeDefined();
+    await wrapper
+      .get('[data-testid="calibration-reference"]')
+      .setValue("reference");
+    await wrapper.get('[data-testid="calibration-offset"]').setValue("250");
+    expect(
+      wrapper.get('[data-testid="calibration-suggestion"]').text(),
+    ).toContain("-250");
+    await wrapper.get('[data-testid="calibration-apply"]').trigger("click");
+    await flushPromises();
+
+    expect(apiMock.savePlayerConfig).toHaveBeenCalledWith("bedroom", {
+      sync_adjust: -250,
+    });
+    expect(wrapper.text()).toContain("player_select.calibrate_remeasure");
   });
 });
