@@ -67,6 +67,15 @@ authorized. Revoked metadata and controller state is discarded immediately;
 revoking the player role also stops and clears its audio. When the player
 role returns, its next state is a full snapshot.
 
+**Scheduled metadata** (`dist/core/protocol-handler.js`,
+`dist/core/state-manager.js`). A future `server/state.metadata.timestamp` holds
+one pending track update while the current track remains visible. A newer
+pending update replaces it; an immediate update, role revocation, pairing, or
+transport reset cancels it. Metadata snapshots replace the old snapshot, so an
+omitted `progress` field clears the prior track position. The client translates
+server timestamps with its current clock estimate. This also supports a
+metadata-only client without advertising an audio player.
+
 **Clock-synchronized readiness** (`dist/core/protocol-handler.js`,
 `dist/core/time-sync-manager.js`, `dist/core/core.js`). A player reports
 `available: false` until its first successful clock-sync burst, then sends
@@ -111,3 +120,5 @@ The same fixture covers player readiness before and after clock sync and
 after a transport loss.
 It also verifies preferred-format selection, runtime change, rejection of
 unsupported formats, and clearing the preference.
+`tests/plugins/sendspin_scheduled_metadata.test.ts` covers future-track timing,
+replacement, omitted progress, revocation, and transport reset.

@@ -302,7 +302,7 @@ index 45f85ba..b8ba856 100644
 \ No newline at end of file
 +//# sourceMappingURL=core.js.map
 diff --git a/dist/core/protocol-handler.d.ts b/dist/core/protocol-handler.d.ts
-index a8fddcc..067cd55 100644
+index a8fddcc..a4911cd 100644
 --- a/dist/core/protocol-handler.d.ts
 +++ b/dist/core/protocol-handler.d.ts
 @@ -1,5 +1,5 @@
@@ -336,7 +336,20 @@ index a8fddcc..067cd55 100644
      private bufferCapacity;
      private requiredLeadTimeMs;
      private minBufferMs;
-@@ -67,8 +72,11 @@ export declare class ProtocolHandler {
+@@ -47,8 +52,12 @@ export declare class ProtocolHandler {
+     private activeRoles;
+     private pairingSuspended;
+     private lastSentPlayer;
++    private pendingMetadata;
++    private metadataTimer;
+     constructor(sender: MessageSender, helloContext: HelloContext, streamHandler: StreamHandler, stateManager: StateManager, timeFilter: SendspinTimeFilter, config?: ProtocolHandlerConfig);
+     handleServerMessage(message: ServerMessage): void;
++    private clearPendingMetadata;
++    private scheduleMetadata;
+     private handleServerHello;
+     private handleServerActivate;
+     private restartStateUpdateInterval;
+@@ -67,8 +76,11 @@ export declare class ProtocolHandler {
      sendClientHello(): void;
      setRequiredLeadTimeMs(leadTimeMs: number): void;
      setMinBufferMs(minBufferMs: number): void;
@@ -351,12 +364,15 @@ index a8fddcc..067cd55 100644
 \ No newline at end of file
 +//# sourceMappingURL=protocol-handler.d.ts.map
 diff --git a/dist/core/protocol-handler.js b/dist/core/protocol-handler.js
-index a77a065..ff32a28 100644
+index a77a065..2c908fa 100644
 --- a/dist/core/protocol-handler.js
 +++ b/dist/core/protocol-handler.js
-@@ -25,8 +25,17 @@ export class ProtocolHandler {
+@@ -24,9 +24,20 @@ export class ProtocolHandler {
+         // full state has been sent yet. Cleared on (re)connect so the first send is
          // full again.
          this.lastSentPlayer = null;
++        this.pendingMetadata = null;
++        this.metadataTimer = null;
          this.clientName = config.clientName ?? "Sendspin Player";
 +        const roles = config.supportedRoles ?? ["player@v1", "controller@v1", "metadata@v1"];
 +        if (!Array.isArray(roles) || roles.length === 0 ||
@@ -372,7 +388,7 @@ index a77a065..ff32a28 100644
          // Left undefined so the capacity is derived from the formats actually
          // advertised in client/hello (see sendClientHello).
          this.bufferCapacity = config.bufferCapacity;
-@@ -39,7 +48,9 @@ export class ProtocolHandler {
+@@ -39,7 +50,9 @@ export class ProtocolHandler {
          this.onVolumeCommand = config.onVolumeCommand;
          this.onDelayCommand = config.onDelayCommand;
          this.getExternalVolume = config.getExternalVolume;
@@ -383,7 +399,7 @@ index a77a065..ff32a28 100644
      }
      // Handle server messages
      handleServerMessage(message) {
-@@ -66,7 +77,15 @@ export class ProtocolHandler {
+@@ -66,13 +79,50 @@ export class ProtocolHandler {
                  this.handleServerCommand(message);
                  break;
              case "server/state":
@@ -394,13 +410,48 @@ index a77a065..ff32a28 100644
 +                        if (this.activeRoles.has(`${role}@v1`))
 +                            activeState[role] = state;
 +                    }
++                    if (Object.hasOwn(activeState, "metadata")) {
++                        this.scheduleMetadata(activeState.metadata);
++                        delete activeState.metadata;
++                    }
 +                    if (Object.keys(activeState).length)
 +                        this.stateManager.updateServerState(activeState);
 +                }
                  break;
              case "group/update":
                  this.stateManager.updateGroupState(message.payload);
-@@ -84,8 +103,22 @@ export class ProtocolHandler {
+                 break;
+         }
+     }
++    clearPendingMetadata() {
++        if (this.metadataTimer !== null)
++            clearTimeout(this.metadataTimer);
++        this.metadataTimer = null;
++        this.pendingMetadata = null;
++    }
++    scheduleMetadata(metadata) {
++        this.clearPendingMetadata();
++        const timestamp = metadata?.timestamp;
++        if (typeof timestamp === "number" && Number.isFinite(timestamp)) {
++            const clientTimeUs = this.timeFilter.computeClientTime(timestamp);
++            const waitMs = clientTimeUs / 1000 - performance.now();
++            if (waitMs > 0) {
++                this.pendingMetadata = metadata;
++                this.metadataTimer = setTimeout(() => {
++                    const pending = this.pendingMetadata;
++                    this.clearPendingMetadata();
++                    if (pending !== null && this.activeRoles?.has("metadata@v1"))
++                        this.stateManager.updateServerState({ metadata: pending });
++                }, Math.min(waitMs, 2147483647));
++                return;
++            }
++        }
++        this.stateManager.updateServerState({ metadata });
++    }
+     // Handle server hello: reply with client/hello. client/state and time-sync
+     // are deferred to server/activate.
+     handleServerHello() {
+@@ -84,8 +134,24 @@ export class ProtocolHandler {
      handleServerActivate(message) {
          this.pairingSuspended = false;
          let rolesChanged = false;
@@ -412,6 +463,8 @@ index a77a065..ff32a28 100644
 +            if (this.activeRoles !== null) {
 +                for (const role of this.activeRoles) {
 +                    if (!nextRoles.has(role)) {
++                        if (role === "metadata@v1")
++                            this.clearPendingMetadata();
 +                        this.stateManager.clearServerRole(role.split("@")[0]);
 +                        if (role === "player@v1") {
 +                            this.streamHandler.handleStreamEnd();
@@ -425,7 +478,23 @@ index a77a065..ff32a28 100644
              rolesChanged =
                  this.activeRoles === null ||
                      nextRoles.size !== this.activeRoles.size ||
-@@ -134,6 +167,8 @@ export class ProtocolHandler {
+@@ -114,6 +180,7 @@ export class ProtocolHandler {
+         this.timeSyncManager.stop();
+     }
+     suspendForPairing() {
++        this.clearPendingMetadata();
+         this.pairingSuspended = true;
+         this.activated = false;
+         this.activeRoles = new Set();
+@@ -126,6 +193,7 @@ export class ProtocolHandler {
+      * @internal called by SendspinCore on transport close, not part of the public API.
+      */
+     resetActivation(preserveActiveRoles = false) {
++        this.clearPendingMetadata();
+         this.pairingSuspended = false;
+         this.activated = false;
+         if (!preserveActiveRoles)
+@@ -134,6 +202,8 @@ export class ProtocolHandler {
          this.stateManager.clearStateUpdateInterval();
      }
      handleStreamStart(message) {
@@ -434,7 +503,7 @@ index a77a065..ff32a28 100644
          const isFormatUpdate = this.stateManager.currentStreamFormat !== null;
          this.stateManager.currentStreamFormat = message.payload.player;
          console.log(isFormatUpdate
-@@ -198,8 +233,10 @@ export class ProtocolHandler {
+@@ -198,8 +268,10 @@ export class ProtocolHandler {
                      }
                  }
                  break;
@@ -446,7 +515,7 @@ index a77a065..ff32a28 100644
                  if (typeof delay === "number" && isFinite(delay)) {
                      const clamped = clampSyncDelayMs(delay);
                      this.streamHandler.handleSyncDelayChange(clamped);
-@@ -215,12 +252,13 @@ export class ProtocolHandler {
+@@ -215,12 +287,13 @@ export class ProtocolHandler {
      }
      // client_id and version live in client/init, not the hello.
      sendClientHello() {
@@ -462,7 +531,7 @@ index a77a065..ff32a28 100644
                  trust_level: this.helloContext.trustLevel(),
                  supported_pair_methods: this.helloContext.pairMethods(),
                  unpaired_access: { enabled: this.helloContext.unpairedAccess },
-@@ -230,11 +268,10 @@ export class ProtocolHandler {
+@@ -230,11 +303,10 @@ export class ProtocolHandler {
                      software_version: (typeof navigator !== "undefined" && navigator.userAgent) ||
                          "Unknown",
                  },
@@ -476,7 +545,7 @@ index a77a065..ff32a28 100644
              },
          };
          // Reset so the first client/state after connect is a full snapshot.
-@@ -251,8 +288,25 @@ export class ProtocolHandler {
+@@ -251,8 +323,25 @@ export class ProtocolHandler {
          this.minBufferMs = minBufferMs;
          this.sendStateUpdate();
      }
@@ -504,7 +573,7 @@ index a77a065..ff32a28 100644
      // When skipHardwareRead is true, use stateManager values instead of reading from hardware.
      // This avoids race conditions when responding to volume commands.
      sendStateUpdate(skipHardwareRead = false) {
-@@ -266,41 +320,28 @@ export class ProtocolHandler {
+@@ -266,41 +355,28 @@ export class ProtocolHandler {
              muted = externalVol.muted;
          }
          const syncDelayMs = this.streamHandler.getSyncDelayMs();
@@ -560,7 +629,7 @@ index a77a065..ff32a28 100644
              this.lastSentPlayer = current;
          }
          const message = {
-@@ -309,6 +350,20 @@ export class ProtocolHandler {
+@@ -309,6 +385,20 @@ export class ProtocolHandler {
          };
          this.sender.sendControl(message);
      }
@@ -581,7 +650,7 @@ index a77a065..ff32a28 100644
      // Send goodbye message before disconnecting
      sendGoodbye(reason) {
          this.sender.sendControl({
-@@ -333,4 +388,4 @@ export class ProtocolHandler {
+@@ -333,4 +423,4 @@ export class ProtocolHandler {
          });
      }
  }
@@ -605,25 +674,29 @@ index ceb59ef..324133f 100644
 \ No newline at end of file
 +//# sourceMappingURL=state-manager.d.ts.map
 diff --git a/dist/core/state-manager.js b/dist/core/state-manager.js
-index 931c5f8..7935b00 100644
+index 931c5f8..567f432 100644
 --- a/dist/core/state-manager.js
 +++ b/dist/core/state-manager.js
-@@ -164,6 +164,14 @@ export class StateManager {
+@@ -162,6 +162,18 @@ export class StateManager {
+     // Update server state (merges delta, null clears fields)
+     updateServerState(update) {
          this._serverState = applyDiff(this._serverState, update);
-         this.notifyStateChange();
-     }
++        // Metadata is a complete snapshot. In particular, omitted progress
++        // clears the previous track position instead of merging it forward.
++        if (update.metadata && typeof update.metadata === "object")
++            this._serverState.metadata = { ...update.metadata };
++        this.notifyStateChange();
++    }
 +    clearServerRole(role) {
 +        if (!(role in this._serverState))
 +            return;
 +        const next = { ...this._serverState };
 +        delete next[role];
 +        this._serverState = next;
-+        this.notifyStateChange();
-+    }
+         this.notifyStateChange();
+     }
      // Update group state (merges delta, null clears fields)
-     updateGroupState(update) {
-         this._groupState = applyDiff(this._groupState, update);
-@@ -177,4 +185,4 @@ export class StateManager {
+@@ -177,4 +189,4 @@ export class StateManager {
          return this._groupState;
      }
  }
@@ -840,7 +913,7 @@ index 1e4ff4c..bd97400 100644
 \ No newline at end of file
 +//# sourceMappingURL=index.js.map
 diff --git a/dist/types.d.ts b/dist/types.d.ts
-index a809128..95e8878 100644
+index a809128..4fe3188 100644
 --- a/dist/types.d.ts
 +++ b/dist/types.d.ts
 @@ -6,6 +6,7 @@ export declare enum MessageType {
@@ -907,7 +980,19 @@ index a809128..95e8878 100644
          };
      };
  }
-@@ -160,6 +173,7 @@ export interface ServerStateController {
+@@ -144,9 +157,11 @@ export interface ServerStateMetadata {
+     timestamp?: number;
+     title?: string | null;
+     artist?: string | null;
++    album_artist?: string | null;
+     album?: string | null;
+     artwork_url?: string | null;
+     year?: number | null;
++    track?: number | null;
+     track_number?: number | null;
+     progress?: {
+         track_progress: number;
+@@ -160,6 +175,7 @@ export interface ServerStateController {
      supported_commands?: string[];
      volume?: number;
      muted?: boolean;
@@ -915,7 +1000,7 @@ index a809128..95e8878 100644
  }
  export interface ServerStatePlayer {
  }
-@@ -200,10 +214,11 @@ export interface ServerCommand {
+@@ -200,10 +216,11 @@ export interface ServerCommand {
      type: MessageType.SERVER_COMMAND;
      payload: {
          player: {
@@ -928,7 +1013,7 @@ index a809128..95e8878 100644
          };
      };
  }
-@@ -339,7 +354,7 @@ export interface ServerUnpair {
+@@ -339,7 +356,7 @@ export interface ServerUnpair {
      payload: Record<string, unknown>;
  }
  export type ServerMessage = ServerHello | ServerInit | NoiseHandshake | ServerActivate | ServerPairInit | ServerPairAuth | ServerPairConfirm | ServerPairFinalize | ServerUnpair | PairAbort | ServerTime | ServerState | StreamStart | StreamClear | StreamEnd | ServerCommand | GroupUpdate;
@@ -937,7 +1022,7 @@ index a809128..95e8878 100644
  export type StreamFormat = {
      codec: string;
      sample_rate: number;
-@@ -350,6 +365,12 @@ export type StreamFormat = {
+@@ -350,6 +367,12 @@ export type StreamFormat = {
  export type PlayerState = "synchronized" | "error";
  export type AudioOutputMode = "direct" | "media-element";
  export type Codec = "pcm" | "opus" | "flac";
@@ -950,7 +1035,7 @@ index a809128..95e8878 100644
  /**
   * Audio sync correction mode:
   * - "sync": Multi-device sync, may use small playback-rate adjustments (capped at ±0.5%, inaudible) for faster convergence.
-@@ -420,6 +441,13 @@ export interface SendspinPlayerConfig extends SendspinCoreConfig {
+@@ -420,6 +443,13 @@ export interface SendspinPlayerConfig extends SendspinCoreConfig {
       * Default: true
       */
      useOutputLatencyCompensation?: boolean;
@@ -964,7 +1049,7 @@ index a809128..95e8878 100644
  }
  /**
   * A decoded audio chunk with raw PCM samples.
-@@ -483,6 +511,8 @@ export interface ReconnectConfig {
+@@ -483,6 +513,8 @@ export interface ReconnectConfig {
   * Configuration for SendspinCore (protocol + decoding, no playback).
   */
  export interface SendspinCoreConfig {
@@ -973,7 +1058,7 @@ index a809128..95e8878 100644
      /**
       * Base URL of the Sendspin server (e.g., "http://192.168.1.100:8095").
       * Required unless webSocket is provided.
-@@ -503,6 +533,8 @@ export interface SendspinCoreConfig {
+@@ -503,6 +535,8 @@ export interface SendspinCoreConfig {
       * Default: ["opus", "flac", "pcm"]
       */
      codecs?: Codec[];
@@ -982,7 +1067,7 @@ index a809128..95e8878 100644
      /**
       * Buffer capacity in bytes, advertised to the server as the amount of
       * not-yet-played encoded audio it may send ahead.
-@@ -532,7 +564,7 @@ export interface SendspinCoreConfig {
+@@ -532,7 +566,7 @@ export interface SendspinCoreConfig {
       * a Bluetooth link), not for browser output latency, which is measured and
       * compensated automatically via `useOutputLatencyCompensation`.
       *
@@ -991,7 +1076,7 @@ index a809128..95e8878 100644
       * restored on the next connect. Passing `syncDelay` explicitly overrides any
       * persisted value for that connect.
       */
-@@ -579,7 +611,7 @@ export interface SendspinCoreConfig {
+@@ -579,7 +613,7 @@ export interface SendspinCoreConfig {
       */
      onVolumeCommand?: (volume: number, muted: boolean) => void;
      /**
@@ -1000,7 +1085,7 @@ index a809128..95e8878 100644
       * Called with the new static delay in milliseconds (0-5000).
       * The SDK persists the value via `storage` before invoking this callback.
       */
-@@ -674,4 +706,4 @@ export interface SendspinStorage {
+@@ -674,4 +708,4 @@ export interface SendspinStorage {
      getItem(key: string): string | null;
      setItem(key: string, value: string): void;
  }
