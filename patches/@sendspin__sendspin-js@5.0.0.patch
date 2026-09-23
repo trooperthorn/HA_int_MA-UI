@@ -510,6 +510,62 @@ index 931c5f8..7935b00 100644
 -//# sourceMappingURL=state-manager.js.map
 \ No newline at end of file
 +//# sourceMappingURL=state-manager.js.map
+diff --git a/dist/core/transport.js b/dist/core/transport.js
+index 5758d9e..1a23fe6 100644
+--- a/dist/core/transport.js
++++ b/dist/core/transport.js
+@@ -301,19 +301,25 @@ export class SendspinTransport {
+     }
+     handleActivate(msg) {
+         const payloadRoles = msg.payload.active_roles;
+-        // active_roles is required on the first activate and persists when later ones omit it.
+-        if (!this.seenActivate && payloadRoles === undefined) {
+-            this.sendGoodbyeAndClose("unauthorized");
+-            return;
++        // A missing first list means no active roles. Later omissions retain the
++        // previous list only while this connection remains playback-capable.
++        let effectiveRoles = payloadRoles ?? this.effectiveActiveRoles ?? [];
++        let forwardRoles = payloadRoles !== undefined || !this.seenActivate;
++        let result = authorizeActivate(this.matched.category, msg.payload.activities, effectiveRoles, this.deps.unpairedAccess);
++        if (payloadRoles === undefined && !result.ok) {
++            const withoutRoles = authorizeActivate(this.matched.category, msg.payload.activities, [], this.deps.unpairedAccess);
++            if (withoutRoles.ok) {
++                effectiveRoles = [];
++                forwardRoles = true;
++                result = withoutRoles;
++            }
+         }
+-        if (payloadRoles !== undefined)
+-            this.effectiveActiveRoles = payloadRoles;
+-        this.seenActivate = true;
+-        const result = authorizeActivate(this.matched.category, msg.payload.activities, this.effectiveActiveRoles, this.deps.unpairedAccess);
+         if (!result.ok) {
+             this.sendGoodbyeAndClose(result.goodbye);
+             return;
+         }
++        this.effectiveActiveRoles = effectiveRoles;
++        this.seenActivate = true;
+         this.clearTimeout();
+         const queuedCommands = !msg.payload.activities.includes("pairing") &&
+             this.effectiveActiveRoles?.includes("controller@v1")
+@@ -321,7 +327,9 @@ export class SendspinTransport {
+             : [];
+         this.quiesced = false;
+         this.outboundQueue = [];
+-        this.cb.onControlMessage(msg);
++        this.cb.onControlMessage(forwardRoles
++            ? { ...msg, payload: { ...msg.payload, active_roles: effectiveRoles } }
++            : msg);
+         for (const command of queuedCommands)
+             this.encryptSend(command);
+     }
+@@ -386,4 +394,4 @@ SendspinTransport.QUIESCED_TYPES = new Set([
+     "client/time",
+     "client/state",
+ ]);
+-//# sourceMappingURL=transport.js.map
+\ No newline at end of file
++//# sourceMappingURL=transport.js.map
 diff --git a/dist/index.d.ts b/dist/index.d.ts
 index 8627437..e0bac02 100644
 --- a/dist/index.d.ts

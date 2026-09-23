@@ -58,6 +58,15 @@ servers. The Music Assistant image's pinned aiosendspin 9.1.1 requires the
 corresponding output-delay compatibility patch before this browser wire is
 deployed; the old app image continues to pin its prior frontend wheel.
 
+**Role activation and revocation** (`dist/core/transport.js`,
+`dist/core/protocol-handler.js`, `dist/core/state-manager.js`). A first
+`server/activate` without `active_roles` means no roles are active. If a
+later activity change makes the connection unable to carry playback roles,
+the transport clears them when the empty-role activation is otherwise
+authorized. Revoked metadata and controller state is discarded immediately;
+revoking the player role also stops and clears its audio. When the player
+role returns, its next state is a full snapshot.
+
 ## Changing or refreshing it
 
 ```bash
@@ -81,4 +90,5 @@ that a phone passes `latencyHint: "playback"`.
 package with a controller-only hello, availability and leave messages, and
 server-bounded seek commands.
 `tests/plugins/sendspin_player_wire.test.ts` checks the current hello/state
-layout, output-delay acknowledgement, and the legacy command fallback.
+layout, output-delay acknowledgement, the legacy command fallback, and role
+activation and revocation.

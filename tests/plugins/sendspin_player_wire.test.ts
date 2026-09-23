@@ -2,7 +2,12 @@ import { SendspinCore } from "@sendspin/sendspin-js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 type CoreInternals = {
-  transport: { sendControl: (message: unknown) => void };
+  transport: {
+    sendControl: (message: unknown) => void;
+    handleActivate: (message: unknown) => void;
+    matched: { category: string };
+    deps: { unpairedAccess: boolean };
+  };
   protocolHandler: { sendClientHello: () => void };
   routeControl: (message: unknown) => void;
 };
@@ -10,6 +15,42 @@ type CoreInternals = {
 afterEach(() => vi.useRealTimers());
 
 describe("patched Sendspin player wire", () => {
+  it("accepts an omitted first role list and clears roles after trust drops", () => {
+    vi.useFakeTimers();
+    const core = new SendspinCore({ storage: null });
+    const internals = core as unknown as CoreInternals & {
+      stateManager: { serverState: Record<string, unknown> };
+    };
+    const send = vi.fn();
+    internals.transport.sendControl = send;
+    internals.transport.matched = { category: "long_term" };
+    internals.transport.handleActivate({
+      type: "server/activate",
+      payload: { activities: [] },
+    });
+    expect(
+      send.mock.calls.find(([message]) => message.type === "client/state")?.[0]
+        .payload,
+    ).not.toHaveProperty("player");
+    internals.transport.handleActivate({
+      type: "server/activate",
+      payload: { activities: ["playback"], active_roles: ["metadata@v1"] },
+    });
+    internals.routeControl({
+      type: "server/state",
+      payload: { metadata: { title: "Old title" } },
+    });
+    expect(internals.stateManager.serverState).toHaveProperty("metadata");
+
+    internals.transport.matched = { category: "sentinel" };
+    internals.transport.deps.unpairedAccess = false;
+    internals.transport.handleActivate({
+      type: "server/activate",
+      payload: { activities: [] },
+    });
+    expect(internals.stateManager.serverState).not.toHaveProperty("metadata");
+  });
+
   it("keeps inactive roles out of state and clears revoked role output", () => {
     vi.useFakeTimers();
     const core = new SendspinCore({ storage: null });
