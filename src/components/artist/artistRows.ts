@@ -117,7 +117,13 @@ const ROW_FEATURES: Partial<Record<ArtistRowId, ProviderFeature>> = {
 function rowSourceCandidates(id: ArtistRowId, artist: Artist): RowSource[] {
   if (artist.provider !== "library") return [];
   const first: RowSource = RELEASE_ROWS.includes(id) ? "library" : "all";
-  return [first, ...rowSourceProviders(id, artist)];
+  // A local library view is useful when provider top-track rankings are
+  // unavailable or the user wants an offline list. Keep "all" the default.
+  return [
+    first,
+    ...(id === "top_tracks" ? (["library"] as const) : []),
+    ...rowSourceProviders(id, artist),
+  ];
 }
 
 /**
