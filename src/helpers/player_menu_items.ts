@@ -415,7 +415,7 @@ export const getPlayerMenuItems = (
     });
   }
 
-  // audio delay (player menu only, protocols that expose sync_adjust). Gated
+  // audio delay (player menu only, protocols with a delay setting). Gated
   // on the same scope as the settings entry below: it writes player config.
   // Upstream replaced authManager.isAdmin() with scope checks and removed the
   // method, so this had to move with it.
@@ -430,7 +430,7 @@ export const getPlayerMenuItems = (
       labelArgs: [],
       icon: markRaw(Timer),
       subComponent: markRaw(SyncAdjustMenuControl),
-      componentProps: { playerId: player.player_id },
+      componentProps: { playerId: player.player_id, provider: player.provider },
     });
   }
 

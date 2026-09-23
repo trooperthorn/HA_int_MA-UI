@@ -1,7 +1,6 @@
 <!--
-  Audio delay popout for the player menu: edits the player's sync_adjust
-  setting (-500..500 ms) so players on different protocols line up when
-  they stream together. Saving reloads the player on the server.
+  Audio delay popout for player settings. Sendspin's output delay has a
+  different range and direction from AirPlay/Squeezelite sync_adjust.
 -->
 <template>
   <div class="sync-adjust-menu" @pointerdown.stop @click.stop>
@@ -15,10 +14,10 @@
     <div class="sync-adjust-menu__row">
       <Slider
         :model-value="[draft]"
-        :min="SYNC_ADJUST_MIN"
-        :max="SYNC_ADJUST_MAX"
+        :min="config.min"
+        :max="config.max"
         :step="5"
-        :disabled="!loaded || saving"
+        :disabled="!loaded || !available || saving"
         class="sync-adjust-menu__slider"
         :aria-label="$t('player_select.sync_adjust')"
         @update:model-value="onSlide"
@@ -27,11 +26,11 @@
     </div>
     <div class="sync-adjust-menu__row sync-adjust-menu__row--steps">
       <Button
-        v-for="step in STEPS"
+        v-for="step in config.steps"
         :key="step"
         variant="outline"
         size="sm"
-        :disabled="!loaded || saving"
+        :disabled="!loaded || !available || saving"
         @click="nudge(step)"
       >
         {{ step > 0 ? `+${step}` : step }}
@@ -39,14 +38,14 @@
       <Button
         variant="ghost"
         size="sm"
-        :disabled="!loaded || saving || draft === 0"
+        :disabled="!loaded || !available || saving || draft === 0"
         @click="save(0)"
       >
         {{ $t("player_select.sync_adjust_reset") }}
       </Button>
     </div>
     <p class="sync-adjust-menu__hint">
-      {{ $t("player_select.sync_adjust_hint") }}
+      {{ $t(statusMessage || config.hint) }}
     </p>
   </div>
 </template>
@@ -54,43 +53,63 @@
 <script setup lang="ts">
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import {
-  SYNC_ADJUST_KEY,
-  SYNC_ADJUST_MAX,
-  SYNC_ADJUST_MIN,
-} from "@/helpers/sync_adjust";
+import { getAudioDelayConfig } from "@/helpers/sync_adjust";
 import { api } from "@/plugins/api";
 import { $t } from "@/plugins/i18n";
 import { Timer } from "@lucide/vue";
 import { computed, onMounted, ref } from "vue";
 import { toast } from "vue-sonner";
 
-const STEPS = [-50, -10, 10, 50] as const;
-
-const props = defineProps<{ playerId: string }>();
+const props = defineProps<{ playerId: string; provider: string }>();
+const config = computed(() => {
+  const result = getAudioDelayConfig({ provider: props.provider });
+  if (!result)
+    throw new Error("Audio delay is not available for this provider");
+  return result;
+});
 
 const draft = ref(0);
 const saved = ref(0);
 const loaded = ref(false);
+const available = ref(false);
 const saving = ref(false);
+const statusMessage = ref("");
 
 const valueLabel = computed(() =>
-  loaded.value ? `${draft.value > 0 ? "+" : ""}${draft.value} ms` : "…",
+  !loaded.value
+    ? "…"
+    : available.value
+      ? `${draft.value > 0 ? "+" : ""}${draft.value} ms`
+      : "—",
 );
 
 const clamp = (value: number) =>
-  Math.min(SYNC_ADJUST_MAX, Math.max(SYNC_ADJUST_MIN, Math.round(value)));
+  Math.min(config.value.max, Math.max(config.value.min, Math.round(value)));
 
 onMounted(async () => {
   try {
+    let defaultValue = 0;
+    if (config.value.requiresCapability) {
+      const entries = await api.getPlayerConfigEntries(props.playerId);
+      const entry = entries.find((item) => item.key === config.value.key);
+      if (!entry) {
+        statusMessage.value = "player_select.sync_adjust_unavailable";
+        return;
+      }
+      defaultValue = Number(entry.default_value ?? 0);
+    }
     const value = await api.getPlayerConfigValue(
       props.playerId,
-      SYNC_ADJUST_KEY,
+      config.value.key,
     );
-    saved.value = clamp(Number(value ?? 0) || 0);
+    const numericValue = Number(value ?? defaultValue);
+    if (!Number.isFinite(numericValue)) throw new Error("Invalid audio delay");
+    saved.value = clamp(numericValue);
     draft.value = saved.value;
+    available.value = true;
   } catch (error) {
-    console.error("Failed to read sync_adjust:", error);
+    console.error("Failed to read audio delay:", error);
+    statusMessage.value = "player_select.sync_adjust_load_failed";
   } finally {
     loaded.value = true;
   }
@@ -109,14 +128,15 @@ function nudge(step: number) {
 }
 
 async function save(value: number) {
+  if (!available.value || saving.value) return;
   draft.value = value;
   if (value === saved.value) return;
   saving.value = true;
   try {
-    await api.savePlayerConfig(props.playerId, { [SYNC_ADJUST_KEY]: value });
+    await api.savePlayerConfig(props.playerId, { [config.value.key]: value });
     saved.value = value;
   } catch (error) {
-    console.error("Failed to save sync_adjust:", error);
+    console.error("Failed to save audio delay:", error);
     draft.value = saved.value;
     toast.error($t("player_select.sync_adjust_failed"));
   } finally {
