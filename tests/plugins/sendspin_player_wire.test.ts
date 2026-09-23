@@ -10,6 +10,62 @@ type CoreInternals = {
 afterEach(() => vi.useRealTimers());
 
 describe("patched Sendspin player wire", () => {
+  it("keeps inactive roles out of state and clears revoked role output", () => {
+    vi.useFakeTimers();
+    const core = new SendspinCore({ storage: null });
+    const internals = core as unknown as CoreInternals & {
+      stateManager: {
+        serverState: Record<string, unknown>;
+        isPlaying: boolean;
+      };
+    };
+    const send = vi.fn();
+    internals.transport.sendControl = send;
+    internals.routeControl({ type: "server/activate", payload: {} });
+    expect(
+      send.mock.calls.find(([message]) => message.type === "client/state")?.[0]
+        .payload,
+    ).not.toHaveProperty("player");
+    internals.routeControl({
+      type: "server/activate",
+      payload: { active_roles: ["player@v1", "metadata@v1", "controller@v1"] },
+    });
+    expect(send.mock.lastCall?.[0].payload.player).toHaveProperty(
+      "supported_commands",
+    );
+    internals.routeControl({
+      type: "server/state",
+      payload: {
+        metadata: { title: "Old title" },
+        controller: { supported_commands: ["play"] },
+      },
+    });
+    expect(internals.stateManager.serverState.metadata).toEqual({
+      title: "Old title",
+    });
+    internals.routeControl({
+      type: "server/activate",
+      payload: { active_roles: ["controller@v1"] },
+    });
+    expect(internals.stateManager.serverState).not.toHaveProperty("metadata");
+    expect(internals.stateManager.serverState.controller).toEqual({
+      supported_commands: ["play"],
+    });
+    expect(internals.stateManager.isPlaying).toBe(false);
+    internals.routeControl({
+      type: "server/state",
+      payload: { metadata: { title: "Ignored" } },
+    });
+    expect(internals.stateManager.serverState).not.toHaveProperty("metadata");
+    internals.routeControl({
+      type: "server/activate",
+      payload: { active_roles: ["controller@v1", "player@v1"] },
+    });
+    expect(send.mock.lastCall?.[0].payload.player).toHaveProperty(
+      "supported_commands",
+    );
+  });
+
   it("reports current-spec output delay and acknowledges server changes", () => {
     vi.useFakeTimers();
     const core = new SendspinCore({ storage: null, syncDelay: 250 });
