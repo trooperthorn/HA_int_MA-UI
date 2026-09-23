@@ -973,6 +973,23 @@
       "apply_uncertain": "Music Assistant may have created the playlist, but verification did not finish. Refresh status before trying again.",
       "invalid_response": "The server returned an incompatible iTunes import response."
     },
+    "sendspin_source_status": {
+      "title": "Sendspin input status",
+      "description": "Signal and PCM activity reported by connected source clients. The latency value is a configured target, not a measured end-to-end delay. Select or stop an input from the destination player's source controls.",
+      "loading": "Checking Sendspin inputs…",
+      "unavailable": "Input diagnostics are unavailable. Update the Music Assistant app if this command is not supported.",
+      "target_latency": "Configured buffer target",
+      "none": "No active source clients",
+      "signal": "Input signal",
+      "destination": "Selected destination",
+      "pcm": "Audio data",
+      "last_pcm": "Last audio received",
+      "unknown": "Not reported",
+      "none_selected": "Not selected",
+      "receiving": "Receiving",
+      "idle": "Idle",
+      "refresh": "Refresh status"
+    },
     "sendspin_discovery": {
       "title": "Sendspin discovery status",
       "description": "Read-only listener, advertisement, discovery, and client status. Refresh after changing network or player settings.",
