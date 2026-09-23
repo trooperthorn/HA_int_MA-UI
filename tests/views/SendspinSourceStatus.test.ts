@@ -31,6 +31,7 @@ describe("Sendspin input diagnostics", () => {
 
   it("labels target latency separately from observed source activity", async () => {
     mocks.sendCommand.mockResolvedValue({
+      api_version: 1,
       target_latency_ms: 80,
       sources: [
         {
@@ -54,6 +55,8 @@ describe("Sendspin input diagnostics", () => {
 
     expect(mocks.sendCommand).toHaveBeenCalledExactlyOnceWith(
       "sendspin_source/status",
+      undefined,
+      { suppressGlobalError: true },
     );
     expect(wrapper.text()).toContain("80 ms");
     expect(wrapper.text()).toContain("Turntable");
@@ -68,6 +71,7 @@ describe("Sendspin input diagnostics", () => {
 
   it("routes through the native queue command and stops only the observed session", async () => {
     mocks.sendCommand.mockResolvedValue({
+      api_version: 1,
       target_latency_ms: 80,
       sources: [
         {
@@ -110,5 +114,15 @@ describe("Sendspin input diagnostics", () => {
       client_id: "source-a",
       playback_session_id: "session-1",
     });
+  });
+
+  it("does not offer source actions before the app advertises them", async () => {
+    mocks.sendCommand.mockRejectedValue(new Error("unknown command"));
+    const wrapper = mount(SourceStatus, {
+      global: { mocks: { $t: (key: string) => key } },
+    });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="sendspin-source-status"]').exists()).toBe(false);
+    expect(mocks.playMedia).not.toHaveBeenCalled();
   });
 });

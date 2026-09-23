@@ -90,6 +90,11 @@ wire modes; this view selects the pinned server's legacy mode. Switching this
 view to current-spec framing requires a server version that accepts the newer
 channel declaration and emits the newer frames.
 
+The Sendspin discovery and source settings panels require an `api_version: 1`
+response from their read-only app endpoints. A frontend wheel released before
+its matching app image keeps those panels hidden and suppresses the expected
+missing-command error; the controls appear once the app advertises them.
+
 **Clock-synchronized readiness** (`dist/core/protocol-handler.js`,
 `dist/core/time-sync-manager.js`, `dist/core/core.js`). A player reports
 `available: false` until its first successful clock-sync burst, then sends

@@ -1,5 +1,5 @@
 <template>
-  <Card class="mb-4" data-testid="sendspin-discovery-status">
+  <Card v-if="available" class="mb-4" data-testid="sendspin-discovery-status">
     <CardHeader>
       <CardTitle>{{ $t("settings.sendspin_discovery.title") }}</CardTitle>
       <CardDescription>{{
@@ -111,6 +111,7 @@ import { onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 interface DiscoveryStatus {
+  api_version: number;
   listener_active: boolean;
   listen_address: string;
   port: number;
@@ -126,6 +127,7 @@ interface DiscoveryStatus {
 
 const { t } = useI18n();
 const status = ref<DiscoveryStatus>();
+const available = ref(false);
 const error = ref("");
 const loading = ref(false);
 
@@ -141,9 +143,18 @@ async function refresh() {
   loading.value = true;
   error.value = "";
   try {
-    status.value = await api.sendCommand<DiscoveryStatus>(
+    const response = await api.sendCommand<DiscoveryStatus>(
       "sendspin/discovery_status",
+      undefined,
+      { suppressGlobalError: true },
     );
+    if (response.api_version !== 1) {
+      available.value = false;
+      status.value = undefined;
+      return;
+    }
+    available.value = true;
+    status.value = response;
   } catch (err) {
     status.value = undefined;
     error.value = String(err);

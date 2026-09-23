@@ -1,5 +1,5 @@
 <template>
-  <Card class="mb-4" data-testid="sendspin-source-status">
+  <Card v-if="available" class="mb-4" data-testid="sendspin-source-status">
     <CardHeader>
       <CardTitle>{{ $t("settings.sendspin_source_status.title") }}</CardTitle>
       <CardDescription>{{
@@ -155,6 +155,7 @@ import { QueueOption } from "@/plugins/api/interfaces";
 import { computed, onMounted, reactive, ref } from "vue";
 
 interface SourceStatus {
+  api_version: number;
   target_latency_ms: number;
   sources: {
     client_id: string;
@@ -171,6 +172,7 @@ interface SourceStatus {
 }
 
 const status = ref<SourceStatus>();
+const available = ref(false);
 const error = ref("");
 const loading = ref(false);
 const busy = ref<string>();
@@ -192,9 +194,18 @@ async function refresh() {
   loading.value = true;
   error.value = "";
   try {
-    status.value = await api.sendCommand<SourceStatus>(
+    const response = await api.sendCommand<SourceStatus>(
       "sendspin_source/status",
+      undefined,
+      { suppressGlobalError: true },
     );
+    if (response.api_version !== 1) {
+      available.value = false;
+      status.value = undefined;
+      return;
+    }
+    available.value = true;
+    status.value = response;
     for (const source of status.value.sources) {
       destinations[source.client_id] ||= source.owner_player_id ?? "";
     }
