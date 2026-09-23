@@ -13,6 +13,7 @@ export interface ArchiveCapabilities {
   interval_bounds?: { min: number; max: number };
   local_matching?: boolean;
   match_review_api_version?: number;
+  match_relocation_api_version?: number;
   max_match_review_page?: number;
   max_match_approvals?: number;
   playback_policy?: boolean;
@@ -560,6 +561,7 @@ export interface ArchiveMatchOverlay {
   decision: ArchiveMatchDecision | null;
   decision_history: ArchiveMatchDecision[];
   approved_asset_id: string | null;
+  approved_asset?: ArchiveMatchAsset | null;
   candidates: ArchiveMatchCandidate[];
 }
 

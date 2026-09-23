@@ -354,6 +354,7 @@
               :version-id="subscription.committed_version_id"
               :page-size="matchPageSize"
               :max-bulk-approvals="maxMatchApprovals"
+              :can-relocate="capabilities.match_relocation_api_version === 1"
             />
             <p
               v-else-if="subscription.committed_version_id"

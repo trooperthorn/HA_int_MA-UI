@@ -221,6 +221,28 @@
                 })
               }}
             </p>
+            <div
+              v-for="option in relocationOptions(item, candidate)"
+              :key="`${option.old.id}:${option.current.id}`"
+              class="space-y-2 rounded border p-2"
+              data-testid="archive-match-move-option"
+            >
+              <p class="break-all text-sm">
+                {{
+                  $t("settings.archives.match_move_preview", {
+                    old: option.old.item_id,
+                    current: option.current.item_id,
+                  })
+                }}
+              </p>
+              <Button
+                data-testid="archive-match-move"
+                variant="outline"
+                :disabled="!canWrite || uncertain || writing || reading"
+                @click="relocate(item, candidate, option.old, option.current)"
+                >{{ $t("settings.archives.match_move") }}</Button
+              >
+            </div>
             <pre class="overflow-auto whitespace-pre-wrap text-xs">{{
               evidence(candidate.evidence)
             }}</pre>
@@ -320,6 +342,7 @@ import type {
   ArchiveMatchCandidate,
   ArchiveMatchClassification,
   ArchiveMatchDecisionResult,
+  ArchiveMatchLocation,
   ArchiveMatchReviewItem,
   ArchiveMatchReviewPage,
 } from "@/library-manager/enrichment";
@@ -333,6 +356,7 @@ const props = defineProps<{
   versionId: string;
   pageSize: number;
   maxBulkApprovals?: number;
+  canRelocate?: boolean;
 }>();
 const canRead = computed(() =>
   authManager.hasScope(Scope.CONFIG_PROVIDERS_WRITE),
@@ -511,6 +535,27 @@ function evidenceValue(value: Record<string, unknown>, key: string) {
 }
 function metadata(candidate: ArchiveMatchCandidate, key: string) {
   return evidenceValue(candidate.asset.metadata, key);
+}
+function relocationOptions(
+  item: ArchiveMatchReviewItem,
+  candidate: ArchiveMatchCandidate,
+): { old: ArchiveMatchLocation; current: ArchiveMatchLocation }[] {
+  if (
+    !props.canRelocate ||
+    item.classification !== "approved" ||
+    !item.match.approved_asset ||
+    candidate.asset_id === item.match.approved_asset_id ||
+    candidate.asset.locations.length !== 1
+  )
+    return [];
+  const current = candidate.asset.locations[0];
+  return item.match.approved_asset.locations
+    .filter(
+      (old) =>
+        old.provider_instance_id === current.provider_instance_id &&
+        old.item_id !== current.item_id,
+    )
+    .map((old) => ({ old, current }));
 }
 async function bounded<T>(promise: Promise<T>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -719,6 +764,59 @@ function previousPage() {
 function nextPage() {
   if (!page.value?.has_more) return;
   void load(page.value.offset + page.value.limit);
+}
+async function relocate(
+  item: ArchiveMatchReviewItem,
+  candidate: ArchiveMatchCandidate,
+  old: ArchiveMatchLocation,
+  current: ArchiveMatchLocation,
+) {
+  if (!canWrite.value || uncertain.value || reading.value || writing.value)
+    return;
+  const approvedAssetId = item.match.approved_asset_id;
+  if (!approvedAssetId || !props.canRelocate) return;
+  const token = generation;
+  writing.value = true;
+  error.value = "";
+  try {
+    const result = await bounded(
+      request<{
+        location: ArchiveMatchLocation;
+        match: ArchiveMatchReviewItem["match"];
+      }>("relocate_match_asset", {
+        version_id: props.versionId,
+        source_item_id: item.source_item_id,
+        asset_id: approvedAssetId,
+        provider_instance_id: current.provider_instance_id,
+        old_item_id: old.item_id,
+        new_item_id: current.item_id,
+        expected_revision: item.match.revision,
+        provisional_asset_id: candidate.asset_id,
+      }),
+    );
+    if (!alive || token !== generation || !canWrite.value || !page.value)
+      return;
+    if (
+      result.location.asset_id !== approvedAssetId ||
+      result.location.item_id !== current.item_id ||
+      result.match.approved_asset_id !== approvedAssetId ||
+      result.match.revision !== item.match.revision ||
+      result.match.source.source_item_id !== item.source_item_id
+    )
+      throw new Error($t("settings.archives.match_invalid_response"));
+    page.value.items = page.value.items.map((occurrence) =>
+      occurrence.source_item_id === item.source_item_id
+        ? { ...occurrence, match: result.match }
+        : occurrence,
+    );
+  } catch (value) {
+    if (alive && token === generation) {
+      uncertain.value = true;
+      error.value = errorText(value);
+    }
+  } finally {
+    if (alive && token === generation) writing.value = false;
+  }
 }
 async function decide(
   item: ArchiveMatchReviewItem,

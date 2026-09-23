@@ -94,12 +94,13 @@ const page: ArchiveMatchReviewPage = {
   candidate_error: null,
   items: [item, { ...item, position: 1 }],
 };
-const mountReview = () =>
+const mountReview = (canRelocate = false) =>
   mount(Review, {
     props: {
       subscriptionId: "subscription-1",
       versionId: "version-1",
       pageSize: 100,
+      canRelocate,
     },
   });
 const calls = (name: string) =>
@@ -142,6 +143,70 @@ describe("Archive local match review", () => {
           classification: "approved",
         };
       throw new Error("Unexpected command");
+    });
+  });
+
+  it("offers a reviewed move only with capability and sends both exact paths", async () => {
+    const moved = structuredClone(page);
+    const occurrence = moved.items[0];
+    occurrence.classification = "approved";
+    occurrence.match.approved_asset_id = "asset-old";
+    occurrence.match.approved_asset = {
+      ...structuredClone(candidate.asset),
+      id: "asset-old",
+      locations: [
+        {
+          ...structuredClone(candidate.asset.locations[0]),
+          id: "location-old",
+          asset_id: "asset-old",
+          item_id: "old/song.flac",
+        },
+      ],
+    };
+    occurrence.match.candidates[0].asset.item_id = "new/song.flac";
+    occurrence.match.candidates[0].asset.locations[0].item_id = "new/song.flac";
+    moved.items = [occurrence];
+    moved.total = 1;
+    moved.has_more = false;
+    mocks.sendCommand.mockImplementation(async (command: string) => {
+      if (command === "library_enrichment/match_review")
+        return structuredClone(moved);
+      if (command === "library_enrichment/relocate_match_asset")
+        return {
+          location: {
+            ...structuredClone(candidate.asset.locations[0]),
+            asset_id: "asset-old",
+            item_id: "new/song.flac",
+          },
+          match: structuredClone(occurrence.match),
+        };
+      throw new Error("Unexpected command");
+    });
+
+    const hidden = mountReview();
+    await hidden.get('[data-testid="archive-match-open"]').trigger("click");
+    await flushPromises();
+    expect(hidden.find('[data-testid="archive-match-move"]').exists()).toBe(
+      false,
+    );
+    hidden.unmount();
+
+    const wrapper = mountReview(true);
+    await wrapper.get('[data-testid="archive-match-open"]').trigger("click");
+    await flushPromises();
+    expect(wrapper.text()).toContain("old/song.flac");
+    expect(wrapper.text()).toContain("new/song.flac");
+    await wrapper.get('[data-testid="archive-match-move"]').trigger("click");
+    await flushPromises();
+    expect(calls("relocate_match_asset")[0][1]).toEqual({
+      version_id: "version-1",
+      source_item_id: "spotify-track-1",
+      asset_id: "asset-old",
+      provider_instance_id: "local-1",
+      old_item_id: "old/song.flac",
+      new_item_id: "new/song.flac",
+      expected_revision: 4,
+      provisional_asset_id: "asset-1",
     });
   });
 

@@ -1096,6 +1096,8 @@
       "match_reject": "Reject local matching",
       "match_candidate_rejected": "Candidate rejected",
       "match_clear": "Clear saved decision",
+      "match_move_preview": "Move approved local file from {old} to {current}. The current Music Assistant mapping will be checked before the saved decision is carried over.",
+      "match_move": "Carry approval to moved file",
       "match_previous": "Previous page",
       "match_next": "Next page",
       "match_diagnostics": "Copyable match diagnostics",
