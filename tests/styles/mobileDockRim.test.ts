@@ -5,6 +5,7 @@ import navSource from "@/components/navigation/BottomNavigation.vue?raw";
 import footerSource from "@/layouts/default/Footer.vue?raw";
 import globalCss from "@/styles/global.css?inline";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { singleLine } from "./cascade";
 
 const DOCK_INSET = "111px";
 const RIM = "7px";
@@ -46,7 +47,7 @@ describe("mobile dock rim", () => {
       extractStyle(navSource),
     ].map((css) => {
       const element = document.createElement("style");
-      element.textContent = css;
+      element.textContent = singleLine(css);
       document.head.appendChild(element);
       return element;
     });

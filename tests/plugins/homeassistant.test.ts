@@ -174,6 +174,9 @@ describe("Home Assistant safe area", () => {
     subscribeToHAProperties({ handleSafeArea: true });
     const foreignFrame = document.createElement("iframe");
     foreignFrame.dataset.foreignFrame = "";
+    // happy-dom 21 no longer loads a page into a frame by default, which left
+    // a bare one without a window; an inline document needs no loading
+    foreignFrame.srcdoc = "";
     document.body.appendChild(foreignFrame);
     expect(foreignFrame.contentWindow).toBeTruthy();
     expect(foreignFrame.contentWindow).not.toBe(window.parent);

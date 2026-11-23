@@ -6,7 +6,7 @@ import sheetSource from "@/layouts/default/PlayerOSD/PlayerBarMobileVolumeSheet.
 import tokens from "@/styles/global.css?inline";
 import css from "@/styles/style.css?inline";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { rank, utilityPriority } from "./cascade";
+import { rank, singleLine, utilityPriority } from "./cascade";
 
 // happy-dom does no calc() arithmetic, and drops a position whose tokens expand
 // to a nested one, so each token the sheet is placed from stands in as a plain
@@ -102,13 +102,13 @@ function normalize(value: string) {
 describe("mobile grouped volume sheet", () => {
   beforeEach(() => {
     tokenStyles = document.createElement("style");
-    tokenStyles.textContent = tokens;
+    tokenStyles.textContent = singleLine(tokens);
     document.head.appendChild(tokenStyles);
     appStyles = document.createElement("style");
-    appStyles.textContent = css;
+    appStyles.textContent = singleLine(css);
     document.head.appendChild(appStyles);
     sheetStyles = document.createElement("style");
-    sheetStyles.textContent = extractStyle(sheetSource);
+    sheetStyles.textContent = singleLine(extractStyle(sheetSource));
     document.head.appendChild(sheetStyles);
 
     for (const [token, value] of [

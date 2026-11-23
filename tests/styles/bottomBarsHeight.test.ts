@@ -3,6 +3,7 @@
 // @vitest-environment happy-dom
 import css from "@/styles/global.css?inline";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { singleLine } from "./cascade";
 
 const OVERLAY_HEIGHT = "--player-bar-overlay-height";
 const OVERLAY_MARKER = "data-player-bar-overlay";
@@ -43,7 +44,7 @@ function offsetFromBars() {
 describe("bottom bars height", () => {
   beforeEach(() => {
     appStyles = document.createElement("style");
-    appStyles.textContent = css;
+    appStyles.textContent = singleLine(css);
     document.head.appendChild(appStyles);
   });
 
