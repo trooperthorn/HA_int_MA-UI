@@ -26,6 +26,16 @@ overrides:
   "baseline-browser-mapping@<2.11.0": ">=2.11.0 <3"
   # infinite loop when size is zero, via vite -> postcss
   "nanoid@<3.3.18": ">=3.3.18 <4"
+  # event-loop denial of service in source map parsing, via
+  # @intlify/bundle-utils, @vue/compiler-core and postcss
+  "source-map-js@<1.2.2": ">=1.2.2 <2"
+  # XSS through srcdoc in translation messages (GHSA-83rm-6c8r-g728). vue-i18n
+  # itself is bumped in package.json; these are the older copies that
+  # @intlify/unplugin-vue-i18n and @intlify/bundle-utils resolve through their
+  # own "~11.4.2" ranges. message-compiler pins shared exactly, so both move
+  # together. Bounded to 11.4.x, the range those parents declare.
+  "@intlify/shared@>=11.1.10 <11.4.14": ">=11.4.14 <11.5"
+  "@intlify/message-compiler@>=11.1.10 <11.4.14": ">=11.4.14 <11.5"
   #
   # esbuild (dev server arbitrary file read on Windows, >=0.27.3 <0.28.1) is
   # deliberately not here. It is a *peer* of vite, so an override rewrites the
