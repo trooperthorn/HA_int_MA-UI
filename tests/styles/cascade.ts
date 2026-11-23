@@ -29,6 +29,19 @@ export function styleBlocks(source: string) {
 }
 
 /**
+ * `css` with every line break, and the indentation around it, folded into one
+ * space.
+ *
+ * happy-dom 21 validates calc() against a pattern that stops at a line break,
+ * so it drops a declaration whose calc() wraps, the way the formatter leaves
+ * the long ones. A line break is plain whitespace to CSS, so folding it changes
+ * nothing a browser would read.
+ */
+export function singleLine(css: string) {
+  return css.replace(/\s*\n\s*/g, " ");
+}
+
+/**
  * The selectors in `styles` that set `property` and land on `element`.
  *
  * A rule may carry a selector list, of which only some parts reach the element,
